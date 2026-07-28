@@ -281,6 +281,175 @@ body {
   background-color: #0056b3;
 }
 
+/* ---------- Armazon de fase ---------- */
+
+.tc-stage {
+  gap: 12px;
+}
+
+.tc-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  width: 100%;
+}
+
+.tc-prompt {
+  margin: 0;
+  font-size: clamp(1.1rem, 3vw, 1.4rem);
+  font-weight: bold;
+  text-align: center;
+  color: #fff;
+}
+
+.tc-note {
+  margin: 0;
+  color: #bbb;
+  text-align: center;
+}
+
+.tc-quote {
+  margin: 0;
+  font-size: 1.3rem;
+  font-style: italic;
+  color: #ffcc00;
+  text-align: center;
+}
+
+.tc-message {
+  text-align: center;
+}
+
+/* ---------- Roster ---------- */
+
+.tc-roster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+}
+
+.tc-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #444;
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 0.85rem;
+}
+
+.tc-player--done {
+  border-color: #2e9e5b;
+  background: rgba(46, 158, 91, 0.2);
+}
+
+.tc-player--off {
+  opacity: 0.45;
+}
+
+.tc-player--me .tc-player__name {
+  color: #00ffcc;
+  font-weight: bold;
+}
+
+.tc-player__pts {
+  color: #ffcc00;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Adivinanza ---------- */
+
+.tc-guess-image,
+.tc-sent-drawing {
+  display: block;
+  width: 100%;
+  max-width: 520px;
+  aspect-ratio: 8 / 5;
+  object-fit: contain;
+  background: #fff;
+  border: 4px solid #444;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.tc-feedback {
+  min-height: 1.2em;
+  color: #ff8888;
+  font-weight: bold;
+  text-align: center;
+}
+
+.tc-feedback--shake {
+  animation: tc-shake 0.3s ease;
+}
+
+@keyframes tc-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+/* ---------- Galeria del reveal ---------- */
+
+.tc-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+  width: 100%;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.tc-chain {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 12px;
+  width: 240px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #444;
+  border-radius: 10px;
+}
+
+.tc-chain__phrase {
+  font-weight: bold;
+  color: #ffcc00;
+  text-align: center;
+}
+
+.tc-chain__img {
+  width: 100%;
+  aspect-ratio: 8 / 5;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 6px;
+}
+
+.tc-chain__meta {
+  font-size: 0.8rem;
+  color: #999;
+  text-align: center;
+}
+
+.tc-chain__outcome {
+  font-size: 0.9rem;
+  color: #ddd;
+  text-align: center;
+}
+
+.tc-chain__outcome--ok {
+  color: #6ee7a0;
+  font-weight: bold;
+}
+
 .back-link {
   position: absolute;
   top: 15px;
