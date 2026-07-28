@@ -499,6 +499,16 @@ body {
 
 /* ---------- Jugadores en circulo ---------- */
 
+/* Las tarjetas van POR ENCIMA del dock de reacciones (z-index 20), no por debajo.
+   En una pantalla baja (celular apaisado, o vertical con el teclado abierto: el
+   stage es 100dvh y se achica) el circulo llega hasta el borde de abajo y no queda
+   ninguna esquina libre, asi que el dock termina sobre la tarjeta de alguien —
+   medido a 700x350, 640x360, 480x320 y 412x400, y varias veces sobre el jugador de
+   TURNO, que es el unico que no puede permitirse no leer lo que escribe. La palabra
+   es la informacion critica de este juego: gana ella y el dock queda detras.
+   `pointer-events: none` es lo que mantiene los botones del dock clickeables por
+   debajo (la tarjeta no tiene nada interactivo; el foco del input invisible lo
+   maneja `.wc__input`, que cubre el stage). */
 .wc__player {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -508,7 +518,8 @@ body {
   align-items: center;
   gap: 4px;
   text-align: center;
-  z-index: 2;
+  z-index: 25;
+  pointer-events: none;
 }
 
 .wc__pname {
@@ -615,6 +626,11 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Halo oscuro: la palabra puede caer sobre el dock de reacciones o sobre una
+     chispa, y tiene que leerse igual (ver el z-index de `.wc__player`). */
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.9),
+    0 0 8px rgba(0, 0, 0, 0.75);
 }
 
 /* La cola de la palabra: la letra que hereda el siguiente jugador, al rojo vivo.
@@ -1056,6 +1072,33 @@ body {
 .wc__emotes.is-cooling {
   opacity: 0.42;
   pointer-events: none;
+}
+
+/* Pantalla baja (celular apaisado, o vertical con el teclado abierto: el stage es
+   100dvh y se achica). Ahi el circulo ocupa TODO el alto y la banda de abajo deja de
+   estar libre: el dock horizontal caia sobre la palabra de la tarjeta de las 4-5 en
+   punto (medido a 700x350, 640x360, 480x320 y 412x400). La banda que si sobra es la
+   LATERAL — la arena es cuadrada de 92vmin y en apaisado deja aire a los costados —
+   asi que el dock pasa a columna pegada al borde derecho. Con eso el solape cae de
+   la palabra entera (91px) a 26px como maximo y solo a 412x400. El badge del atajo
+   se esconde: en tactil no hay teclado que apretar. */
+@media (max-height: 500px) {
+  .wc__emotes {
+    flex-direction: column;
+    top: 50%;
+    bottom: auto;
+    right: 4px;
+    transform: translateY(-50%);
+    gap: 3px;
+    padding: 4px;
+  }
+  .wc__emote {
+    width: 34px;
+    height: 34px;
+  }
+  .wc__emote-key {
+    display: none;
+  }
 }
 
 /* Yo: nombre subrayado (sutil, para ubicarme). */

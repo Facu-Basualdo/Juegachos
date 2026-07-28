@@ -136,8 +136,11 @@ cerrado (`risa` / `sorpresa` / `enojo` / `burla` / `llanto`) y cada cara esta
   a proposito**: duran entre 1.2s y 5s, mas que el cooldown de 1s y mas que la cara, asi que
   con la mesa llena se apilan. Es deliberado; no cortar el anterior ni limitar la duracion. El `AudioContext` vive en `game/audioContext.ts`
   (modulo hoja, para que el fallback no cierre un ciclo de imports con `EmoteAudio`).
-- **Como**: dock de cabecitas abajo (`.wb__emotes`, z-index por encima del input
-  invisible) o atajos **1-5**. Los atajos escuchan en `window` y hacen `preventDefault`,
+- **Como**: dock de cabecitas en la **esquina inferior derecha** (`.wb__emotes`, z-index
+  por encima del input invisible) o atajos **1-5**. Estaba **centrado abajo** y le tapaba
+  la palabra al jugador de las 6 en punto — o sea, el de turno no podia leer lo que
+  escribia. Medido con Playwright sobre el HUD real: pasaba desde 1366x768 para abajo, con
+  2, 4, 5, 6 y 8 jugadores. Ver "El dock nunca puede tapar una palabra" mas abajo. Los atajos escuchan en `window` y hacen `preventDefault`,
   lo que cancela la insercion del digito en el input del jugador de turno — no se
   pierde nada, las palabras son solo `[a-zñ]`. El boton hace `preventDefault` en su
   `pointerdown` para **no robarle el foco al input** a mitad de palabra.
@@ -150,6 +153,24 @@ cerrado (`risa` / `sorpresa` / `enojo` / `burla` / `llanto`) y cada cara esta
   exactamente lo mismo que ven los demas y el cooldown del server es el unico arbitro.
   (Es lo contrario de `wb:typing`, que **si** se pinta local y **ignora** su eco,
   porque llega por tecla y con lag pisaria lo recien escrito.)
+
+**El dock nunca puede tapar una palabra.** Es la regla que manda sobre la estetica: lo que
+el jugador de turno escribe se lee bajo su avatar, y si no lo ve, no puede jugar. Tres capas,
+las tres necesarias (medidas con Playwright sobre el HUD real, 2-8 jugadores):
+
+1. El dock vive en la **esquina inferior derecha**, no centrado abajo (ver arriba). Solo con
+   eso desaparecen los 75 casos de solape del barrido de escritorio/tablet/celular.
+2. `.wb__player` tiene **z-index 25**, por encima del dock (20), y `pointer-events: none`:
+   la palabra se dibuja **sobre** el dock y los botones se siguen pudiendo tocar por abajo
+   (la tarjeta no tiene nada interactivo). Es la garantia dura, no depende de la geometria.
+3. En pantallas **bajas** (`max-height: 500px`: celular apaisado, o vertical con el teclado
+   abierto — el stage es `100dvh` y se achica) el dock pasa a **columna sobre el borde
+   derecho**: ahi el circulo ocupa todo el alto y la esquina de abajo deja de estar libre,
+   pero la banda lateral sobra (la arena es cuadrada, 92vmin). Mas un **halo oscuro** en
+   `.wb__word` para que la palabra se lea sobre cualquier fondo.
+
+Cadena de Palabras tiene su propia copia de las tres capas (cada juego tiene su CSS; tocar
+uno no toca el otro).
 
 **Gotcha del DOM**: `Hud.render()` reconstruye todas las tarjetas en cada `wb:state`
 (que llega en cada turno y en cada palabra aceptada). Por eso la reaccion vigente vive

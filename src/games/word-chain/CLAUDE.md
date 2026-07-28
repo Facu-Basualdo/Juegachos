@@ -103,7 +103,9 @@ el diccionario vive ahi y la validacion no puede ser spoofeable. Aparece en la l
   mecha saliendo por arriba que esquivar. El SVG va rotado `-90deg` para empezar arriba.
 - **No hay mecha que se queme** (`WICK_*`) ni explosion: hay un eslabon que se parte.
 - **El dock de reacciones va en la esquina inferior derecha**, no centrado abajo: con 8
-  jugadores hay uno a las 6 en punto y el dock centrado le tapaba la palabra.
+  jugadores hay uno a las 6 en punto y el dock centrado le tapaba la palabra. (Bomba
+  Palabra arrastro el dock centrado un tiempo mas y termino corrigiendolo igual, pero
+  cada juego tiene su copia del CSS: tocar uno no toca el otro.)
 - **La flecha se oculta por debajo de 560px de ancho**: en la arena chica no queda banda
   libre entre el anillo del reloj y las tarjetas.
 - **`lives` no viaja en `wc:state`** (siempre seria 1). Lo que viaja es `alive` y `links`
@@ -155,6 +157,26 @@ hoja: si viviera en `SoundEffects`, el fallback cerraria un ciclo de imports con
 **Las reacciones se superponen a proposito**: los samples duran entre 1.2s y 5s — mas que el
 cooldown de 1s del server y mas que la cara — asi que con la mesa llena se apilan varias. No es
 un bug: es lo que hace graciosa la ronda. No cortar el sample anterior ni limitar su duracion.
+
+**El dock nunca puede tapar una palabra.** Es la regla que manda sobre la estetica: lo que
+el jugador de turno escribe se lee bajo su avatar, y si no lo ve, no puede jugar. Tres capas,
+las tres necesarias (medidas con Playwright sobre el HUD real, 2-8 jugadores):
+
+1. `.wc__player` tiene **z-index 25**, por encima del dock (20), y `pointer-events: none`.
+   La palabra se dibuja **sobre** el dock, no debajo, y los botones se siguen pudiendo tocar
+   por abajo (la tarjeta no tiene nada interactivo). Es la garantia dura: no depende de la
+   geometria.
+2. En pantallas **bajas** (`max-height: 500px`: celular apaisado, o vertical con el teclado
+   abierto — el stage es `100dvh` y se achica) el dock pasa a **columna sobre el borde
+   derecho**. Ahi el circulo ocupa todo el alto y la esquina de abajo deja de estar libre,
+   pero la banda lateral sobra (la arena es cuadrada, 92vmin). Sin esto, el dock horizontal
+   se comia la palabra entera del jugador de las 4-5 en punto a 700x350, 640x360, 480x320 y
+   412x400 — y varias veces era el de TURNO.
+3. La palabra lleva un **halo oscuro** (`text-shadow` doble en `.wc__word`) para leerse igual
+   sobre el dock o sobre una chispa.
+
+Queda un solape residual de <= 26px solo a 412x400 (portrait + teclado), donde la arena no
+deja aire por ningun lado; ahi lo resuelve la capa 1.
 
 **Gotcha del DOM**: `Hud.render()` reconstruye todas las tarjetas en cada `wc:state`. Por eso
 la reaccion vigente vive en `Hud.emoteState` y se **re-aplica** al crear la tarjeta.
