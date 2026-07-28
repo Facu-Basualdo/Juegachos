@@ -7,6 +7,7 @@ import { registerPong } from "./games/pong.js";
 import { registerBasta } from "./games/basta.js";
 import { registerCarRace } from "./games/carrace.js";
 import { registerImpostor } from "./games/impostor.js";
+import { registerTelefonoCortado } from "./games/telefonocortado.js";
 import { impostorWordCount } from "./words-impostor.js";
 
 /**
@@ -64,6 +65,7 @@ registerWordChain(io);
 registerPong(io);
 registerBasta(io);
 registerImpostor(io);
+registerTelefonoCortado(io);
 registerCarRace(io);
 
 httpServer.listen(PORT, () => {
