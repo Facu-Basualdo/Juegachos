@@ -477,6 +477,14 @@ body {
 
 /* ---------- Jugadores en circulo ---------- */
 
+/* Las tarjetas van POR ENCIMA del dock de reacciones (z-index 20), no por debajo.
+   El circulo llega hasta el borde de abajo y el dock termina sobre la tarjeta de
+   alguien; la palabra es la informacion critica del juego (mas todavia si el tapado
+   es el de TURNO, que no puede ver lo que escribe), asi que gana ella y el dock
+   queda detras. `pointer-events: none` es lo que mantiene los botones del dock
+   clickeables por debajo (la tarjeta no tiene nada interactivo; el foco del input
+   invisible lo maneja `.wb__input`, que cubre el stage). Mismo criterio que en
+   Cadena de Palabras (los dos juegos lo implementan por separado). */
 .wb__player {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -486,7 +494,8 @@ body {
   align-items: center;
   gap: 4px;
   text-align: center;
-  z-index: 2;
+  z-index: 25;
+  pointer-events: none;
 }
 
 .wb__pname {
@@ -586,6 +595,11 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Halo oscuro: la palabra puede caer sobre el dock de reacciones y tiene que
+     leerse igual (ver el z-index de `.wb__player`). */
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.9),
+    0 0 8px rgba(0, 0, 0, 0.75);
 }
 
 /* Turno: concentrado (cejas + boca firme), nombre verde y realce del personaje. */
@@ -952,12 +966,16 @@ body {
   animation: wb-emote-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Dock: por encima del input invisible (z-index 5), que cubre todo el stage. */
+/* Dock: por encima del input invisible (z-index 5), que cubre todo el stage. Va a la
+   esquina inferior derecha y NO centrado abajo: con la mesa llena hay un jugador a
+   las 6 en punto y el dock centrado le tapaba la palabra justo cuando le tocaba
+   escribirla (medido con Playwright: pasaba desde 1366x768 para abajo, con 2, 4, 5,
+   6 y 8 jugadores). La esquina queda fuera del circulo salvo en pantallas muy bajas,
+   y para ese resto esta el z-index de `.wb__player`. */
 .wb__emotes {
   position: absolute;
-  bottom: clamp(10px, 3vh, 26px);
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: clamp(8px, 2.4vh, 20px);
+  right: clamp(8px, 2vw, 22px);
   z-index: 20;
   display: flex;
   gap: clamp(4px, 1vmin, 9px);
@@ -1018,6 +1036,30 @@ body {
 .wb__emotes.is-cooling {
   opacity: 0.42;
   pointer-events: none;
+}
+
+/* Pantalla baja (celular apaisado, o vertical con el teclado abierto: el stage es
+   100dvh y se achica). Ahi el circulo ocupa TODO el alto y la banda de abajo deja de
+   estar libre. La que si sobra es la LATERAL — la arena es cuadrada de 92vmin y en
+   apaisado deja aire a los costados — asi que el dock pasa a columna pegada al borde
+   derecho. El badge del atajo se esconde: en tactil no hay teclado que apretar. */
+@media (max-height: 500px) {
+  .wb__emotes {
+    flex-direction: column;
+    top: 50%;
+    bottom: auto;
+    right: 4px;
+    transform: translateY(-50%);
+    gap: 3px;
+    padding: 4px;
+  }
+  .wb__emote {
+    width: 34px;
+    height: 34px;
+  }
+  .wb__emote-key {
+    display: none;
+  }
 }
 
 /* Yo: nombre subrayado (sutil, para ubicarme). */

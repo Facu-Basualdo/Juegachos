@@ -491,3 +491,116 @@ export interface ImServerToClient {
   "im:you": (msg: ImYou) => void;
   "im:gameover": (msg: ImGameover) => void;
 }
+
+/* ------------------------------------------------------------------ *
+ * Telefono Cortado (`tc:*`, namespace /telefonocortado)
+ * ------------------------------------------------------------------ *
+ *
+ * Telefono descompuesto con dibujos. Cada jugador escribe una frase secreta; despues
+ * le llega la frase de OTRO y la dibuja; despues le llega el dibujo de un TERCERO y
+ * tiene que adivinar la frase original. Al final se revela cada cadena completa
+ * (frase -> dibujo -> adivinanza).
+ *
+ * Como Basta e Impostor, el server arbitra todo el flujo (fases + deadlines con
+ * setTimeout propio) y NO usa el diccionario. Lo que le toca a cada jugador (la frase
+ * a dibujar, el dibujo a adivinar, la pista) viaja SOLO por el evento dirigido
+ * `tc:you`, nunca en el broadcast `tc:state`: si la frase a adivinar viajara en el
+ * state, se leeria desde las devtools y la adivinanza no valdria nada.
+ */
+
+export type TcPhase = "waiting" | "writing" | "drawing" | "guessing" | "reveal" | "over";
+
+/** Vista publica de un jugador (nunca revela su frase, su dibujo ni su pista). */
+export interface TcPlayerView {
+  nickname: string;
+  connected: boolean;
+  /** Ya entrego lo que pedia la fase actual (frase / dibujo / acierto). */
+  done: boolean;
+  /** Puntaje acumulado del partido. */
+  total: number;
+}
+
+/** Snapshot que el server difunde en cada cambio. Sin contenido secreto. */
+export interface TcState {
+  phase: TcPhase;
+  /** Fin de la fase actual en epoch ms, o null. */
+  deadline: number | null;
+  /** Ms restantes de la fase al broadcast; el cliente los ancla a performance.now(). */
+  clockMs: number | null;
+  clockTotalMs: number | null;
+  players: TcPlayerView[];
+  /** Cuantas cadenas se van a revelar (solo en reveal/over). */
+  totalChains: number | null;
+}
+
+/**
+ * Lo que le toca al jugador en la fase actual. Dirigido, y reenviado al reconectar
+ * (F5) y cada vez que avanza la pista.
+ */
+export interface TcYou {
+  phase: TcPhase;
+  /** Frase ajena que te toca dibujar (solo en drawing). */
+  phrase: string | null;
+  /** Dibujo ajeno que te toca adivinar, dataURL (solo en guessing). */
+  drawing: string | null;
+  /**
+   * Pista tipo ahorcado de la frase a adivinar (solo en guessing): las letras
+   * reveladas van tal cual, las ocultas como "_" y los espacios como " ". La frase
+   * completa NUNCA se manda hasta el reveal.
+   */
+  hint: string | null;
+  /** Lo ya entregado en esta fase, para repintarlo tras un F5. */
+  submitted: string | null;
+  /** Ya acertaste la frase (solo en guessing). */
+  solved: boolean;
+}
+
+/** Una cadena completa, revelada al final. Se manda de a una (ver `tc:chain`). */
+export interface TcChainView {
+  /** Indice de la cadena y total, para que el cliente sepa cuando las tiene todas. */
+  index: number;
+  total: number;
+  /** Quien escribio la frase. */
+  author: string;
+  phrase: string;
+  /** True si la frase la puso el server porque el autor no llego a escribirla. */
+  filled: boolean;
+  /** Quien la dibujo (null si nadie llego a dibujarla). */
+  artist: string | null;
+  /** dataURL del dibujo, o null. */
+  drawing: string | null;
+  /** Quien intento adivinarla (null si a nadie le toco). */
+  guesser: string | null;
+  /** Su ultimo intento, o null. */
+  guess: string | null;
+  solved: boolean;
+}
+
+export interface TcGameover {
+  ranking: { nickname: string; place: number; total: number }[];
+}
+
+/** Cliente -> Server. */
+export interface TcClientToServer {
+  "tc:join": (msg: { code: string; nickname: string; roster: string[] }) => void;
+  /** La frase secreta propia (solo en writing). */
+  "tc:phrase": (msg: { text: string }) => void;
+  /** El dibujo terminado, dataURL (solo en drawing). */
+  "tc:draw": (msg: { image: string }) => void;
+  /** Un intento de adivinanza (solo en guessing; ilimitados hasta acertar). */
+  "tc:guess": (msg: { text: string }) => void;
+}
+
+/** Server -> Cliente. */
+export interface TcServerToClient {
+  "tc:state": (state: TcState) => void;
+  /** Dirigido: la tarea privada del jugador. No viaja en tc:state. */
+  "tc:you": (msg: TcYou) => void;
+  /**
+   * Una cadena revelada. Se manda de a UNA (no un array con todas) porque cada
+   * dibujo son decenas de KB en base64 y una sala de 8 juntaria ~500KB en un solo
+   * mensaje, cerca del `maxHttpBufferSize` de socket.io (1MB por defecto).
+   */
+  "tc:chain": (msg: TcChainView) => void;
+  "tc:gameover": (msg: TcGameover) => void;
+}
