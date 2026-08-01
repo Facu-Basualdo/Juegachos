@@ -163,8 +163,10 @@ mas corto del server). Ojo: **es un motivo de volumen, no de "esta en un canal"*
 
 Estructura de `server/` (paquete propio, aislado del build de Vite, con su propio
 `package.json` / `tsconfig.json` / `node_modules`, gitignoreado):
-- `src/index.ts` — crea `io` + health check HTTP (`/health`, devuelve `{ ok: true }`
-  mas el tamano del diccionario) + registra los namespaces de cada juego. Escucha en
+- `src/index.ts` — crea `io` + health check HTTP (`/health`, devuelve `{ ok: true }`,
+  el tamano del diccionario y `clients` = sockets conectados ahora mismo, que es lo que
+  usa el auto-update de la maquina self-hosted para no reiniciar con gente jugando; ver
+  `docs/self-host.md`) + registra los namespaces de cada juego. Escucha en
   `PORT` (Railway lo inyecta), CORS a `ALLOWED_ORIGINS` (coma-separado; `*` en dev).
   El `/health` **manda sus propias cabeceras CORS** (echo del `Origin` si esta en
   `ALLOWED_ORIGINS`, `*` sin la lista): el `cors` del `Server` de socket.io solo cubre
