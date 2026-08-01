@@ -48,6 +48,10 @@ const httpServer = createServer((req, res) => {
         fragments: fragmentCount(),
         initials: initialCount(),
         impostorWords: impostorWordCount(),
+        // Sockets conectados ahora mismo. Lo consume el auto-update de la netbook
+        // (`update-server.sh --auto`): el restart borra el estado en-ronda, que vive
+        // en memoria, asi que espera a que no haya nadie jugando. Ver docs/self-host.md.
+        clients: io.engine.clientsCount,
       }),
     );
     return;
