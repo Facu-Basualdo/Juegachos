@@ -9,6 +9,7 @@ export const meta: GameEntry = {
   added: "2026-07-27",
   order: 950,
   controls: "Mouse o dedo para dibujar, teclado para escribir y adivinar.",
+  hidden: true,
 };
 
 // Sin `scoring`: el puntaje de sala es placement-based, o sea el default
