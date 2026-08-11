@@ -1,5 +1,10 @@
 # Telefono Cortado (telefono-cortado)
 
+> **Fuera del roster.** `meta.ts` declara `hidden: true`, asi que no aparece ni en la
+> landing ni en el picker / votacion de salas (igual que Basta e Impostor). El codigo y
+> su sim del server (`server/src/games/telefonocortado.ts`) siguen en el repo: para
+> volver a habilitarlo, sacar esa linea del `meta.ts`.
+
 Telefono descompuesto con dibujos, **solo de sala**. Cada jugador escribe una frase
 secreta; despues le llega la frase de **otro** y la dibuja; despues le llega el dibujo
 de un **tercero** y tiene que adivinar la frase original. Al final se revelan las
