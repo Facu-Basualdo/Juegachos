@@ -262,6 +262,15 @@ class RoomModeController implements RoomMode {
   }
 
   async boot(): Promise<void> {
+    // Tapar la pantalla ANTES del primer await. Entre que carga la pagina del
+    // juego y que llega el estado de la sala hay unos cientos de ms en los que
+    // el juego ya muestra su "presiona ENTER para jugar" y lo escucha: un Enter
+    // o un toque ahi arrancaban la partida durante el briefing, corriendo detras
+    // del cartel de "listos" (y reportando un puntaje de una ronda que para el
+    // resto todavia no habia empezado). El overlay se traga ese input hasta que
+    // la ronda pasa a "playing".
+    this.overlay.showConnecting();
+
     const state = await fetchRoomState(this.code);
     if (!state) {
       this.overlay.showError("La sala no existe o no se pudo cargar.");
@@ -524,6 +533,16 @@ class RoomModeController implements RoomMode {
   private async submitScore(score: number, finished: boolean): Promise<void> {
     // Un espectador no puntua nunca (no esta registrado en la sala).
     if (this.spectator) return;
+    // Red de seguridad contra la partida largada antes de tiempo: si MI ronda
+    // todavia no arranco (la sala esta en su briefing, o ni siquiera se leyo el
+    // estado), el puntaje no vale y se descarta. Sin latchear `reported`, asi
+    // cuando la ronda pase a "playing" el jugador la juega de verdad (onStart
+    // reinicia la partida) en vez de quedarse esperando con un cero puesto. Se
+    // compara contra la ronda propia a proposito: un briefing de la ronda
+    // SIGUIENTE no invalida el parcial de la que esta cerrando.
+    const room = this.state?.room;
+    if (this.myRound <= 0 || !room) return;
+    if (room.current_round === this.myRound && room.status === "briefing") return;
     // No re-reportar si ya se confirmo, ni lanzar una segunda escritura mientras
     // hay una en vuelo (varios caminos llaman aca: muerte, timeout del tick, parcial
     // al cambiar de fase, navegacion).
