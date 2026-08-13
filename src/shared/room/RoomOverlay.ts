@@ -219,24 +219,30 @@ export class RoomOverlay {
     for (const type of ["pointerdown", "mousedown", "click", "touchstart"]) {
       this.root.addEventListener(type, (e) => e.stopPropagation());
     }
-    // Los juegos escuchan Enter/Espacio en `window` para su propio "toca para
+    // Los juegos escuchan el teclado en `window` para su propio "toca para
     // empezar" (ver CLAUDE.md, "Enter-to-start countdown"). Ese listener no
     // sabe nada del overlay: sin esto, tocar Enter mientras se lee el briefing
     // (o cualquier otra vista del overlay) arranca la partida local antes de
     // que la ronda pase a "playing", el juego termina solo y reporta un
     // puntaje para una ronda que todavia no empezo para los demas. Se
     // intercepta en fase de captura (antes que el listener del juego, que esta
-    // en fase de bubble) mientras el overlay esta visible, salvo que el foco
-    // este en un control propio del overlay (p.ej. el boton "Listo" via teclado).
+    // en fase de bubble) mientras el overlay esta visible.
+    //
+    // Se corta TODA tecla, no solo Enter/Espacio: cada juego elige con que
+    // arranca (Enter, espacio, una letra, una flecha) y el overlay no puede
+    // saberlo. Y se corta tambien cuando el foco esta en un control propio del
+    // overlay: un boton que quedo enfocado tras el clic (las opciones de
+    // votacion, la accion del host) dejaba pasar el Enter siguiente hasta el
+    // juego. Cortar la propagacion no cancela la accion por defecto, asi que
+    // el boton enfocado se sigue activando con teclado; el preventDefault (que
+    // si la cancelaria) queda solo para el scroll del espacio fuera del overlay.
     window.addEventListener(
       "keydown",
       (e) => {
         if (this.root.style.display === "none") return;
+        e.stopPropagation();
         if (e.target instanceof Node && this.root.contains(e.target)) return;
-        if (e.code === "Space" || e.code === "Enter") {
-          e.stopPropagation();
-          e.preventDefault();
-        }
+        if (e.code === "Space" || e.code === "Enter") e.preventDefault();
       },
       { capture: true },
     );
@@ -724,6 +730,21 @@ export class RoomOverlay {
     this.addSubtitle(
       "La partida ya empezo, asi que la miras desde afuera. Vas a poder jugar cuando termine y el anfitrion abra una nueva.",
     );
+  }
+
+  /**
+   * Primera vista, montada apenas carga la pagina del juego (antes de leer el
+   * estado de la sala). No es decorativa: mientras no hay overlay, la pantalla
+   * de inicio del juego ("presiona ENTER para jugar") esta viva y un Enter o un
+   * toque largan la partida antes de que la ronda arranque — la carrera contra
+   * el fetch inicial. Con el overlay puesto desde el arranque, todo el input
+   * queda tapado hasta que el modo sala decide que se juega.
+   */
+  showConnecting(): void {
+    this.show();
+    this.addKicker("Sala");
+    this.addTitle("Conectando...");
+    this.addSubtitle("Buscando la sala, esperando el arranque de la ronda.");
   }
 
   /** Error terminal (sala inexistente, etc.). */
