@@ -47,6 +47,17 @@ body {
   justify-content: center;
 }
 
+/*
+ * El Hud prende y apaga la escena, el cartel y el countdown con el atributo
+ * `hidden`, y el `display: none` que el navegador le da a `[hidden]` lo pisa
+ * cualquier `display` propio (la escena es flex, el cartel y el countdown son
+ * grid). Sin esta regla el "YA" y el cartel de "esperando" quedan clavados
+ * arriba de la hoja y tapan el juego. No sacar.
+ */
+.bt [hidden] {
+  display: none !important;
+}
+
 /* ---------- Escena / hoja ---------- */
 
 .bt__stage {
