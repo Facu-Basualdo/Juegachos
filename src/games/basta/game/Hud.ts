@@ -1,5 +1,5 @@
 import { CATEGORIES } from "./constants";
-import type { BtCategoryId, BtCell, BtState, BtVote } from "./BastaTransport";
+import type { BtCategoryId, BtCell, BtReject, BtState } from "./BastaTransport";
 
 type Answers = Partial<Record<BtCategoryId, string>>;
 
@@ -14,6 +14,9 @@ function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ESCAPE[c]);
 }
 
+/** Cuanto dura el cartel de transicion entre fases (sincronizado con `bt-wipe` en el CSS). */
+export const TRANSITION_MS = 1400;
+
 const STATUS_LABEL: Record<string, string> = {
   unique: "unica",
   repeated: "repetida",
@@ -25,9 +28,13 @@ const STATUS_LABEL: Record<string, string> = {
  * Hud de Basta (estetica "hoja de cuaderno", ver DESIGN.md). Tres vistas segun la
  * fase que manda el server:
  *  - filling / grace: la hoja rayada con las 7 categorias como inputs + boton BASTA.
- *  - voting: las respuestas de todos, con un boton para tachar las ajenas.
+ *  - voting: las respuestas de todos, con un boton para tachar las ajenas. El tachado
+ *    es LOCAL hasta que se confirma con el boton de accion; recien ahi viaja al server.
  *  - reveal: las mismas respuestas con su puntaje (100 / 50 / 0) y el subtotal.
  * Los estados de espera / resultados / tablero final los cubre el RoomOverlay por encima.
+ *
+ * Entre fase y fase se interpone un cartel de transicion (`showTransition`), para que
+ * el salto de la hoja al tablero de votacion no sea un corte seco.
  */
 export class Hud {
   private readonly stage: HTMLElement;
@@ -39,16 +46,25 @@ export class Hud {
   private readonly bannerEl: HTMLElement;
   private readonly panelEl: HTMLElement;
   private readonly bastaBtn: HTMLButtonElement;
+  private readonly wipeEl: HTMLElement;
 
   private fillChangeCb: () => void = () => {};
   private bastaCb: () => void = () => {};
-  private voteCb: (target: string, category: BtCategoryId) => void = () => {};
+  private voteSubmitCb: (rejects: BtReject[]) => void = () => {};
 
   private me = "";
   /** Que hay montado en el panel ahora, para no reconstruir los inputs en cada snapshot. */
   private panelMode: "none" | "sheet" | "voting" | "reveal" = "none";
   private sheetLetterIndex = -1;
+  private votingLetterIndex = -1;
   private readonly inputs = new Map<BtCategoryId, HTMLInputElement>();
+
+  /** Tachados marcados a mano y todavia NO enviados, como `${target}|${category}`. */
+  private readonly pendingRejects = new Set<string>();
+  /** Ya confirmo su voto en esta letra (el server ignora un segundo envio). */
+  private voteSent = false;
+
+  private wipeTimer = 0;
 
   private clockRaf = 0;
   private clockAnchor = 0;
@@ -70,6 +86,12 @@ export class Hud {
         <div class="bt__panel"></div>
         <button class="bt__basta" type="button" disabled>BASTA</button>
       </div>
+      <div class="bt__wipe" hidden>
+        <div class="bt__wipe-card">
+          <span class="bt__wipe-title"></span>
+          <span class="bt__wipe-sub"></span>
+        </div>
+      </div>
       <div class="bt__overlay" hidden></div>
       <div class="bt__countdown" hidden></div>
     `;
@@ -84,9 +106,14 @@ export class Hud {
     this.bannerEl = wrap.querySelector(".bt__banner")!;
     this.panelEl = wrap.querySelector(".bt__panel")!;
     this.bastaBtn = wrap.querySelector(".bt__basta")!;
+    this.wipeEl = wrap.querySelector(".bt__wipe")!;
 
+    // Un solo boton de accion abajo: grita BASTA en el llenado y confirma el voto en
+    // la votacion (la fase decide, ver `renderSheet` / `renderVoting`).
     this.bastaBtn.addEventListener("click", () => {
-      if (!this.bastaBtn.disabled) this.bastaCb();
+      if (this.bastaBtn.disabled) return;
+      if (this.panelMode === "voting") this.submitVotes();
+      else this.bastaCb();
     });
   }
 
@@ -98,8 +125,9 @@ export class Hud {
   onBasta(cb: () => void): void {
     this.bastaCb = cb;
   }
-  onVote(cb: (target: string, category: BtCategoryId) => void): void {
-    this.voteCb = cb;
+  /** Se dispara UNA vez por letra, al confirmar la hoja de tachados. */
+  onVoteSubmit(cb: (rejects: BtReject[]) => void): void {
+    this.voteSubmitCb = cb;
   }
 
   // ---------- Mensajes / countdown ----------
@@ -135,6 +163,27 @@ export class Hud {
   showStage(): void {
     this.overlay.hidden = true;
     this.stage.hidden = false;
+  }
+
+  /**
+   * Cartel de transicion entre fases (hoja -> votacion -> puntaje -> letra nueva).
+   * Es puramente visual: no bloquea nada, la vista de abajo ya esta renderizada y el
+   * cartel se corre solo. Se re-dispara pisando el anterior.
+   */
+  showTransition(title: string, sub: string): void {
+    this.wipeEl.querySelector<HTMLElement>(".bt__wipe-title")!.textContent = title;
+    this.wipeEl.querySelector<HTMLElement>(".bt__wipe-sub")!.textContent = sub;
+    this.wipeEl.hidden = false;
+    // Reinicia la animacion aunque ya estuviera corriendo.
+    this.wipeEl.classList.remove("is-on");
+    void this.wipeEl.offsetWidth;
+    this.wipeEl.classList.add("is-on");
+    if (this.wipeTimer !== 0) window.clearTimeout(this.wipeTimer);
+    this.wipeTimer = window.setTimeout(() => {
+      this.wipeTimer = 0;
+      this.wipeEl.classList.remove("is-on");
+      this.wipeEl.hidden = true;
+    }, TRANSITION_MS);
   }
 
   // ---------- Render por fase ----------
@@ -191,6 +240,8 @@ export class Hud {
       this.bannerEl.hidden = true;
     }
     this.bastaBtn.hidden = false;
+    this.bastaBtn.classList.remove("is-vote");
+    this.bastaBtn.textContent = "BASTA";
     this.refreshBastaEnabled();
   }
 
@@ -263,54 +314,102 @@ export class Hud {
 
   // ---------- Vista: votacion ----------
 
+  /**
+   * El tablero de votacion se arma UNA vez por letra: los tachados son estado local
+   * (`pendingRejects`) hasta que se confirman, asi que reconstruirlo en cada snapshot
+   * ajeno haria saltar el scroll mientras el jugador revisa. Los snapshots siguientes
+   * solo refrescan el banner de "listos" y el boton.
+   */
   private renderVoting(s: BtState): void {
-    this.panelMode = "voting";
+    const fresh = this.panelMode !== "voting" || this.votingLetterIndex !== s.letterIndex;
+    if (fresh) {
+      this.panelMode = "voting";
+      this.votingLetterIndex = s.letterIndex;
+      this.pendingRejects.clear();
+      this.voteSent = false;
+      this.buildVotingBoard(s);
+    }
     this.bannerEl.hidden = false;
-    this.bannerEl.textContent = "Tacha las respuestas que no valgan";
-    this.bastaBtn.hidden = true;
+    this.refreshVoteUI(s);
+  }
 
+  private buildVotingBoard(s: BtState): void {
     const cells = s.cells ?? [];
-    const votes = s.votes ?? [];
-    const eligible = s.players.length - 1;
     this.panelEl.innerHTML = `<div class="bt__board">${CATEGORIES.map((c) =>
-      this.categoryBlock(c.id, c.label, s, cells, votes, eligible),
+      this.categoryBlock(c.id, c.label, s, cells),
     ).join("")}</div>`;
 
     for (const btn of this.panelEl.querySelectorAll<HTMLButtonElement>(".bt__tacha")) {
       btn.addEventListener("click", () => {
-        const target = btn.dataset.target!;
-        const category = btn.dataset.cat as BtCategoryId;
-        this.voteCb(target, category);
+        if (this.voteSent) return; // ya confirmado: no se puede recular
+        const key = `${btn.dataset.target}|${btn.dataset.cat}`;
+        if (this.pendingRejects.has(key)) this.pendingRejects.delete(key);
+        else this.pendingRejects.add(key);
+        btn.classList.toggle("is-on", this.pendingRejects.has(key));
+        btn.closest(".bt__ans")?.classList.toggle("is-doomed", this.pendingRejects.has(key));
+        this.refreshVoteButton();
       });
     }
   }
 
-  private categoryBlock(
-    cat: BtCategoryId,
-    label: string,
-    s: BtState,
-    cells: BtCell[],
-    votes: BtVote[],
-    eligible: number,
-  ): string {
+  /** Banner con el progreso de la mesa + estado del boton de confirmar. */
+  private refreshVoteUI(s: BtState): void {
+    const total = s.players.length;
+    const done = s.players.filter((p) => p.voted).length;
+    // Un F5 en plena votacion rearma el tablero en blanco, pero el server sigue
+    // teniendo el voto: manda el, para no ofrecer confirmar algo que ya se cerro.
+    if (s.players.find((p) => p.nickname === this.me)?.voted) this.voteSent = true;
+    this.bannerEl.textContent = this.voteSent
+      ? `Voto enviado. Esperando a los demas (${done}/${total})`
+      : `Tacha las que no valgan y confirma (${done}/${total} listos)`;
+    this.refreshVoteButton();
+  }
+
+  private refreshVoteButton(): void {
+    this.bastaBtn.hidden = false;
+    this.bastaBtn.classList.add("is-vote");
+    this.bastaBtn.disabled = this.voteSent;
+    if (this.voteSent) {
+      for (const btn of this.panelEl.querySelectorAll<HTMLButtonElement>(".bt__tacha")) {
+        btn.disabled = true;
+      }
+    }
+    const n = this.pendingRejects.size;
+    this.bastaBtn.textContent = this.voteSent
+      ? "ENVIADO"
+      : n > 0
+        ? `LISTO (${n})`
+        : "LISTO";
+  }
+
+  private submitVotes(): void {
+    if (this.voteSent) return;
+    this.voteSent = true;
+    const rejects: BtReject[] = [...this.pendingRejects].map((key) => {
+      const [target, category] = key.split("|") as [string, BtCategoryId];
+      return { target, category };
+    });
+    // Congela el tablero: lo enviado no se toca.
+    for (const btn of this.panelEl.querySelectorAll<HTMLButtonElement>(".bt__tacha")) {
+      btn.disabled = true;
+    }
+    this.refreshVoteButton();
+    this.voteSubmitCb(rejects);
+  }
+
+  private categoryBlock(cat: BtCategoryId, label: string, s: BtState, cells: BtCell[]): string {
     const rows = s.players
       .map((p) => {
         const cell = cells.find((c) => c.player === p.nickname && c.category === cat);
         const text = cell?.text ?? "";
-        const rejects = votes.filter((v) => v.target === p.nickname && v.category === cat).length;
-        const mine = votes.some(
-          (v) => v.voter === this.me && v.target === p.nickname && v.category === cat,
-        );
-        const doomed = eligible > 0 && rejects * 2 > eligible;
         const empty = text.trim() === "";
         const cls = ["bt__ans"];
         if (empty) cls.push("is-empty");
-        if (doomed) cls.push("is-doomed");
         const canVote = !empty && p.nickname !== this.me;
         const btn = canVote
-          ? `<button class="bt__tacha${mine ? " is-on" : ""}" type="button" data-target="${esc(
+          ? `<button class="bt__tacha" type="button" data-target="${esc(
               p.nickname,
-            )}" data-cat="${cat}" title="Tachar">${CROSS_SVG}${rejects > 0 ? `<span class="bt__rejects">${rejects}</span>` : ""}</button>`
+            )}" data-cat="${cat}" title="Tachar">${CROSS_SVG}</button>`
           : "";
         return `
           <div class="${cls.join(" ")}">

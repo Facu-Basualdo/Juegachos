@@ -86,10 +86,24 @@ respaldo. Por turnos, la latencia por jugada no se nota.
   uno (con la pareja correcta) y les destraba el AFK. Corre su propio tablero
   activo mas un `SharedMatch` **pasivo** (`passive: true`) por cada otra pareja
   (`humanBoards`), que no toca HUD/sonido/puntaje. Los tableros vs IA no usan DB,
-  asi que el host no los administra.
-- **Anti-AFK**: si el jugador de turno de un tablero no mueve en `AFK_MOVE_MS`, el
-  host juega una casilla al azar por el para que la partida (que no puede empatar)
-  avance hasta un ganador. El deadline de ronda sigue siendo el corte duro.
+  asi que el host no los administra. Si el host **no aparece** (se desconecto
+  antes de cargar la ronda), pasados `CREATE_FALLBACK_MS` (6s, de `matchState.ts`)
+  cada jugador crea su propio tablero: sin eso la pareja se quedaba en "Esperando
+  un rival..." para siempre.
+- **Anti-AFK**: si el jugador de turno de un tablero no mueve en `AFK_MOVE_MS`
+  (25 s), se juega una casilla al azar por el para que la partida (que no puede
+  empatar) avance hasta un ganador. El deadline de ronda sigue siendo el corte
+  duro.
+- **El destrabe no es exclusivo del host**: tambien lo hace **el rival del jugador
+  parado, en su propio tablero** (nunca su propio turno; para eso esta el host).
+  Hacia falta porque los tableros ajenos los administra el host con instancias
+  `passive` creadas al arrancar la ronda: un host que **toma el control a mitad de
+  ronda** (migracion automatica de `roomMode`) no las tiene, asi que un host caido
+  congelaba duelos en los que ni jugaba.
+- **Al desconectado no se le espera la ventana AFK completa**: si el jugador de
+  turno no esta en `room.presentPlayers()` se juega por el a los
+  `AFK_ABSENT_MOVE_MS` (5 s) en vez de 25 s — no va a mover nunca. Con
+  `presentPlayers()` vacia (canal aun sin sincronizar) se cae a la ventana normal.
 - **Fin**: con `winner` definido, cada cliente reporta 1 (si gano) o 0 via
   `room.reportScore(...)`; los espectadores reportan 0. Recargar a mitad de
   partida reengancha (el estado vive en Postgres y `SharedMatch.boot()` lo
@@ -108,7 +122,8 @@ respaldo. Por turnos, la latencia por jugada no se nota.
   `refresh` corta solo por el flag `disposed`).
 
 Usa el contexto extendido de `RoomMode` (`code`, `me`, `round()`, `players()`,
-`isHost()`, `ping()`, `onSync()`) igual que Memoria y Conecta 4.
+`presentPlayers()`, `isHost()`, `ping()`, `onSync()`) igual que Memoria y
+Conecta 4.
 
 ## Integraciones estandar
 

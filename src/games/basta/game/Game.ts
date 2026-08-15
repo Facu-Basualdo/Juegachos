@@ -1,5 +1,6 @@
 import { initRoomMode, isRoomMode, type RoomMode } from "../../../shared/room/roomMode";
 import { isGameServerConfigured, resolveGameServerUrl } from "../../../shared/server-status";
+import { BastaAudio } from "./BastaAudio";
 import { COUNTDOWN_LABELS, COUNTDOWN_STEP } from "./constants";
 import { Hud } from "./Hud";
 import { SocketTransport } from "./SocketTransport";
@@ -30,13 +31,18 @@ export class Game {
   private lastCountdownIndex = -1;
   private latest: BtState | null = null;
   private prevPhase: BtPhase | null = null;
+  /** Junto con `prevPhase`: dos letras seguidas entran a `filling` sin cambiar de fase. */
+  private prevLetterIndex = -1;
   private fillTimer: number | null = null;
 
   constructor(root: HTMLElement) {
+    // Se baja y decodifica ya: el BASTA tiene que sonar en el instante en que corta la
+    // ronda, no medio segundo despues.
+    BastaAudio.preload();
     this.hud = new Hud(root);
     this.hud.onFillChange(() => this.scheduleFill());
     this.hud.onBasta(() => this.onBasta());
-    this.hud.onVote((target, category) => this.transport?.sendVote(target, category));
+    this.hud.onVoteSubmit((rejects) => this.transport?.sendVotes(rejects));
 
     this.room = initRoomMode("basta", {
       getScore: () => this.liveScore(),
@@ -77,6 +83,7 @@ export class Game {
     this.state = "countdown";
     this.lastCountdownIndex = -1;
     this.prevPhase = null;
+    this.prevLetterIndex = -1;
     void this.connect();
 
     let i = 0;
@@ -134,23 +141,38 @@ export class Game {
   }
 
   private applyState(s: BtState): void {
-    if (this.prevPhase !== s.phase) {
-      this.playPhaseSound(s);
-      this.prevPhase = s.phase;
-    }
+    // El render va primero para que el cartel de transicion tape una vista ya armada
+    // (si no, el barrido descubre el tablero recien a mitad de camino).
     this.hud.render(s, this.room?.me ?? "");
+    if (this.prevPhase !== s.phase || this.prevLetterIndex !== s.letterIndex) {
+      this.onPhaseChange(s);
+      this.prevPhase = s.phase;
+      this.prevLetterIndex = s.letterIndex;
+    }
   }
 
-  private playPhaseSound(s: BtState): void {
+  /** Sonido + cartel de transicion en cada salto de fase (o de letra). */
+  private onPhaseChange(s: BtState): void {
     switch (s.phase) {
+      case "filling":
+        // La primera letra ya viene anunciada por el countdown 3/2/1/YA.
+        if (s.letterIndex > 0) {
+          this.hud.showTransition(
+            `LETRA ${s.letterIndex + 1}`,
+            `Ahora con la ${s.letter ?? ""}`,
+          );
+        }
+        break;
       case "grace":
         SoundEffects.playBasta();
         break;
       case "voting":
         SoundEffects.playVoteOpen();
+        this.hud.showTransition("A VOTAR", "Tacha las que no valgan y confirma");
         break;
       case "reveal":
         SoundEffects.playReveal();
+        this.hud.showTransition("PUNTAJE", "Se cerro la votacion");
         break;
       default:
         break;

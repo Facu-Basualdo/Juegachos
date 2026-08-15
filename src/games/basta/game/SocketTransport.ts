@@ -3,6 +3,7 @@ import type {
   BastaTransport,
   BtCategoryId,
   BtGameover,
+  BtReject,
   BtState,
 } from "./BastaTransport";
 
@@ -65,8 +66,8 @@ export class SocketTransport implements BastaTransport {
   sendBasta(): void {
     this.socket?.emit("bt:basta", {});
   }
-  sendVote(target: string, category: BtCategoryId): void {
-    this.socket?.emit("bt:vote", { target, category });
+  sendVotes(rejects: BtReject[]): void {
+    this.socket?.emit("bt:vote", { rejects });
   }
   dispose(): void {
     this.socket?.disconnect();

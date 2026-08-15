@@ -242,6 +242,9 @@ export interface BtPlayerView {
   filledCount: number;
   /** Puntaje acumulado del partido. */
   total: number;
+  /** Solo en voting: ya mando su hoja de tachados. Es lo unico que se sabe del voto
+   *  ajeno hasta el reveal (a quien tacho no se ve, para no arrastrar a la mesa). */
+  voted: boolean;
 }
 
 /** Como quedo puntuada una respuesta al revelar (para el desglose). */
@@ -258,8 +261,9 @@ export interface BtCell {
   points: number | null;
 }
 
-/** Un voto de rechazo crudo (la votacion es publica). El cliente cuenta los rechazos
- *  por celda y deriva cuales tacho el mismo (voter === su nickname). */
+/** Un voto de rechazo crudo. Se difunden recien en el REVEAL (durante la votacion
+ *  solo se sabe QUIEN ya voto, no a quien tacho): la hoja de tachados se manda
+ *  entera y de una sola vez al confirmar. */
 export interface BtVote {
   voter: string;
   target: string;
@@ -286,7 +290,8 @@ export interface BtState {
   bastaBy: string | null;
   /** Respuestas reveladas de TODOS (solo en voting/reveal; null en filling). */
   cells: BtCell[] | null;
-  /** Votos de rechazo crudos (solo en voting/reveal; null en filling). */
+  /** Votos de rechazo crudos, solo en REVEAL (null en el resto, votacion incluida:
+   *  mientras se vota, lo unico publico es el `voted` de cada jugador). */
   votes: BtVote[] | null;
   /** Puntos ganados por cada jugador en esta letra (solo en reveal; null si no). */
   letterScores: { player: string; points: number }[] | null;
@@ -304,8 +309,11 @@ export interface BtClientToServer {
   "bt:fill": (msg: { answers: Partial<Record<BtCategoryId, string>> }) => void;
   /** Declara BASTA: el server exige tener las 7 categorias no vacias. */
   "bt:basta": (msg: Record<string, never>) => void;
-  /** Togglea el tachado de una respuesta ajena (voto de rechazo) durante la votacion. */
-  "bt:vote": (msg: { target: string; category: BtCategoryId }) => void;
+  /** Hoja de tachados COMPLETA del votante, mandada de una sola vez al confirmar
+   *  ("Listo"): mientras revisa, el tachado es local y nadie lo ve. Confirma una
+   *  vez por letra — el server ignora los reenvios. Cuando confirmaron todos los
+   *  jugadores conectados, la votacion se cierra sin esperar el tope. */
+  "bt:vote": (msg: { rejects: { target: string; category: BtCategoryId }[] }) => void;
 }
 
 /** Server -> Cliente. */

@@ -11,5 +11,11 @@ export const REVEAL_HOLD_MS = 900;
 /** Inactividad del jugador de turno antes de que el host lo saltee (sala). */
 export const AFK_SKIP_MS = 20000;
 
+/**
+ * Lo mismo, pero para un jugador **desconectado**: no va a mover nunca, asi que
+ * no tiene sentido reservarle la ventana AFK completa en cada vuelta de turnos.
+ */
+export const AFK_ABSENT_SKIP_MS = 3000;
+
 /** Poll de respaldo del estado compartido (ademas del broadcast "sync"). */
 export const MATCH_POLL_MS = 5000;

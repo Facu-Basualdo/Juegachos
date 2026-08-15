@@ -11,7 +11,12 @@ import {
 import { Hud } from "./Hud";
 import { initRoomMode, type RoomMode } from "../../../shared/room/roomMode";
 import { SoundEffects } from "./SoundEffects";
-import { fetchMatchState, createMatchState, updateMatchState } from "../../../shared/room/matchState";
+import {
+  fetchMatchState,
+  createMatchState,
+  updateMatchState,
+  CREATE_FALLBACK_MS,
+} from "../../../shared/room/matchState";
 
 type State = "ready" | "countdown" | "showingCoin" | "shuffling" | "waitingChoice" | "revealing" | "roundEnd" | "gameOver";
 
@@ -44,6 +49,8 @@ export class Game {
   private bestLevel: number | null = null;
   private lastTime = 0;
   private roomState: SharedGameState | null = null;
+  /** Cuando esta pagina entro al modo sala (para el fallback de creacion). */
+  private roomBootAt = 0;
 
   // Gameplay variables
   private countdownTime = 0;
@@ -514,10 +521,27 @@ export class Game {
 
   private async startRoomMode(): Promise<void> {
     this.hud.updateStats(this.level);
+    this.roomBootAt = Date.now();
 
     this.room!.onSync(() => void this.syncRoomState());
-    
+
     await this.syncRoomState();
+    void this.waitForRoomState();
+  }
+
+  /**
+   * Reintenta hasta que exista el estado compartido de la ronda. Sin esto, si el
+   * host no llegaba a crearlo (se desconecto antes de cargar la ronda) los demas
+   * se quedaban esperando para siempre: `syncRoomState` solo se dispara con el
+   * broadcast "sync", que en ese caso no llega nunca. Pasado CREATE_FALLBACK_MS
+   * el propio reintento lo crea (ver `syncRoomState`).
+   */
+  private async waitForRoomState(): Promise<void> {
+    for (let attempt = 0; attempt < 30 && !this.roomState; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (this.roomState || !this.room) return;
+      await this.syncRoomState();
+    }
   }
 
   private async syncRoomState(): Promise<void> {
@@ -556,7 +580,9 @@ export class Game {
         this.startNextLevel();
       }
 
-    } else if (this.room.isHost()) {
+    } else if (this.room.isHost() || Date.now() - this.roomBootAt > CREATE_FALLBACK_MS) {
+      // Normalmente lo crea el host; si no aparece, lo crea cualquiera pasado el
+      // margen (el insert es idempotente por PK: gana el primero).
       const config = getRoomLevelConfig(1);
       const initialCoinSlot = Math.floor(Math.random() * config.cups);
       const swaps = this.generateSwapsList(config.cups, config.swaps);
