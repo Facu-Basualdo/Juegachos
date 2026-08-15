@@ -9,6 +9,7 @@ import {
   STEP_MIN,
   STEP_DECREMENT,
   MAX_DT,
+  TURN_EARLY_FRACTION,
   COUNTDOWN_LABELS,
   COUNTDOWN_STEP,
   BEST_KEY,
@@ -145,7 +146,21 @@ export class Game {
     if (this.dirQueue.length < 2) {
       this.dirQueue.push({ x, y });
       SoundEffects.playTurn();
+      this.tryEarlyStep();
     }
+  }
+
+  /**
+   * Adelanta el paso cuando el giro llega pasada la mitad del tick. Sin esto el giro
+   * espera hasta el proximo borde de paso (hasta STEP_INITIAL = 140 ms al principio) y
+   * eso es lo que se siente como delay en los controles. Solo aplica al giro que se
+   * ejecuta en este paso (cola de 1); el segundo bufferado sigue siendo del paso que viene.
+   */
+  private tryEarlyStep(): void {
+    if (this.dirQueue.length !== 1) return;
+    if (this.stepAccum < this.stepInterval * TURN_EARLY_FRACTION) return;
+    this.stepAccum = 0;
+    this.stepSnake();
   }
 
   private onAction(): void {
