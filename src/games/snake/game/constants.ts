@@ -14,6 +14,10 @@ export const STEP_DECREMENT = 0.004;
 
 export const MAX_DT = 0.05;
 
+// Latencia de giro: fraccion del paso ya recorrida a partir de la cual un giro adelanta
+// el paso en vez de esperar al proximo borde. Ver "Giro sin espera" en CLAUDE.md.
+export const TURN_EARLY_FRACTION = 0.5;
+
 export const COUNTDOWN_LABELS = ["3", "2", "1", "YA"];
 export const COUNTDOWN_STEP = 0.75;
 
