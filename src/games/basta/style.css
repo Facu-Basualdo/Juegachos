@@ -273,6 +273,19 @@ body {
   cursor: not-allowed;
 }
 
+/* Mismo boton, otra funcion: en la votacion confirma la hoja de tachados (tinta
+   azul de la lapicera, para que no se lea como un segundo BASTA). */
+.bt__basta.is-vote {
+  background: var(--bt-ink);
+  box-shadow: 0 6px 0 #1c3f9c, 0 10px 18px rgba(0, 0, 0, 0.25);
+  font-size: 22px;
+  padding: 12px 38px;
+}
+
+.bt__basta.is-vote:not(:disabled):active {
+  box-shadow: 0 2px 0 #1c3f9c, 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
 /* ---------- Vistas votacion / reveal ---------- */
 
 .bt__board {
@@ -462,6 +475,97 @@ body {
   100% {
     transform: scale(1) rotate(0deg);
     opacity: 0.9;
+  }
+}
+
+/* ---------- Transicion entre fases ---------- */
+
+/*
+ * Cartel que se cruza entre fase y fase (hoja -> votacion -> puntaje -> letra
+ * nueva). Es un pase de hoja: una banda de papel que barre la pantalla, se planta
+ * un instante con el titulo y sigue de largo. No bloquea: `pointer-events: none`
+ * y la vista de abajo ya esta armada, asi que si el cartel se pierde (pestaña en
+ * segundo plano) no queda nada trabado. Duracion sincronizada con TRANSITION_MS.
+ */
+.bt__wipe {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 15;
+}
+
+.bt__wipe-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px clamp(28px, 9vw, 76px);
+  background: var(--bt-paper);
+  border-top: 3px solid var(--bt-ink);
+  border-bottom: 3px solid var(--bt-ink);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+  transform: translateX(-120%) rotate(-2deg);
+}
+
+.bt__wipe.is-on .bt__wipe-card {
+  animation: bt-wipe 1.4s cubic-bezier(0.22, 0.8, 0.3, 1) forwards;
+}
+
+.bt__wipe-title {
+  font-family: var(--bt-hand);
+  font-weight: 700;
+  font-size: clamp(38px, 12vw, 68px);
+  line-height: 1;
+  color: var(--bt-red);
+  letter-spacing: 2px;
+}
+
+.bt__wipe-sub {
+  font-family: var(--bt-hand);
+  font-size: clamp(15px, 4.5vw, 20px);
+  color: var(--bt-ink);
+}
+
+@keyframes bt-wipe {
+  0% {
+    transform: translateX(-120%) rotate(-6deg);
+    opacity: 0;
+  }
+  22% {
+    transform: translateX(0) rotate(-2deg);
+    opacity: 1;
+  }
+  72% {
+    transform: translateX(0) rotate(-2deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(120%) rotate(4deg);
+    opacity: 0;
+  }
+}
+
+/* Quien prefiere no ver movimiento igual necesita leer el cartel: se queda quieto
+   y se va con un fundido. */
+@media (prefers-reduced-motion: reduce) {
+  .bt__wipe.is-on .bt__wipe-card {
+    animation: bt-wipe-fade 1.4s ease forwards;
+  }
+
+  @keyframes bt-wipe-fade {
+    0%,
+    100% {
+      transform: rotate(-2deg);
+      opacity: 0;
+    }
+    20%,
+    75% {
+      transform: rotate(-2deg);
+      opacity: 1;
+    }
   }
 }
 

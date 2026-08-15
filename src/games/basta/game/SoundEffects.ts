@@ -1,22 +1,16 @@
+import { BastaAudio } from "./BastaAudio";
+import { getAudioContext, resumeAudio } from "./audioContext";
+
 /**
  * Efectos sintetizados con Web Audio (sin assets), en clave "lapiz sobre papel".
- * Un unico AudioContext por pagina, arrancado en `suspended` hasta el primer gesto.
+ * La unica excepcion es el grito de BASTA, que es un sample real (`BastaAudio`) con
+ * fallback al campanazo sintetizado de aca.
  */
-let audioCtx: AudioContext | null = null;
-
-function getAudioContext(): AudioContext | null {
-  if (typeof window === "undefined") return null;
-  if (!audioCtx) {
-    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (AudioContextClass) audioCtx = new AudioContextClass();
-  }
-  return audioCtx;
-}
 
 function blip(type: OscillatorType, freq: number, dur: number, peak: number, slideTo?: number, delay = 0): void {
   const ctx = getAudioContext();
   if (!ctx) return;
-  if (ctx.state === "suspended") void ctx.resume();
+  resumeAudio(ctx);
   const now = ctx.currentTime + delay;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -38,8 +32,12 @@ export class SoundEffects {
     blip("sine", 750, 0.05, 0.08);
   }
 
-  /** Alguien grito BASTA: campanazo seco que corta a todos. */
+  /**
+   * Alguien grito BASTA (suena en todas las pantallas, no solo en la del que corto).
+   * Sample real si esta cargado; si no, campanazo seco sintetizado.
+   */
   static playBasta(): void {
+    if (BastaAudio.play()) return;
     blip("square", 440, 0.1, 0.12, 660);
     blip("triangle", 880, 0.18, 0.08);
   }

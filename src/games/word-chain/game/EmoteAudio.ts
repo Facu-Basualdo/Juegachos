@@ -2,9 +2,9 @@ import { getAudioContext, resumeAudio } from "./audioContext";
 import { EMOTES, type EmoteId } from "./constants";
 
 /**
- * Samples reales (mp3) de las cinco reacciones. Es la UNICA excepcion del repo a la
- * regla de sintetizar todo con Web Audio: una risa humana no la hace un oscilador, y
- * las reacciones son la voz del jugador en la mesa.
+ * Samples reales (mp3) de las cinco reacciones. Es una de las dos excepciones del repo
+ * a la regla de sintetizar todo con Web Audio (la otra es el grito de Basta): una risa
+ * humana no la hace un oscilador, y las reacciones son la voz del jugador en la mesa.
  *
  * Los archivos viven en `public/sfx/emotes/<id>.mp3` (ver su README) y se sirven
  * estaticos, sin pasar por el bundle. Se precargan una sola vez por pagina: se bajan,

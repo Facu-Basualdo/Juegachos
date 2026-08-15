@@ -76,7 +76,9 @@ la ronda pasa a `playing`:
 - Estado durable: `{ phase: "voting" | "playing", votes: Record<player, discos>,
   discs, startedAt }`.
 - El **host** crea la fila al cargar (insert; gana el primero ante la carrera
-  host-viejo/host-nuevo). Todos ven el overlay de votacion (`Hud.showDiscVote`).
+  host-viejo/host-nuevo). Si el host no aparece, pasados `CREATE_FALLBACK_MS`
+  (6s, de `matchState.ts`) la crea cualquier jugador. Todos ven el overlay de
+  votacion (`Hud.showDiscVote`).
 - Cada jugador vota con un UPDATE optimista (version) local-first + ping; ante
   conflicto se refetchea. Patron identico a `sharedMatch.ts` de Memoria.
 - El host cierra la votacion (mayoria; empate al azar) cuando **todos** votaron o
@@ -92,10 +94,11 @@ Cableado estandar (contrato minimo de `RoomMode`) mas el contexto extendido
 `RoomVote`. En el game-over el input manual (Enter) esta bloqueado en modo sala.
 
 Gotcha: la votacion es host-autoritativa (el host tallya). Si el host se
-desconecta durante la votacion no hay takeover (la fase `playing` sin reportar no
-es "estable" para el takeover de `roomMode`); mismo nivel de confiabilidad que
-los tableros compartidos. El tope `VOTE_TIMEOUT_MS` acota la espera y cuenta
-contra el tope de ronda (3 min, `roomTimeLimitSec` en `meta.ts`).
+desconecta durante la votacion, `roomMode` migra el control **solo** a los 20s
+(antes el takeover era un boton manual que ni se dibujaba en fase `playing`, asi
+que la votacion quedaba trabada hasta el tope de ronda) y el host nuevo la cierra.
+El tope `VOTE_TIMEOUT_MS` acota la espera y cuenta contra el tope de ronda (3 min,
+`roomTimeLimitSec` en `meta.ts`).
 
 ## Modo sala: F5 no reinicia la partida
 

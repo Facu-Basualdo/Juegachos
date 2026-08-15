@@ -4,8 +4,9 @@ Samples de las cinco reacciones de **Bomba Palabra** y **Cadena de Palabras** (l
 juegos comparten el set de emotes y cada uno tiene su copia de `EmoteAudio.ts`, por la
 regla de decoupling del repo).
 
-Es la **unica excepcion** del repo a la regla de sintetizar todo con Web Audio (ver el
-`CLAUDE.md` de sliding-puzzle): una risa humana no la hace un oscilador.
+Es una de las dos **excepciones** del repo a la regla de sintetizar todo con Web Audio
+(ver el `CLAUDE.md` de sliding-puzzle): una risa humana no la hace un oscilador. La otra
+es el grito de BASTA, en `../basta/`.
 
 ## Archivos esperados
 

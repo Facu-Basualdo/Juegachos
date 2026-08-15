@@ -21,6 +21,8 @@ export interface BtPlayerView {
   connected: boolean;
   filledCount: number;
   total: number;
+  /** Solo en voting: ya confirmo su hoja de tachados (no se ve a quien tacho). */
+  voted: boolean;
 }
 
 export type BtCellStatus = "unique" | "repeated" | "rejected" | "empty";
@@ -33,8 +35,16 @@ export interface BtCell {
   points: number | null;
 }
 
+/** Un voto de rechazo crudo. Llega SOLO en el reveal: durante la votacion cada uno
+ *  tacha a ciegas y lo unico publico es el `voted` de cada jugador. */
 export interface BtVote {
   voter: string;
+  target: string;
+  category: BtCategoryId;
+}
+
+/** Una celda tachada en la hoja de votos que el jugador manda al confirmar. */
+export interface BtReject {
   target: string;
   category: BtCategoryId;
 }
@@ -52,6 +62,7 @@ export interface BtState {
   players: BtPlayerView[];
   bastaBy: string | null;
   cells: BtCell[] | null;
+  /** Votos crudos, solo en reveal (null en el resto, votacion incluida). */
   votes: BtVote[] | null;
   letterScores: { player: string; points: number }[] | null;
 }
@@ -67,6 +78,7 @@ export interface BastaTransport {
   onGameover(cb: (result: BtGameover) => void): void;
   sendFill(answers: Partial<Record<BtCategoryId, string>>): void;
   sendBasta(): void;
-  sendVote(target: string, category: BtCategoryId): void;
+  /** Manda la hoja de tachados COMPLETA y confirma el voto (una vez por letra). */
+  sendVotes(rejects: BtReject[]): void;
   dispose(): void;
 }

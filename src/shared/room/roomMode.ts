@@ -78,6 +78,13 @@ export interface RoomMode {
   round(): number;
   /** Jugadores registrados en la sala (orden por joined_at, deterministico). */
   players(): string[];
+  /**
+   * Los jugadores registrados que estan conectados ahora mismo (presence), en el
+   * mismo orden que `players()`. Lo usan los juegos por turnos para no regalarle
+   * el turno a alguien que se fue: un desconectado no va a mover nunca, asi que
+   * se lo saltea enseguida en vez de esperarle la ventana AFK entera.
+   */
+  presentPlayers(): string[];
   isHost(): boolean;
   /** Avisa al resto que hay cambios en la DB (broadcast "sync"). */
   ping(): void;
@@ -169,8 +176,17 @@ const VOTE_GRACE_MS = 3000;
 const CLOSE_LAG_MS = 2500;
 /** Cierre anticipado: todos los presentes reportaron y hay ausentes. */
 const CLOSE_EARLY_GRACE_MS = 15000;
-/** Ausencia continua del host antes de ofrecer "tomar el control". */
+/** Ausencia continua del host antes de que otro jugador tome el control. */
 const HOST_ABSENT_MS = 20000;
+/**
+ * Escalonado entre candidatos al control: el primero de la fila intenta a los
+ * HOST_ABSENT_MS, el segundo unos segundos despues, etc. Evita que dos escriban
+ * a la vez y cubre el caso del candidato cuya pestana esta en segundo plano (el
+ * navegador le estrangula los timers y puede tardar en reaccionar).
+ */
+const TAKEOVER_STAGGER_MS = 5000;
+/** Espera antes de reintentar un takeover que no se reflejo en la DB. */
+const TAKEOVER_RETRY_MS = 10000;
 /** Pausa en resultados antes de que el host abra la votacion. */
 const RESULTS_TO_VOTE_MS = 5000;
 
@@ -190,6 +206,7 @@ export function initRoomMode(gameId: string, hooks: RoomModeHooks): RoomMode | n
       me: "",
       round: () => 0,
       players: () => [],
+      presentPlayers: () => [],
       isHost: () => false,
       ping: () => {},
       onSync: () => {},
@@ -234,6 +251,8 @@ class RoomModeController implements RoomMode {
   private actionInFlight = false;
   private voteScheduledForRound = 0;
   private hostAbsentSince: number | null = null;
+  /** Ultimo intento de tomar el control (para no reescribir en cada tick). */
+  private takeoverAt = 0;
   /** Cuando esta pagina vio por primera vez la ronda vigente en "playing"
    * (fallback de inicio de ronda para la gracia sin tope de tiempo). */
   private playingSinceRound = 0;
@@ -326,6 +345,13 @@ class RoomModeController implements RoomMode {
     return this.state?.players ?? [];
   }
 
+  presentPlayers(): string[] {
+    const present = this.channel?.presentPlayers() ?? [];
+    // Se filtra contra los registrados (y en su orden) para que la lista sea la
+    // misma en todos los clientes: presence tambien lista espectadores.
+    return (this.state?.players ?? []).filter((p) => present.includes(p));
+  }
+
   ping(): void {
     this.channel?.ping();
   }
@@ -413,7 +439,7 @@ class RoomModeController implements RoomMode {
           waitingText: null,
         });
       }
-      this.updateTakeover();
+      this.maybeTakeOverHost();
       return;
     }
 
@@ -461,7 +487,7 @@ class RoomModeController implements RoomMode {
         this.renderVoting();
         break;
     }
-    this.updateTakeover();
+    this.maybeTakeOverHost();
   }
 
   /**
@@ -631,7 +657,7 @@ class RoomModeController implements RoomMode {
       }
     }
 
-    this.updateTakeover();
+    this.maybeTakeOverHost();
   }
 
   private updateStrip(): void {
@@ -992,33 +1018,52 @@ class RoomModeController implements RoomMode {
 
   // ---------- Migracion de host ----------
 
-  private updateTakeover(): void {
+  /**
+   * Si el host se fue, otro jugador toma el control **solo**, sin que nadie
+   * apriete nada. Es lo que impide que la sala quede injugable: como todas las
+   * transiciones de fase (cerrar la ronda, cerrar el briefing, cerrar la
+   * votacion) y los destrabes de los juegos de tablero compartido los escribe
+   * unicamente el host, si el host desaparece nadie avanza y la sala se congela.
+   *
+   * Antes esto era un boton manual ("tomar el control") y no alcanzaba: solo se
+   * ofrecia en fases "estables" — durante `playing` hacia falta haber reportado —
+   * y el overlay esta oculto mientras se juega, asi que en el caso mas comun (el
+   * host se va en plena ronda) el boton no llegaba a dibujarse nunca.
+   *
+   * El candidato se elige deterministicamente: el primero de `presentPlayers()`
+   * (orden joined_at) que no sea el host ausente. El escalonado por posicion
+   * evita escrituras simultaneas y cubre al candidato dormido.
+   */
+  private maybeTakeOverHost(): void {
     const state = this.state;
     // Un espectador no puede tomar el control (no es jugador de la sala).
-    if (!state || this.spectator || this.isHost()) {
+    if (!state || this.spectator || this.isHost() || state.room.status === "lobby") {
       this.hostAbsentSince = null;
       return;
     }
-    // Solo en fases estables: la presencia parpadea durante la navegacion.
-    const stable =
-      state.room.status === "briefing" ||
-      state.room.status === "results" ||
-      state.room.status === "voting" ||
-      state.room.status === "finished" ||
-      (state.room.status === "playing" && this.reported);
-    const present = this.channel?.presentPlayers() ?? [];
-    if (!stable || present.includes(state.room.host)) {
-      this.hostAbsentSince = null;
-      return;
-    }
-    if (this.hostAbsentSince === null) this.hostAbsentSince = Date.now();
-    if (Date.now() - this.hostAbsentSince < HOST_ABSENT_MS) return;
 
-    this.overlay.offerTakeover(() => {
-      void takeOverHost(this.code, this.me).then((ok) => {
-        if (ok) this.channel?.ping();
-        void this.refresh();
-      });
+    const present = this.presentPlayers();
+    if (present.includes(state.room.host)) {
+      this.hostAbsentSince = null;
+      return;
+    }
+    // Sin presencia propia (canal recien suscripto, o caido) no se decide nada:
+    // si la lista esta vacia para todos, nadie se autoproclama host.
+    if (!present.includes(this.me)) return;
+
+    if (this.hostAbsentSince === null) {
+      this.hostAbsentSince = Date.now();
+      return;
+    }
+    const rank = present.filter((p) => p !== state.room.host).indexOf(this.me);
+    if (rank < 0) return;
+    if (Date.now() - this.hostAbsentSince < HOST_ABSENT_MS + rank * TAKEOVER_STAGGER_MS) return;
+    if (Date.now() - this.takeoverAt < TAKEOVER_RETRY_MS) return;
+
+    this.takeoverAt = Date.now();
+    void takeOverHost(this.code, this.me).then((ok) => {
+      if (ok) this.channel?.ping();
+      void this.refresh();
     });
   }
 }

@@ -120,13 +120,6 @@ const CSS = `
   display: inline-block; margin-bottom: 18px; padding: 9px 20px; border-radius: 999px;
   background: #111; color: #efeee6; font-size: 15px; font-weight: 800; letter-spacing: 0.3px;
 }
-.mg-room__takeover {
-  display: block; margin: 14px auto 0; padding: 10px 18px; border-radius: 999px;
-  border: 2px solid #c81d4a; background: transparent; color: #c81d4a;
-  font: inherit; font-size: 12px; font-weight: 800; letter-spacing: 0.5px;
-  text-transform: uppercase; cursor: pointer;
-}
-.mg-room__takeover:hover { background: #c81d4a; color: #efeee6; }
 `;
 
 function ensureStyles(): void {
@@ -184,7 +177,6 @@ export class RoomOverlay {
   private readonly stripTextEl: HTMLSpanElement;
   private readonly stripLightsEl: HTMLSpanElement;
   private timeEl: HTMLDivElement | null = null;
-  private takeoverEl: HTMLButtonElement | null = null;
 
   // ── Votacion: estado para actualizar in-place (sin reconstruir el DOM en
   // cada sync, que hace titilar el modal y borra el countdown) ─────────────
@@ -296,7 +288,6 @@ export class RoomOverlay {
     this.root.style.display = "";
     this.boxEl.innerHTML = "";
     this.timeEl = null;
-    this.takeoverEl = null;
     this.resetVoteState();
   }
 
@@ -306,22 +297,6 @@ export class RoomOverlay {
     this.voteOptimisticMine = null;
     this.briefSig = null;
     this.briefEls = null;
-  }
-
-  /**
-   * Agrega (una sola vez por vista) el boton para tomar el control cuando el
-   * host se desconecto. Idempotente: si ya esta en la vista actual, no hace nada.
-   */
-  offerTakeover(onClick: () => void): void {
-    if (this.root.style.display === "none") return;
-    if (this.takeoverEl && this.boxEl.contains(this.takeoverEl)) return;
-    const btn = document.createElement("button");
-    btn.className = "mg-room__takeover";
-    btn.type = "button";
-    btn.textContent = "El anfitrion se desconecto - tomar el control";
-    btn.addEventListener("click", onClick);
-    this.takeoverEl = btn;
-    this.boxEl.append(btn);
   }
 
   private addKicker(text: string): void {

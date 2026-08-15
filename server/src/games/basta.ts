@@ -45,8 +45,13 @@ const START_GRACE_MS = 8000;
 const FILL_MAX_MS = 120000;
 /** Al gritar BASTA, cuanto tienen los demas para cerrar su hoja. */
 const BASTA_GRACE_MS = 5000;
-/** Duracion de la fase de votacion. */
-const VOTE_MS = 25000;
+/**
+ * Tope de la fase de votacion. Es solo un tope: la votacion se cierra apenas
+ * confirmaron todos los jugadores conectados. Es mas largo que cuando cada tachado
+ * contaba solo (25s) porque ahora hay que revisar la grilla entera y ademas apretar
+ * "Listo": el que no confirma a tiempo pierde TODOS sus tachados.
+ */
+const VOTE_MS = 35000;
 /** Cuanto se muestra el desglose de puntaje antes de la proxima letra. */
 const REVEAL_MS = 8000;
 /** Bonus para el que grita BASTA (dejado en 0; subir para premiar cortar). */
@@ -93,6 +98,8 @@ class BastaSim implements RoomSim {
   private answers = new Map<string, Answers>();
   /** Votos de rechazo de la letra actual: clave `${target}|${category}` -> set de votantes. */
   private votes = new Map<string, Set<string>>();
+  /** Quienes ya confirmaron su hoja de tachados en la letra actual (se resetea por letra). */
+  private submittedVotes = new Set<string>();
   private bastaBy: string | null = null;
   private readonly totals = new Map<string, number>();
   /** Desglose puntuado de la letra actual (se arma en el reveal). */
@@ -132,6 +139,9 @@ class BastaSim implements RoomSim {
     // No elimina al desconectar: si vuelve (recarga) se reengancha y recupera su hoja
     // del server. Solo refresca las luces de "conectado".
     if (this.phase !== "over") this.broadcastState();
+    // El que se fue puede ser justo el que faltaba votar: sin esto la fase espera el
+    // tope entero por alguien que ya no esta.
+    this.maybeCloseVoting();
   }
 
   message(nickname: string, event: string, payload: unknown): void {
@@ -175,27 +185,51 @@ class BastaSim implements RoomSim {
     this.broadcastState();
   }
 
+  /**
+   * Hoja de tachados completa del votante, mandada al confirmar. Se acepta UNA vez
+   * por letra (los reenvios se ignoran: ya quedo registrado y no se puede recular),
+   * y al entrarla se chequea si con esta ya votaron todos los conectados para cerrar
+   * la votacion sin esperar el tope.
+   */
   private onVote(voter: string, payload: unknown): void {
     if (this.phase !== "voting") return;
-    const target =
-      payload && typeof payload === "object" && "target" in payload
-        ? String((payload as { target: unknown }).target)
-        : "";
-    const category =
-      payload && typeof payload === "object" && "category" in payload
-        ? ((payload as { category: unknown }).category as BtCategoryId)
+    if (this.submittedVotes.has(voter)) return;
+    const raw =
+      payload && typeof payload === "object" && "rejects" in payload
+        ? (payload as { rejects: unknown }).rejects
         : null;
-    if (!category || !CATEGORIES.includes(category)) return;
-    if (target === voter || !this.seats.includes(target)) return; // no te votas a vos mismo
-    const key = `${target}|${category}`;
-    let set = this.votes.get(key);
-    if (!set) {
-      set = new Set();
-      this.votes.set(key, set);
+    if (!Array.isArray(raw)) return;
+
+    for (const item of raw) {
+      if (!item || typeof item !== "object") continue;
+      const entry = item as Record<string, unknown>;
+      const target = typeof entry.target === "string" ? entry.target : "";
+      const category = entry.category as BtCategoryId;
+      if (!category || !CATEGORIES.includes(category)) continue;
+      if (target === voter || !this.seats.includes(target)) continue; // no te votas a vos mismo
+      const key = `${target}|${category}`;
+      let set = this.votes.get(key);
+      if (!set) {
+        set = new Set();
+        this.votes.set(key, set);
+      }
+      set.add(voter);
     }
-    if (set.has(voter)) set.delete(voter);
-    else set.add(voter);
+
+    this.submittedVotes.add(voter);
     this.broadcastState();
+    this.maybeCloseVoting();
+  }
+
+  /**
+   * Cierra la votacion apenas confirmaron todos los jugadores CONECTADOS (a los
+   * ausentes no se los espera: si no, un desconectado clava la fase hasta el tope).
+   */
+  private maybeCloseVoting(): void {
+    if (this.phase !== "voting") return;
+    const present = this.seats.filter((n) => this.room.isConnected(n));
+    if (present.length === 0) return; // sin nadie a quien esperar, corta el tope
+    if (present.every((n) => this.submittedVotes.has(n))) this.toReveal();
   }
 
   // ---------- Fases ----------
@@ -216,6 +250,7 @@ class BastaSim implements RoomSim {
   private startLetter(): void {
     this.answers = new Map();
     this.votes = new Map();
+    this.submittedVotes.clear();
     this.bastaBy = null;
     this.revealCells = null;
     this.letterScores = null;
@@ -361,6 +396,7 @@ class BastaSim implements RoomSim {
       connected: this.room.isConnected(nickname),
       filledCount: this.filledCount(nickname),
       total: this.totals.get(nickname) ?? 0,
+      voted: this.submittedVotes.has(nickname),
     }));
   }
 
@@ -383,8 +419,13 @@ class BastaSim implements RoomSim {
     return cells;
   }
 
+  /**
+   * Los votos se difunden recien en el REVEAL. Durante la votacion se guardan pero no
+   * se muestran: cada uno tacha a ciegas y lo unico publico es el `voted` de la vista
+   * de jugador (asi el conteo ajeno no arrastra a la mesa).
+   */
   private votesFor(phase: BtPhase): BtVote[] | null {
-    if (phase !== "voting" && phase !== "reveal") return null;
+    if (phase !== "reveal") return null;
     const out: BtVote[] = [];
     for (const [key, voters] of this.votes) {
       const [target, category] = key.split("|") as [string, BtCategoryId];
