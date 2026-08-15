@@ -94,6 +94,13 @@ no pisar lo que el jugador este tipeando en ese instante.
 
 ## Gotchas
 
+- **El `hidden` del Hud necesita ayuda del CSS.** `showStage` / `showMessage` / `showCountdown`
+  prenden y apagan la escena, el cartel y el countdown con el atributo `hidden`, pero
+  `.bt__stage` (flex), `.bt__overlay` y `.bt__countdown` (grid) declaran su propio `display`,
+  que pisa el `display: none` del user-agent. Sin la regla `.bt [hidden] { display: none
+  !important; }` de `style.css` el cartel de "esperando" y el **"YA" del countdown quedan
+  clavados arriba de la hoja** y el juego se ve trabado (la partida corre atras, pero no se
+  puede jugar). Si se agrega otro elemento que se apague con `hidden`, va adentro de `.bt`.
 - Los tipos del protocolo estan **duplicados** en cliente y server a proposito (decoupling).
   Mantenerlos en sync a mano; requiere redeploy del server al tocarlos.
 - El server **no** usa `dictionary.ts` (a diferencia de Bomba/Cadena): la validacion es 100%
