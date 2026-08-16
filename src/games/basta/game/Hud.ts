@@ -22,7 +22,26 @@ const STATUS_LABEL: Record<string, string> = {
   repeated: "repetida",
   rejected: "tachada",
   empty: "vacia",
+  invalid: "muy corta",
 };
+
+/**
+ * Largo minimo (en letras reales) para que una respuesta cuente. **Espeja
+ * `MIN_ANSWER_LEN` de `server/src/games/basta.ts`**, que es el arbitro: aca solo
+ * decide si se habilita el boton BASTA y si la celda se marca en rojo mientras
+ * se escribe. Una sola letra no es una palabra (con la letra A, un apellido "A").
+ */
+const MIN_ANSWER_LEN = 2;
+
+/** Letras reales de una respuesta: sin espacios ni signos, como cuenta el server. */
+function answerLength(text: string): number {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[́̈]/g, "")
+    .normalize("NFC")
+    .replace(/[^a-zñ]/g, "").length;
+}
 
 /**
  * Hud de Basta (estetica "hoja de cuaderno", ver DESIGN.md). Tres vistas segun la
@@ -289,11 +308,27 @@ export class Hud {
     }
   }
 
-  private allFilled(): boolean {
-    return CATEGORIES.every((c) => (this.inputs.get(c.id)?.value.trim() ?? "") !== "");
+  /** Una celda cuenta con `MIN_ANSWER_LEN` letras reales: la letra suelta no llena. */
+  private isFilled(cat: BtCategoryId): boolean {
+    return answerLength(this.inputs.get(cat)?.value ?? "") >= MIN_ANSWER_LEN;
   }
 
+  private allFilled(): boolean {
+    return CATEGORIES.every((c) => this.isFilled(c.id));
+  }
+
+  /**
+   * Habilita BASTA solo con las 7 completas y marca en rojo las celdas escritas que no
+   * llegan al minimo, para que el jugador vea POR QUE no se le habilita el boton (si no,
+   * con una "A" en apellido el boton queda muerto sin explicacion).
+   */
   private refreshBastaEnabled(): void {
+    for (const c of CATEGORIES) {
+      const input = this.inputs.get(c.id);
+      if (!input) continue;
+      const written = input.value.trim() !== "";
+      input.classList.toggle("is-short", written && !this.isFilled(c.id));
+    }
     this.bastaBtn.disabled = !this.allFilled();
   }
 
@@ -403,9 +438,14 @@ export class Hud {
         const cell = cells.find((c) => c.player === p.nickname && c.category === cat);
         const text = cell?.text ?? "";
         const empty = text.trim() === "";
+        // Anulada sola por corta: se muestra ya caida y sin cruz — no hay nada que
+        // votar, el server no la va a puntuar. (En voting el server manda `status`
+        // en null para todas, asi que se deriva aca con la misma regla que el.)
+        const short = !empty && answerLength(text) < MIN_ANSWER_LEN;
         const cls = ["bt__ans"];
         if (empty) cls.push("is-empty");
-        const canVote = !empty && p.nickname !== this.me;
+        if (short) cls.push("is-invalid");
+        const canVote = !empty && !short && p.nickname !== this.me;
         const btn = canVote
           ? `<button class="bt__tacha" type="button" data-target="${esc(
               p.nickname,
@@ -415,6 +455,7 @@ export class Hud {
           <div class="${cls.join(" ")}">
             <span class="bt__ans-who">${esc(p.nickname)}</span>
             <span class="bt__ans-text">${empty ? "&mdash;" : esc(text)}</span>
+            ${short ? `<span class="bt__ans-note">${STATUS_LABEL.invalid}</span>` : ""}
             ${btn}
           </div>`;
       })

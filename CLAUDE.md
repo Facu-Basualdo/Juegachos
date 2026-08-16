@@ -254,8 +254,9 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   jugador (`bt:fill`) sin revelarlas en el llenado, recolecta los votos de rechazo
   (`bt:vote`: la hoja de tachados entera, mandada de una sola vez al confirmar, una por
   letra; tumba con mayoria de los demas) y computa el puntaje (unica 100 / repetida
-  50 / vacia o tumbada 0). La votacion **cierra apenas confirmaron todos los conectados**;
-  su `VOTE_MS` es solo un tope. Los votos crudos se difunden recien en el reveal (durante
+  50 / vacia, tumbada o de una sola letra 0 — `MIN_ANSWER_LEN`, que ademas impide gritar
+  BASTA con la letra suelta en las 7 celdas). La votacion **cierra apenas confirmaron todos los conectados**;
+  su `VOTE_MS` (2 min) es solo un tope. Los votos crudos se difunden recien en el reveal (durante
   la votacion lo unico publico es el `voted` de cada jugador). Difunde `bt:state`; devuelve la hoja propia con `bt:you` al
   reconectar (F5 en el llenado). Un partido son 3 letras. Ver el `CLAUDE.md` de `basta`.
 - `src/games/impostor.ts` — `ImpostorSim`: deduccion social. Sortea categoria + palabra

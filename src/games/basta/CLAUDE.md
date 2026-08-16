@@ -40,14 +40,15 @@ puntaje es `direction: "higher"` (default), `meta.ts` **omite** `scoring`.
 2. `filling` — letra sorteada; cada uno llena sus 7 categorias. El cliente manda su hoja
    con `bt:fill` (debounced ~350ms); el server la guarda pero **no revela** las ajenas
    (solo el `filledCount` de cada uno, para tension). Tope `FILL_MAX_MS` (120s) si nadie
-   grita BASTA.
+   grita BASTA. Una celda **cuenta como llena solo con `MIN_ANSWER_LEN` (2) letras
+   reales** (ver "Respuestas de una sola letra" abajo).
 3. `grace` — alguien mando `bt:basta` (el server exige las 7 no vacias); `BASTA_GRACE_MS`
    (5s) para que el resto cierre, y pasa a votacion. Los inputs siguen activos en la gracia.
    Al entrar en esta fase suena el **grito de BASTA** (`BastaAudio`) en **todas** las
    pantallas: lo dispara el cambio de fase, no el click, asi que suena una sola vez por
    letra y tambien en la del que corto.
-4. `voting` — el server **revela todas las respuestas** y abre `VOTE_MS` (35s, solo un
-   **tope**). El tachado es **local**: se marcan las que no valen y recien al confirmar
+4. `voting` — el server **revela todas las respuestas** y abre `VOTE_MS` (2 min, solo un
+   **tope**: en la practica manda el "Listo" de la mesa y casi nunca se alcanza). El tachado es **local**: se marcan las que no valen y recien al confirmar
    ("Listo") viaja la hoja entera en un `bt:vote {rejects: [{target, category}]}`. El
    server acepta **un solo envio por letra** (los reenvios se ignoran: no se recula) y
    **cierra la fase apenas confirmaron todos los conectados**, sin esperar el tope. Una
@@ -56,9 +57,33 @@ puntaje es `direction: "higher"` (default), `meta.ts` **omite** `scoring`.
    el Hud muestra como "n/m listos"): los votos crudos (`BtState.votes`) viajan recien en
    el `reveal`, asi nadie se deja arrastrar por el conteo ajeno.
 5. `reveal` — computa el puntaje de la letra (`REVEAL_MS` = 8s): por celda, **valida y
-   unica** = 100, **valida y repetida** (mismo texto normalizado que otro) = 50, **vacia o
-   tumbada** = 0. Luego: quedan letras -> `filling`; si no -> `over`.
+   unica** = 100, **valida y repetida** (mismo texto normalizado que otro) = 50, **vacia,
+   tumbada o muy corta** = 0. Luego: quedan letras -> `filling`; si no -> `over`.
 6. `over` — `bt:gameover` con ranking por puntaje total; cada cliente reporta su placement.
+
+## Respuestas de una sola letra (anulacion automatica)
+
+Una respuesta con menos de `MIN_ANSWER_LEN` (2) **letras reales** no vale: con la letra A,
+un apellido que dice "A" no es un apellido. Se mide sobre el texto **normalizado y sin
+espacios**, asi que "A." o "a " tampoco pasan. Es una regla del juego, no una validacion de
+diccionario — Basta sigue sin consultar el corpus, la mesa decide todo lo demas por voto.
+
+Pega en tres lugares, y los tres hacen falta:
+
+- **`filledCount` (server)**: la celda corta **no cuenta como llena**, asi que no habilita
+  el BASTA. Ese era el agujero real: llenar las 7 con la letra suelta era la forma de cortar
+  a todos en dos segundos.
+- **`scoreLetter` (server)**: la celda queda con status **`invalid`** y 0 puntos, sin pasar
+  por la votacion (no se gasta un voto en algo que no es palabra).
+- **Hud (cliente)**: `MIN_ANSWER_LEN` y `answerLength` **espejan** los del server — el
+  arbitro es el server, aca solo se decide si se habilita BASTA y se marca la celda en rojo
+  (`.bt__input.is-short`) mientras se escribe. Sin esa marca el boton queda muerto sin que se
+  entienda por que. En la votacion la celda anulada se muestra ya caida, con el motivo ("muy
+  corta") y **sin cruz para tachar**; en `voting` el server manda `status: null` para todas,
+  asi que el cliente lo deriva con la misma regla.
+
+Subir el umbral **invalida palabras reales de dos letras** ("Ir", "Ya", "Uy"), asi que si se
+toca `MIN_ANSWER_LEN` hay que tocarlo en los dos lados y redeployar el server.
 
 ## Sobrevivir un F5
 
@@ -114,10 +139,11 @@ no pisar lo que el jugador este tipeando en ese instante.
 
 ## Tuning (server, `server/src/games/basta.ts`)
 
-- Fases: `START_GRACE_MS` (8s), `FILL_MAX_MS` (120s), `BASTA_GRACE_MS` (5s), `VOTE_MS` (35s,
+- Fases: `START_GRACE_MS` (8s), `FILL_MAX_MS` (120s), `BASTA_GRACE_MS` (5s), `VOTE_MS` (2 min,
   solo tope: `maybeCloseVoting` cierra antes), `REVEAL_MS` (8s). Partido: `LETTERS_PER_MATCH` (3).
   Letras jugables: `LETTERS` (sin K/W/X/Y/Z/Ñ/Q).
 - Puntaje: `POINTS_UNIQUE` (100), `POINTS_REPEATED` (50), `BASTA_BONUS` (0; subir para premiar cortar).
+- Largo minimo de una respuesta: `MIN_ANSWER_LEN` (2). Espejado en el `Hud` del cliente.
 - La votacion tumba con mayoria estricta de los **demas** jugadores (empate = sobrevive). La
   desconexion no elimina: si vuelve, se reengancha y recupera su hoja por `bt:you`.
 - `maybeCloseVoting` espera solo a los **conectados**, y tambien corre en `leave`: si el que
@@ -141,7 +167,8 @@ no pisar lo que el jugador este tipeando en ese instante.
   propio `pendingRejects`. Asi el `bt:state` sigue siendo un unico broadcast (no per-cliente) sin
   filtrar el voto ajeno antes de tiempo.
 - Confirmar el voto es **irreversible** y se puede perder: el que no aprieta "Listo" antes del
-  tope pierde TODOS sus tachados (por eso `VOTE_MS` subio de 25s a 35s). Si alguna vez se quiere
+  tope pierde TODOS sus tachados (por eso `VOTE_MS` es de 2 min y no de los 25s de cuando cada
+  tachado contaba solo: la mesa lee y discute la grilla entera antes de confirmar). Si se quiere
   permitir corregir, hay que sacar el `submittedVotes.has(voter)` del `onVote` **y** decidir que
   pasa con el cierre anticipado (hoy cierra apenas confirman todos).
 - Puntaje de sala placement-based y **no** va al ranking global (como el resto de las salas).

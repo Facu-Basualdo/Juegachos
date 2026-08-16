@@ -240,6 +240,16 @@ body {
   border-bottom-color: var(--bt-ink);
 }
 
+/*
+ * Escrita pero demasiado corta (una letra suelta). El server la anula sola, asi que se
+ * marca mientras se escribe: si no, el boton BASTA queda muerto sin que se entienda por
+ * que. Solo aparece con algo escrito — la celda vacia no se pinta de rojo.
+ */
+.bt__input.is-short {
+  border-bottom-color: var(--bt-red);
+  border-bottom-style: dashed;
+}
+
 /* ---------- Boton BASTA ---------- */
 
 .bt__basta {
@@ -336,11 +346,21 @@ body {
 }
 
 .bt__ans.is-doomed .bt__ans-text,
-.bt__ans.is-rejected .bt__ans-text {
+.bt__ans.is-rejected .bt__ans-text,
+.bt__ans.is-invalid .bt__ans-text {
   color: var(--bt-red);
   text-decoration: line-through;
   text-decoration-color: var(--bt-red);
   text-decoration-thickness: 2px;
+}
+
+/* Motivo de la anulacion automatica ("muy corta"), al lado de la respuesta caida. */
+.bt__ans-note {
+  font-family: var(--bt-hand);
+  font-size: clamp(12px, 3vw, 14px);
+  color: var(--bt-red);
+  opacity: 0.8;
+  white-space: nowrap;
 }
 
 /* Boton tachar (votacion) */
