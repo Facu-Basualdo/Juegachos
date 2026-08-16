@@ -100,6 +100,14 @@ repetir en el partido. Se edita a mano; requiere redeploy del server. No se usa 
 
 ## Gotchas
 
+- **El `hidden` del Hud necesita ayuda del CSS.** `showStage` / `showMessage` / `showCountdown`
+  prenden y apagan la escena, el cartel y el countdown con el atributo `hidden`, pero
+  `.im__stage` (flex), `.im__overlay` y `.im__countdown` (grid) declaran su propio `display`,
+  que pisa el `display: none` del user-agent. Sin la regla `.im [hidden] { display: none
+  !important; }` de `style.css` el cartel de "esperando" y el **"YA" del countdown quedan
+  clavados arriba de la escena**: la partida corre atras pero no se puede jugar. No sacar
+  (Basta tenia el mismo bug; word-bomb y word-chain ya traian la regla). Si se agrega otro
+  elemento que se apague con `hidden`, va adentro de `.im`.
 - Los tipos del protocolo estan **duplicados** en cliente y server a proposito (decoupling).
   Mantenerlos en sync a mano; requiere redeploy del server al tocarlos.
 - El rol **nunca** va en `im:state` (solo por `im:you`). No mover la palabra/impostor al broadcast:
@@ -108,5 +116,3 @@ repetir en el partido. Se edita a mano; requiere redeploy del server. No se usa 
   "mine": el cliente cuenta por sospechoso y deriva el propio (`voter === me`). A proposito, para que
   `im:state` sea un unico broadcast (no per-cliente).
 - Puntaje de sala placement-based y **no** va al ranking global (como el resto de las salas).
-- Falta el cover `public/covers/impostor.jpg` (lo referencian el `index.html` y el vote box de salas);
-  agregarlo cuando este el arte.

@@ -12,5 +12,4 @@ export const meta: GameEntry = {
   category: "Party",
   order: 390,
   added: "2026-07-10",
-  hidden: true,
 };
