@@ -3,6 +3,7 @@ import { GameRoom, registerGame, type RoomSim } from "../rooms.js";
 import type {
   BtCategoryId,
   BtCell,
+  BtCellStatus,
   BtGameover,
   BtPhase,
   BtPlayerView,
@@ -46,18 +47,26 @@ const FILL_MAX_MS = 120000;
 /** Al gritar BASTA, cuanto tienen los demas para cerrar su hoja. */
 const BASTA_GRACE_MS = 5000;
 /**
- * Tope de la fase de votacion. Es solo un tope: la votacion se cierra apenas
- * confirmaron todos los jugadores conectados. Es mas largo que cuando cada tachado
- * contaba solo (25s) porque ahora hay que revisar la grilla entera y ademas apretar
- * "Listo": el que no confirma a tiempo pierde TODOS sus tachados.
+ * Tope de la fase de votacion. Es **solo un tope**, y a proposito generoso: la votacion
+ * cierra apenas confirmaron todos los conectados, asi que en la practica manda el
+ * "Listo" de la mesa y estos 2 minutos casi nunca se alcanzan. Sirven de red para el
+ * que se colgo — y por eso son largos: la mesa lee y discute la grilla entera (7
+ * categorias x hasta 8 jugadores) antes de confirmar, y el que no llega a apretar
+ * "Listo" pierde TODOS sus tachados.
  */
-const VOTE_MS = 35000;
+const VOTE_MS = 120000;
 /** Cuanto se muestra el desglose de puntaje antes de la proxima letra. */
 const REVEAL_MS = 8000;
 /** Bonus para el que grita BASTA (dejado en 0; subir para premiar cortar). */
 const BASTA_BONUS = 0;
 /** Largo maximo de una respuesta (defensa; el cliente ya acota). */
 const MAX_ANSWER_LEN = 40;
+/**
+ * Largo minimo de una respuesta para que valga. Una sola letra no es una palabra (con
+ * la letra A, un apellido que dice "A"), y llenar las 7 con la letra suelta era la forma
+ * de gritar BASTA al toque y cortar a todos. Se descarta sola, sin gastar la votacion.
+ */
+const MIN_ANSWER_LEN = 2;
 
 const POINTS_UNIQUE = 100;
 const POINTS_REPEATED = 50;
@@ -82,6 +91,16 @@ function normalize(input: string): string {
 function cleanAnswer(input: unknown): string {
   if (typeof input !== "string") return "";
   return input.replace(/\s+/g, " ").trim().slice(0, MAX_ANSWER_LEN);
+}
+
+/**
+ * Una respuesta cuenta si tiene al menos `MIN_ANSWER_LEN` letras **reales**: se mide
+ * sobre el texto normalizado, asi que "A." o "a " tampoco pasan. El cliente aplica la
+ * misma regla para habilitar el boton BASTA, pero el arbitro es este (el cliente es
+ * spoofeable).
+ */
+function isValidAnswer(text: string): boolean {
+  return normalize(text).replace(/ /g, "").length >= MIN_ANSWER_LEN;
 }
 
 type Answers = Partial<Record<BtCategoryId, string>>;
@@ -312,11 +331,16 @@ class BastaSim implements RoomSim {
     for (const cat of CATEGORIES) {
       // Agrupa las respuestas validas (no vacias, no tumbadas) por su forma normalizada.
       const groups = new Map<string, string[]>(); // normalized -> jugadores
-      const status = new Map<string, "unique" | "repeated" | "rejected" | "empty">();
+      const status = new Map<string, BtCellStatus>();
       for (const player of this.seats) {
         const text = this.answers.get(player)?.[cat] ?? "";
         if (text.trim() === "") {
           status.set(player, "empty");
+          continue;
+        }
+        // Anulacion automatica: una sola letra no es palabra, no llega ni a votarse.
+        if (!isValidAnswer(text)) {
+          status.set(player, "invalid");
           continue;
         }
         if (this.isRejected(player, cat)) {
@@ -373,10 +397,11 @@ class BastaSim implements RoomSim {
     return from[Math.floor(Math.random() * from.length)];
   }
 
+  /** Categorias con una respuesta que cuenta (una letra suelta no llena la celda). */
   private filledCount(nickname: string): number {
     const a = this.answers.get(nickname);
     if (!a) return 0;
-    return CATEGORIES.reduce((n, cat) => n + ((a[cat] ?? "").trim() !== "" ? 1 : 0), 0);
+    return CATEGORIES.reduce((n, cat) => n + (isValidAnswer(a[cat] ?? "") ? 1 : 0), 0);
   }
 
   private setPhaseClock(ms: number): void {

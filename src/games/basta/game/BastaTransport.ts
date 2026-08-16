@@ -25,7 +25,8 @@ export interface BtPlayerView {
   voted: boolean;
 }
 
-export type BtCellStatus = "unique" | "repeated" | "rejected" | "empty";
+/** `invalid` = anulada sola por corta (una letra no es palabra); no pasa por votacion. */
+export type BtCellStatus = "unique" | "repeated" | "rejected" | "empty" | "invalid";
 
 export interface BtCell {
   player: string;

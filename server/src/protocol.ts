@@ -247,8 +247,12 @@ export interface BtPlayerView {
   voted: boolean;
 }
 
-/** Como quedo puntuada una respuesta al revelar (para el desglose). */
-export type BtCellStatus = "unique" | "repeated" | "rejected" | "empty";
+/**
+ * Como quedo puntuada una respuesta al revelar (para el desglose). `invalid` es la
+ * anulacion automatica: una sola letra no es una palabra (con la letra A, un apellido
+ * que dice "A"), asi que el server la descarta sin pasar por la votacion.
+ */
+export type BtCellStatus = "unique" | "repeated" | "rejected" | "empty" | "invalid";
 
 /** Una celda revelada (en voting/reveal): la respuesta de un jugador en una categoria. */
 export interface BtCell {
