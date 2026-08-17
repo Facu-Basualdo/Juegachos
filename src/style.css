@@ -169,6 +169,7 @@ a {
 /* En pantallas chicas la barra ya va justa: queda solo el punto (el estado y el
    ping siguen en el title). */
 @media (max-width: 640px) {
+
   .topbar__server-text,
   .topbar__server-ping {
     display: none;
@@ -381,7 +382,7 @@ a {
   margin-bottom: 40px;
 }
 
-.banners-row > * {
+.banners-row>* {
   flex: 1 1 0;
   min-width: 0;
   margin-bottom: 0;
@@ -693,11 +694,21 @@ a {
 }
 
 /* Chips superpuestos a la portada (la imagen ya trae el nombre del juego). */
-.game-card__tag {
+/* La categoria y el chip de "Móvil" comparten fila. El ancho se corta antes del
+   boton de Ranking (arriba a la derecha) para que no se pisen: si los dos chips
+   no entran, el de Móvil baja de linea en vez de meterse abajo del boton. */
+.game-card__tags {
   position: absolute;
   top: 12px;
   left: 12px;
   z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: calc(100% - 100px);
+}
+
+.game-card__tag {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 1px;
@@ -706,6 +717,28 @@ a {
   background: rgba(17, 17, 17, 0.85);
   border-radius: 7px;
   padding: 5px 10px;
+}
+
+/* Chips de plataforma (PC / celular): mismo chip que la categoria pero con un
+   icono en lugar de texto. El padding es mas angosto para que queden cuadrados,
+   y el alto termina igual que el chip de texto (13px de icono + 5px arriba y
+   abajo = los ~23px de la categoria), asi la fila queda pareja. */
+.game-card__tag--icon {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 7px;
+}
+
+.game-card__tag--icon svg {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+/* El de PC esta en todas las cards, asi que va en el color base; el cian lo usa
+   solo el del celular, que es el que aporta la informacion. */
+.game-card__tag--mobile {
+  color: #ffffff;
 }
 
 .game-card__ranking {
@@ -1315,6 +1348,7 @@ a {
   .fame__podium {
     gap: 6px;
   }
+
   .fame__slot {
     width: 30vw;
   }

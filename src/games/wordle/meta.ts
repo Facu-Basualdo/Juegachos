@@ -14,6 +14,8 @@ export const meta: GameEntry = {
   category: "Puzzle",
   order: 410,
   added: "2026-07-16",
+  mobile: true,
+
   // Sin tope la ronda no termina nunca: la partida solo se cierra cuando el
   // jugador gasta sus intentos, asi que uno quieto la colgaria para todos.
   roomTimeLimitSec: 180,

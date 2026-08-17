@@ -147,7 +147,7 @@ export class Game {
       onStart: () => this.beginCountdown(),
     });
 
-    this.bindInputs();
+    this.bindInputs(container);
     this.resize();
     window.addEventListener("resize", this.resize);
 
@@ -224,7 +224,7 @@ export class Game {
     return { x: 0, y: -1 };
   }
 
-  private bindInputs(): void {
+  private bindInputs(container: HTMLElement): void {
     window.addEventListener("keydown", (e) => {
       const k = e.key.toLowerCase();
       switch (k) {
@@ -255,13 +255,17 @@ export class Game {
     });
 
     // Tactil: tocar la pantalla arranca/reintenta; el swipe gira la senal.
-    this.canvas.addEventListener("pointerdown", (e) => {
+    // Van sobre el container y no sobre el canvas: las pantallas de inicio y de
+    // fin son un overlay que lo tapa, asi que en movil (donde no hay Enter) el
+    // toque sobre el cartel moria ahi. El panel de ranking corta la propagacion
+    // de sus propios pointerdown.
+    container.addEventListener("pointerdown", (e) => {
       this.pointerActive = true;
       this.pointerX = e.clientX;
       this.pointerY = e.clientY;
       if (this.state === "ready" || this.state === "won") this.onAction();
     });
-    this.canvas.addEventListener("pointermove", (e) => {
+    container.addEventListener("pointermove", (e) => {
       if (!this.pointerActive) return;
       const dx = e.clientX - this.pointerX;
       const dy = e.clientY - this.pointerY;
@@ -275,8 +279,8 @@ export class Game {
     const endPointer = () => {
       this.pointerActive = false;
     };
-    this.canvas.addEventListener("pointerup", endPointer);
-    this.canvas.addEventListener("pointercancel", endPointer);
+    container.addEventListener("pointerup", endPointer);
+    container.addEventListener("pointercancel", endPointer);
     this.canvas.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
   }
 

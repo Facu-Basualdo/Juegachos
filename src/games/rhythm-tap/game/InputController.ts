@@ -51,5 +51,9 @@ export class InputController {
     const viewX = this.toViewX(e.clientX);
     const lane = Math.floor(viewX / LANE_WIDTH);
     if (lane >= 0 && lane < LANE_COUNT) this.onLane(lane);
+    // Fuera de las columnas (las bandas del letterbox) no hay nada que juzgar,
+    // pero un toque sigue siendo un "quiero empezar": es el unico arranque que
+    // hay en movil, donde no existe el Enter.
+    else this.onStart();
   };
 }

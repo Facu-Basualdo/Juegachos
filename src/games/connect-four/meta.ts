@@ -11,4 +11,6 @@ export const meta: GameEntry = {
   category: "Puzzle",
   order: 270,
   added: "2026-07-04",
+  mobile: true,
+
 };

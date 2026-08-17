@@ -12,6 +12,8 @@ export const meta: GameEntry = {
   category: "Reflejos",
   order: 360,
   added: "2026-07-09",
+  mobile: true,
+
 };
 
 // Puntaje = tiempo sobrevivido en segundos (mayor es mejor, con un decimal).

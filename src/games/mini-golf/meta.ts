@@ -13,6 +13,8 @@ export const meta: GameEntry = {
   category: "Precisión",
   order: 350,
   added: "2026-07-07",
+  mobile: true,
+
   roomTimeLimitSec: 300,
 };
 

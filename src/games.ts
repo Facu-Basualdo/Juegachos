@@ -16,6 +16,25 @@ export interface GameEntry {
    * de la landing, que es el orden por defecto. Obligatorio en juegos nuevos:
    * `order` es curado a mano y no refleja cuando entro cada juego. */
   added: string;
+  /**
+   * Si el juego se puede jugar en celular. **Obligatorio** (como `added`) y a
+   * proposito: sin un valor por defecto, un juego nuevo no puede colarse
+   * marcado como apto sin que alguien lo haya probado en un telefono.
+   *
+   * Para poner `true` hacen falta las dos cosas, no una:
+   * 1. Que se pueda **arrancar** con un toque. En movil no hay Enter, asi que el
+   *    listener de arranque tiene que colgar del container o del overlay, nunca
+   *    del canvas: la pantalla de inicio es un overlay que lo tapa y se come el
+   *    toque (era el bug de 10 juegos). Ver `flappy-bird` (container) o
+   *    `timberman` (overlay) como referencia.
+   * 2. Que se pueda **jugar** sin teclado fisico: puntero/tactil, botones en
+   *    pantalla, o su propio teclado en pantalla (como `wordle`).
+   *
+   * Hoy solo `mecano`, `typing-race` y `hackerman` son `false`: escuchan
+   * `window keydown` sin ningun `<input>`, asi que en un telefono el teclado
+   * virtual no aparece nunca y no hay con que jugarlos.
+   */
+  mobile: boolean;
   /** Ocultar del roster sin borrar la entrada (landing y salas). El juego sigue en el repo. */
   hidden?: boolean;
   /** Excluir solo del modo sala (selección, votación, random y picker del host),

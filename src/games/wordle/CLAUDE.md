@@ -60,3 +60,12 @@ Quien **no** resuelve se anota con `FAILED_ATTEMPTS` (= `MAX_ATTEMPTS + 1` = 7),
 - **El strip de sala tapa la barra de intentos.** Es `fixed` arriba al centro; `body:has(.mg-room-strip) #app` le abre lugar solo cuando hay sala.
 - **Enter en el game over no reinicia si el foco esta en el campo de nombre** del ranking: el panel se lo queda y para la propagacion. Es comportamiento compartido e intencional del repo, no un bug de este juego.
 - Las teclas en pantalla hacen `preventDefault` en `pointerdown` para no quedarse el foco: si no, el Enter fisico posterior "reclickea" la tecla en vez de llegar al juego.
+
+## Arranque por toque (movil)
+
+El arranque/reintento entra por un `pointerdown` en el container que solo actua en ready / over (el teclado en pantalla recien existe con la partida empezada).
+**No devolverlo al canvas**: la pantalla de inicio y la de game over son un overlay
+que lo tapa, asi que el toque moria ahi y en celular el juego no se podia empezar
+(no hay Enter). Es `pointerdown` y no `click` porque el `LeaderboardPanel` compartido
+corta la propagacion de los `pointerdown` de su propia UI. Ver el `CLAUDE.md` raiz,
+"El toque de arranque no puede colgar del canvas".

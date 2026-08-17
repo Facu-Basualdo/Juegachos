@@ -11,6 +11,8 @@ export const meta: GameEntry = {
   category: "Reflejos",
   order: 275,
   added: "2026-07-06",
+  mobile: false,
+
   // Sin roomTimeLimitSec: el sprint de 30s llega solo al game over, asi que la
   // ronda no necesita reloj propio (ver CLAUDE.md, "Salas").
 };

@@ -80,15 +80,26 @@ export class Game {
       onStart: () => this.beginCountdown(),
     });
 
-    this.bindInputs();
+    this.bindInputs(container);
 
     this.lastTime = performance.now();
     requestAnimationFrame(this.tick);
   }
 
-  private bindInputs(): void {
+  private bindInputs(container: HTMLElement): void {
     window.addEventListener("keydown", this.handleKeyDown);
+    // Arranque por toque: en movil no hay Enter fisico, y el teclado en pantalla
+    // recien aparece con la partida ya empezada, asi que sin esto la pantalla de
+    // inicio no tenia salida. Solo actua en ready / over, con lo cual los toques
+    // sobre las teclas durante la partida no lo despiertan.
+    container.addEventListener("pointerdown", this.handlePointerDown);
   }
+
+  private handlePointerDown = (): void => {
+    // En modo sala se juega una sola partida por ronda: sin reintento.
+    if (this.state === "over" && this.room) return;
+    if (this.state === "ready" || this.state === "over") this.beginCountdown();
+  };
 
   /** Mientras corre el reloj de la partida (el reveal cuenta: es parte del turno). */
   private isRunning(): boolean {

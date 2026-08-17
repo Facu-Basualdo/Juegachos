@@ -10,6 +10,8 @@ export const meta: GameEntry = {
   category: "Arcade",
   order: 49,
   added: "2026-07-09",
+  mobile: true,
+
 };
 
 // Scoring por defecto: { direction: "higher" } (mas anillos = mejor). No se

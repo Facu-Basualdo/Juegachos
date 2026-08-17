@@ -66,7 +66,7 @@ export class Game {
       onStart: () => this.beginCountdown(),
     });
 
-    this.bindInputs();
+    this.bindInputs(container);
     this.resize();
     window.addEventListener("resize", this.resize);
 
@@ -74,7 +74,7 @@ export class Game {
     requestAnimationFrame(this.tick);
   }
 
-  private bindInputs(): void {
+  private bindInputs(container: HTMLElement): void {
     window.addEventListener("keydown", (e) => {
       if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") this.moveDir = -1;
       if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") this.moveDir = 1;
@@ -105,13 +105,17 @@ export class Game {
       this.clampPaddle();
     }, { passive: false });
 
-    this.canvas.addEventListener("click", () => this.onAction());
-    this.canvas.addEventListener("touchstart", (e) => {
+    // Arranque / reintento por toque. Va sobre el container y no sobre el canvas
+    // porque la pantalla de inicio y la de game over son un overlay que lo tapa:
+    // en movil (donde no hay Enter) el toque sobre el cartel moria ahi y no habia
+    // forma de empezar. Es `pointerdown` (no `click` + `touchstart`) porque el
+    // panel de ranking corta la propagacion de los pointerdown de su propia UI.
+    container.addEventListener("pointerdown", (e) => {
       if (this.state === "ready" || this.state === "dead") {
         e.preventDefault();
         this.onAction();
       }
-    }, { passive: false });
+    });
   }
 
   private onAction(): void {

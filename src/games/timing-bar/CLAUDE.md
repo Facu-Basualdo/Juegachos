@@ -32,3 +32,12 @@ Timing / precision minigame. A horizontal ruler has a single marker that sweeps 
 ## Aesthetic
 
 Cream & ink (see `DESIGN.md`, "Papel y Tinta") — matches the landing page and room overlays. Cyan is the target/accent; coral-red is reserved for the perfect hit; olive is secondary. Nothing glows.
+
+## Arranque por toque (movil)
+
+El arranque/reintento entra por el `pointerdown` del container (antes `mousedown` + `touchstart` sobre el canvas del Hud).
+**No devolverlo al canvas**: la pantalla de inicio y la de game over son un overlay
+que lo tapa, asi que el toque moria ahi y en celular el juego no se podia empezar
+(no hay Enter). Es `pointerdown` y no `click` porque el `LeaderboardPanel` compartido
+corta la propagacion de los `pointerdown` de su propia UI. Ver el `CLAUDE.md` raiz,
+"El toque de arranque no puede colgar del canvas".

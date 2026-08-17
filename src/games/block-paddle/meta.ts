@@ -10,4 +10,6 @@ export const meta: GameEntry = {
   category: "Arcade",
   order: 230,
   added: "2026-07-03",
+  mobile: true,
+
 };

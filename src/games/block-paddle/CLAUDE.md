@@ -33,3 +33,12 @@ Single-player paddle-and-ball survival game. The player controls a paddle at the
 ## Room mode (multiplayer)
 
 Wired to the shared party mode: the constructor calls `initRoomMode("block-paddle", { getScore: () => this.score, onStart: () => this.beginCountdown() })` (see root CLAUDE.md, "Salas (multiplayer rooms)").
+
+## Arranque por toque (movil)
+
+El arranque/reintento entra por el `pointerdown` del container (antes eran `click` + `touchstart` sobre el canvas).
+**No devolverlo al canvas**: la pantalla de inicio y la de game over son un overlay
+que lo tapa, asi que el toque moria ahi y en celular el juego no se podia empezar
+(no hay Enter). Es `pointerdown` y no `click` porque el `LeaderboardPanel` compartido
+corta la propagacion de los `pointerdown` de su propia UI. Ver el `CLAUDE.md` raiz,
+"El toque de arranque no puede colgar del canvas".

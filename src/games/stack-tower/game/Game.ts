@@ -53,7 +53,11 @@ export class Game {
 
     this.tower.reset();
 
-    this.input = new InputController(this.canvas, () => this.onDrop());
+    // El target es el container, no el canvas: la pantalla de inicio / game over
+    // es un overlay que tapa el canvas, asi que en movil (donde no hay Enter) un
+    // toque sobre el cartel no llegaba nunca a arrancar la partida. El panel de
+    // ranking corta la propagacion de sus propios pointerdown.
+    this.input = new InputController(container, () => this.onDrop());
 
     this.resize();
     window.addEventListener("resize", this.resize);
