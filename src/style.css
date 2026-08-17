@@ -169,6 +169,7 @@ a {
 /* En pantallas chicas la barra ya va justa: queda solo el punto (el estado y el
    ping siguen en el title). */
 @media (max-width: 640px) {
+
   .topbar__server-text,
   .topbar__server-ping {
     display: none;
@@ -381,7 +382,7 @@ a {
   margin-bottom: 40px;
 }
 
-.banners-row > * {
+.banners-row>* {
   flex: 1 1 0;
   min-width: 0;
   margin-bottom: 0;
@@ -718,9 +719,26 @@ a {
   padding: 5px 10px;
 }
 
-/* Atributo, no una segunda categoria: mismo chip, texto en el cian de acento. */
+/* Chips de plataforma (PC / celular): mismo chip que la categoria pero con un
+   icono en lugar de texto. El padding es mas angosto para que queden cuadrados,
+   y el alto termina igual que el chip de texto (13px de icono + 5px arriba y
+   abajo = los ~23px de la categoria), asi la fila queda pareja. */
+.game-card__tag--icon {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 7px;
+}
+
+.game-card__tag--icon svg {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+/* El de PC esta en todas las cards, asi que va en el color base; el cian lo usa
+   solo el del celular, que es el que aporta la informacion. */
 .game-card__tag--mobile {
-  color: #5fd8e8;
+  color: #ffffff;
 }
 
 .game-card__ranking {
@@ -1330,6 +1348,7 @@ a {
   .fame__podium {
     gap: 6px;
   }
+
   .fame__slot {
     width: 30vw;
   }

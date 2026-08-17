@@ -276,6 +276,24 @@ function orderedGames(): GameEntry[] {
   return [...games].sort((a, b) => b.added.localeCompare(a.added));
 }
 
+/**
+ * Chips de plataforma: en que se puede jugar cada juego. Son iconos y no las
+ * palabras "PC" / "Móvil" porque al lado del chip de categoria, dos chips de
+ * texto se leian como dos categorias. Los SVG van inline — no hay assets
+ * sueltos que cargar — y toman el color con `currentColor`, asi que el acento
+ * se cambia desde el CSS y en un solo lugar. El `aria-label` va en el span
+ * porque el `<svg>` es `aria-hidden`: sin el, el chip seria invisible para un
+ * lector de pantalla.
+ *
+ * El de PC va en **todas** las cards (todo el roster se juega en compu); el del
+ * telefono solo en los que declaran `mobile: true` en su `meta.ts`. Por eso el
+ * de PC queda en el color base del chip y el del telefono en el cian de acento:
+ * el que aporta informacion es el segundo, y el par se lee "ademas en el celu".
+ */
+const PC_BADGE = `<span class="game-card__tag game-card__tag--icon" role="img" aria-label="Se puede jugar en la computadora" title="Se puede jugar en la computadora"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M12 17v3" /><path d="M8.5 20h7" /></svg></span>`;
+
+const MOBILE_BADGE = `<span class="game-card__tag game-card__tag--icon game-card__tag--mobile" role="img" aria-label="Se puede jugar en el celular" title="Se puede jugar en el celular"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="7" y="2" width="10" height="20" rx="2.5" /><path d="M10.5 18.5h3" /></svg></span>`;
+
 orderedGames().forEach((game, i) => {
   const card = document.createElement("a");
   card.className = "game-card";
@@ -299,11 +317,7 @@ orderedGames().forEach((game, i) => {
       <div class="game-card__fallback"></div>
       <div class="game-card__tags">
         <span class="game-card__tag">${game.category}</span>
-        ${
-          game.mobile
-            ? `<span class="game-card__tag game-card__tag--mobile" title="Se puede jugar en el celular">Móvil</span>`
-            : ""
-        }
+        ${PC_BADGE}${game.mobile ? MOBILE_BADGE : ""}
       </div>
     </div>
     <div class="game-card__head">
