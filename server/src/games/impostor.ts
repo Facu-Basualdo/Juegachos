@@ -32,7 +32,14 @@ const START_GRACE_MS = 8000;
 /** Cuanto se muestra el rol privado antes de arrancar las pistas. */
 const REVEAL_MS = 6000;
 /** Tope por turno para escribir la pista (al vencer, pista vacia y pasa al siguiente). */
-const CLUE_TURN_MS = 25000;
+const CLUE_TURN_MS = 37500;
+/**
+ * Pausa despues de la ultima pista, antes de abrir la votacion. Sin esto, el que escribia
+ * ultimo mandaba su pista y la mesa saltaba de una a los sospechosos: nadie llegaba a leer
+ * lo que habia escrito. La fase sigue siendo `clues` con `turn = null` (el cliente muestra
+ * la lista completa y avisa que arranca la votacion).
+ */
+const CLUES_RECAP_MS = 3500;
 /** Duracion de la votacion. */
 const VOTE_MS = 30000;
 /** Tiempo del impostor descubierto para adivinar la palabra. */
@@ -243,7 +250,7 @@ class ImpostorSim implements RoomSim {
       this.turnPos += 1;
     }
     if (this.turnPos >= this.turnOrder.length * CLUE_LAPS) {
-      this.toVoting();
+      this.endClues();
       return;
     }
     this.setPhaseClock(CLUE_TURN_MS);
@@ -260,11 +267,19 @@ class ImpostorSim implements RoomSim {
 
   private advanceTurn(): void {
     this.turnPos += 1;
-    if (this.turnPos >= this.turnOrder.length * CLUE_LAPS) this.toVoting();
+    if (this.turnPos >= this.turnOrder.length * CLUE_LAPS) this.endClues();
     else this.startTurn();
   }
 
+  /** Ultima pista dada: se queda en `clues` sin turno unos segundos para que se lea. */
+  private endClues(): void {
+    this.setPhaseClock(CLUES_RECAP_MS);
+    this.armTimer(() => this.toVoting());
+    this.broadcastState();
+  }
+
   private toVoting(): void {
+    if (this.phase !== "clues") return;
     this.phase = "voting";
     this.setPhaseClock(VOTE_MS);
     this.armTimer(() => this.closeVoting());
@@ -357,6 +372,9 @@ class ImpostorSim implements RoomSim {
 
   private currentTurn(): string | null {
     if (this.turnOrder.length === 0) return null;
+    // Agotados los turnos ya no hay de quien sea el turno: es la pausa de lectura
+    // (`endClues`). Sin este corte el modulo daria la vuelta y volveria a marcar al primero.
+    if (this.turnPos >= this.turnOrder.length * CLUE_LAPS) return null;
     return this.turnOrder[this.turnPos % this.turnOrder.length];
   }
 
