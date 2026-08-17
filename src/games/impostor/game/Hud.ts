@@ -6,6 +6,24 @@ function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ESCAPE[c]);
 }
 
+/** Que mide el reloj ahora mismo (va al lado de la ronda, arriba de la barra). */
+function phaseLabel(s: ImState): string {
+  switch (s.phase) {
+    case "reveal":
+      return "Tu rol";
+    case "clues":
+      return s.turn === null ? "Ultima pista" : "Pistas";
+    case "voting":
+      return "Votacion";
+    case "guess":
+      return "Adivinanza";
+    case "result":
+      return "Resultado";
+    default:
+      return "";
+  }
+}
+
 const OUTCOME_TITLE: Record<string, string> = {
   "impostor-survived": "El impostor zafo",
   "impostor-guessed": "El impostor adivino",
@@ -27,6 +45,7 @@ export class Hud {
   private readonly overlay: HTMLElement;
   private readonly countdownEl: HTMLElement;
   private readonly roundEl: HTMLElement;
+  private readonly phaseEl: HTMLElement;
   private readonly clockBar: HTMLElement;
   private readonly rosterEl: HTMLElement;
   private readonly panelEl: HTMLElement;
@@ -52,9 +71,14 @@ export class Hud {
     wrap.innerHTML = `
       <div class="im__stage" hidden>
         <div class="im__topbar">
-          <div class="im__round" aria-label="ronda"></div>
+          <div class="im__toprow">
+            <div class="im__meta">
+              <span class="im__round" aria-label="ronda"></span>
+              <span class="im__phase"></span>
+            </div>
+            <div class="im__roster"></div>
+          </div>
           <div class="im__clock"><div class="im__clock-bar"></div></div>
-          <div class="im__roster"></div>
         </div>
         <div class="im__panel"></div>
       </div>
@@ -67,6 +91,7 @@ export class Hud {
     this.overlay = wrap.querySelector(".im__overlay")!;
     this.countdownEl = wrap.querySelector(".im__countdown")!;
     this.roundEl = wrap.querySelector(".im__round")!;
+    this.phaseEl = wrap.querySelector(".im__phase")!;
     this.clockBar = wrap.querySelector(".im__clock-bar")!;
     this.rosterEl = wrap.querySelector(".im__roster")!;
     this.panelEl = wrap.querySelector(".im__panel")!;
@@ -128,6 +153,7 @@ export class Hud {
   render(s: ImState, me: string): void {
     this.me = me;
     this.roundEl.textContent = `Ronda ${Math.min(s.round, s.totalRounds)}/${s.totalRounds}`;
+    this.phaseEl.textContent = phaseLabel(s);
     this.renderRoster(s);
     this.updateClock(s);
 
@@ -217,16 +243,21 @@ export class Hud {
 
     const cluesHtml = s.clues.length
       ? s.clues
-          .map(
-            (c) => `
-            <li class="im__clue${c.player === this.me ? " is-mine" : ""}">
+          .map((c, i) => {
+            const cls = ["im__clue"];
+            if (c.player === this.me) cls.push("is-mine");
+            if (i === s.clues.length - 1) cls.push("is-new"); // la ultima entra iluminada
+            return `
+            <li class="${cls.join(" ")}">
               <span class="im__clue-who">${esc(c.player)}</span>
               <span class="im__clue-word">${c.word.trim() ? esc(c.word) : "&mdash;"}</span>
-            </li>`,
-          )
+            </li>`;
+          })
           .join("")
       : `<li class="im__clue is-empty">Todavia nadie dio una pista.</li>`;
 
+    // Sin turno = pausa de lectura del server (`CLUES_RECAP_MS`): estan todas las pistas
+    // sobre la mesa y la votacion arranca en unos segundos.
     const inputHtml = myTurn
       ? `
         <form class="im__cluebar" novalidate>
@@ -234,7 +265,9 @@ export class Hud {
                  spellcheck="false" maxlength="${MAX_WORD_LEN}" placeholder="Tu pista (una palabra)" />
           <button class="im__send" type="submit">Enviar</button>
         </form>`
-      : `<div class="im__turnwait">Turno de <strong>${esc(s.turn ?? "")}</strong>...</div>`;
+      : s.turn !== null
+        ? `<div class="im__turnwait">Turno de <strong>${esc(s.turn)}</strong>...</div>`
+        : `<div class="im__turnwait is-recap">Ya estan todas las pistas. Empieza la votaci&oacute;n...</div>`;
 
     this.panelEl.innerHTML = `
       <div class="im__cluewrap">

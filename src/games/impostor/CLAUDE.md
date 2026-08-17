@@ -49,7 +49,11 @@ secreta solo aparece en `im:state` en la fase `result` (ya termino la ronda, se 
    si no 1). `REVEAL_MS` (6s) para que cada uno lea su ficha privada (`im:you`).
 3. `clues` — orden de turnos **barajado** (`CLUE_LAPS` = 1 vuelta). El jugador de turno escribe
    una palabra-pista (`im:clue`); el server la agrega y avanza. Tope por turno `CLUE_TURN_MS`
-   (25s) -> pista vacia y pasa al siguiente. Los turnos de desconectados se saltean (pista vacia).
+   (37.5s) -> pista vacia y pasa al siguiente. Los turnos de desconectados se saltean (pista vacia).
+   Dada la **ultima** pista no se salta a la votacion: la fase sigue en `clues` con `turn = null`
+   durante `CLUES_RECAP_MS` (3.5s) para que la mesa alcance a leer lo que escribio el ultimo
+   (`endClues`). **`currentTurn()` devuelve null cuando se agotaron los turnos**: sin ese corte el
+   modulo daba la vuelta y volvia a marcar de turno al primero durante la pausa.
 4. `voting` — `VOTE_MS` (30s): cada uno vota (`im:vote {target}`, cambiable/toggle, no a si mismo).
    Cierra al vencer o `VOTE_GRACE_MS` (1.2s) despues de que votaron todos los presentes. El mas
    votado es el **acusado**; empate o sin votos -> nadie acusado (el impostor zafa).
@@ -84,12 +88,19 @@ repetir en el partido. Se edita a mano; requiere redeploy del server. No se usa 
   puntaje en `im:gameover`. Sonido de "tu turno" al cambiar el turno a uno mismo en `clues`.
 - `game/Hud.ts` — DOM "sala de interrogatorio" (ver DESIGN.md). Cinco vistas segun fase: reveal
   (ficha de rol), clues (categoria + pistas + input propio), voting (sospechosos), guess
-  (adivinanza), result (revelado + puntos). Topbar con ronda, reloj (barra anclada a
-  `performance.now()`, sin drift) y roster. Espera/resultados/tablero final los cubre el `RoomOverlay`.
+  (adivinanza), result (revelado + puntos). Topbar en **dos filas**: arriba ronda + fase +
+  roster, abajo el reloj (barra anclada a `performance.now()`, sin drift) a lo ancho.
+  Espera/resultados/tablero final los cubre el `RoomOverlay`.
   - **Gotcha:** en `clues` el panel **no** se reconstruye en cada snapshot (perderia el foco del
     input). Se keya en `turn|clues.length|myTurn` (`cluesSig`); mientras no cambie, solo se refresca
     reloj y roster. En `guess` con input propio tampoco se reconstruye (`panelMode === "guess"`).
     Voting/reveal/result si se reconstruyen (no tienen input con foco que perder).
+  - **Gotcha (layout):** el reloj va en su **propia fila** y la escena lleva `padding-top: 44px`
+    porque el strip de la sala (`.mg-room-strip`: fijo, centrado y pegado al borde superior, con
+    codigo / ronda / luces de jugadores) **tapaba la barra de tiempo**. Cualquier chrome nuevo
+    arriba tiene que quedar fuera de esa franja.
+  - En `clues` con `turn === null` (la pausa de lectura) el panel muestra la lista completa y
+    "Ya estan todas las pistas. Empieza la votacion..." en vez de "Turno de X".
 - `game/ImpostorTransport.ts` — interfaz de transporte + tipos que **espejan** `server/src/protocol.ts`
   (regla de decoupling; si cambia el protocolo, tocar ambos lados).
 - `game/SocketTransport.ts` — socket.io-client (import dinamico) contra `/impostor`. Anuncia

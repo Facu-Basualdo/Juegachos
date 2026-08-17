@@ -17,14 +17,19 @@ palabra, o que sos el impostor), **de que se esta hablando** (la categoria y las
 
 - **Escena** centrada (ancho de celular, `min(560px, 100%)`) sobre un fondo **carbon** con un
   **foco** radial arriba al centro (calido, tenue). El chrome vive arriba, el foco abajo.
-- **Topbar**: la **ronda** (condensada, tenue), el **reloj** (una barra que se vacia de ambar a
-  rojo) y el **roster** con chips por jugador — el de turno resaltado en rojo, un punto cuando ya
-  dio su pista o voto, su puntaje si no.
+- **Topbar** en dos filas: arriba la **ronda** y la **fase** (condensadas: la ronda tenue, la fase
+  en ambar — dice que esta midiendo el reloj) con el **roster** a la derecha, chips por jugador
+  (el de turno resaltado en rojo, un punto cuando ya dio su pista o voto, su puntaje si no); abajo
+  el **reloj** a lo ancho, una barra que se vacia de ambar a rojo. El reloj va abajo y la escena
+  deja aire arriba porque la franja de la sala ocupa el borde superior.
 - **Reveal**: una **ficha de rol** al centro, iluminada. Inocente: la **palabra secreta en ambar**,
   grande, con la categoria arriba. Impostor: **SOS EL IMPOSTOR en rojo**, la categoria como unica
   pista, y el complice si son dos.
 - **Clues**: la **categoria** como sello arriba, un recordatorio chico de tu rol, la **lista de
-  pistas** dadas (la tuya marcada), y abajo tu **input** cuando es tu turno (si no, "Turno de X").
+  pistas** dadas (la tuya marcada; la **ultima entra iluminada**, que es la que hay que leer), y
+  abajo tu **input** cuando es tu turno (si no, "Turno de X"). Dada la ultima pista la mesa queda
+  unos segundos con todas las pistas a la vista antes de abrir la votacion: nadie tiene que
+  perderse lo que escribio el que cerro.
 - **Voting**: los jugadores como **sospechosos** en fichas apiladas — nombre, su pista, y el contador
   de votos; tocar uno lo acusa (se marca en rojo). Vos mismo aparecas deshabilitado ("vos").
 - **Guess**: si te descubrieron, un cuarto en **rojo** con el input para adivinar la palabra; si no,

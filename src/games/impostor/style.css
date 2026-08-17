@@ -72,33 +72,55 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 12px clamp(12px, 4vw, 24px) 18px;
+  /*
+   * El padding de arriba deja pasar el strip de la sala (`.mg-room-strip`: fijo, pegado
+   * al borde superior y centrado, con el codigo / ronda / luces de jugadores). Sin esto
+   * el chrome de Impostor queda debajo y no se lee.
+   */
+  padding: 44px clamp(12px, 4vw, 24px) 18px;
 }
 
 /* ---------- Topbar ---------- */
 
+/*
+ * Dos filas: ronda + fase + roster arriba, y el reloj a lo ancho abajo. El reloj no puede
+ * ir en la fila de arriba: ahi lo tapa el strip de la sala (aun con el padding, el strip
+ * se come el centro del borde superior).
+ */
 .im__topbar {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-areas:
-    "round clock"
-    "roster roster";
-  gap: 8px 14px;
-  align-items: center;
-  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
-.im__round {
-  grid-area: round;
+.im__toprow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.im__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   font-family: var(--im-cond);
   letter-spacing: 2px;
   text-transform: uppercase;
   font-size: 15px;
+}
+
+.im__round {
   color: var(--im-dim);
 }
 
+.im__phase {
+  color: var(--im-gold);
+}
+
 .im__clock {
-  grid-area: clock;
   height: 8px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.08);
@@ -119,9 +141,9 @@ body {
 }
 
 .im__roster {
-  grid-area: roster;
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
   align-items: center;
 }
@@ -315,6 +337,29 @@ body {
   border-color: rgba(228, 182, 76, 0.4);
 }
 
+/* La ultima pista entra iluminada: es la que la mesa tiene que alcanzar a leer. */
+.im__clue.is-new {
+  animation: im-clue-in 0.4s ease-out;
+}
+
+@keyframes im-clue-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+    border-color: rgba(228, 182, 76, 0.85);
+    background: var(--im-panel-2);
+  }
+  60% {
+    opacity: 1;
+    transform: none;
+    border-color: rgba(228, 182, 76, 0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .im__clue.is-empty {
   justify-content: center;
   color: var(--im-dim);
@@ -396,6 +441,16 @@ body {
 
 .im__turnwait strong {
   color: var(--im-red);
+}
+
+/* Pausa de lectura tras la ultima pista (CLUES_RECAP_MS en el server). */
+.im__turnwait.is-recap {
+  border-color: rgba(228, 182, 76, 0.45);
+  color: var(--im-gold);
+  font-family: var(--im-cond);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 18px;
 }
 
 /* ---------- Vista: votacion ---------- */
@@ -740,7 +795,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .im__countdown.is-pop {
+  .im__countdown.is-pop,
+  .im__clue.is-new {
     animation: none;
   }
 }
