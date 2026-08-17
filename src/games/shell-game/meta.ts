@@ -11,6 +11,8 @@ export const meta: GameEntry = {
   category: "Reflejos",
   order: 210,
   added: "2026-07-03",
+  mobile: true,
+
 };
 
 export const scoring: GameScoring = {

@@ -143,3 +143,12 @@ La corrida (nivel alcanzado, reloj, choques, `levelScores`) se persiste en
   actual, asi que `resumeSavedRun` los pisa con los guardados: si no, el puntaje
   propio del nivel saldria falseado.
 - `win()` limpia el snapshot.
+
+## Arranque por toque (movil)
+
+El arranque/reintento entra por el `pointerdown` del container (antes sobre el canvas, junto con el swipe).
+**No devolverlo al canvas**: la pantalla de inicio y la de game over son un overlay
+que lo tapa, asi que el toque moria ahi y en celular el juego no se podia empezar
+(no hay Enter). Es `pointerdown` y no `click` porque el `LeaderboardPanel` compartido
+corta la propagacion de los `pointerdown` de su propia UI. Ver el `CLAUDE.md` raiz,
+"El toque de arranque no puede colgar del canvas".

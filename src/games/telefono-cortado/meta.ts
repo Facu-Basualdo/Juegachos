@@ -7,6 +7,8 @@ export const meta: GameEntry = {
   category: "Party",
   path: "/games/telefono-cortado/",
   added: "2026-07-27",
+  mobile: true,
+
   order: 950,
   controls: "Mouse o dedo para dibujar, teclado para escribir y adivinar.",
   hidden: true,

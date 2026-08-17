@@ -297,7 +297,14 @@ orderedGames().forEach((game, i) => {
   card.innerHTML = `
     <div class="game-card__cover">
       <div class="game-card__fallback"></div>
-      <span class="game-card__tag">${game.category}</span>
+      <div class="game-card__tags">
+        <span class="game-card__tag">${game.category}</span>
+        ${
+          game.mobile
+            ? `<span class="game-card__tag game-card__tag--mobile" title="Se puede jugar en el celular">Móvil</span>`
+            : ""
+        }
+      </div>
     </div>
     <div class="game-card__head">
       <h2 class="game-card__name">${game.title}</h2>

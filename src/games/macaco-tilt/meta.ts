@@ -12,6 +12,8 @@ export const meta: GameEntry = {
   category: "Precisión",
   order: 960,
   added: "2026-08-12",
+  mobile: true,
+
 };
 
 export const scoring: GameScoring = {

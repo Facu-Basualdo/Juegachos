@@ -13,6 +13,8 @@ export const meta: GameEntry = {
   category: "Arcade",
   order: 290,
   added: "2026-07-05",
+  mobile: true,
+
 };
 
 // El puntaje es el tiempo sobrevivido en centisegundos: mayor es mejor, se

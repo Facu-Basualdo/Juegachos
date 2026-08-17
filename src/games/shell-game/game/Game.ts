@@ -42,6 +42,8 @@ interface SharedGameState {
 export class Game {
   private readonly hud: Hud;
   private readonly room: RoomMode | null;
+  /** Se guarda solo para poder desenganchar el pointerdown en `dispose`. */
+  private container: HTMLElement | null = null;
 
   private state: State = "ready";
   private level = 1;
@@ -82,7 +84,7 @@ export class Game {
       onStart: () => this.beginCountdown(),
     });
 
-    this.bindInputs();
+    this.bindInputs(container);
 
     this.lastTime = performance.now();
     requestAnimationFrame(this.tick);
@@ -92,9 +94,19 @@ export class Game {
     }
   }
 
-  private bindInputs(): void {
+  private bindInputs(container: HTMLElement): void {
     window.addEventListener("keydown", this.handleKeyDown);
+    // En movil no hay Enter: un toque en cualquier parte tiene que arrancar y
+    // continuar. `onAction` solo reacciona en ready / roundEnd / gameOver, asi
+    // que los toques sobre los vasos durante el juego siguen siendo inofensivos
+    // (y el panel de ranking corta la propagacion de los suyos).
+    this.container = container;
+    container.addEventListener("pointerdown", this.handlePointerDown);
   }
+
+  private handlePointerDown = (): void => {
+    this.onAction();
+  };
 
   private handleKeyDown = (e: KeyboardEvent): void => {
     if (e.key === "Enter" || e.key === " ") {
@@ -914,6 +926,7 @@ export class Game {
 
   dispose(): void {
     window.removeEventListener("keydown", this.handleKeyDown);
+    this.container?.removeEventListener("pointerdown", this.handlePointerDown);
     this.clearSelectionTimer();
   }
 }

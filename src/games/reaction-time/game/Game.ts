@@ -45,8 +45,8 @@ export class Game {
   private triggerDelay = 0;
   private triggerTimestamp = 0;
   
-  // Clickable elements and event listeners
-  private reactionCardEl!: HTMLDivElement;
+  /** Se guarda solo para poder desenganchar el pointerdown en `dispose`. */
+  private container: HTMLElement | null = null;
 
   constructor(container: HTMLElement) {
     // Load best score
@@ -66,31 +66,29 @@ export class Game {
       onStart: () => this.beginCountdown(),
     });
     
-    // Retrieve reference to the reaction card for input binding
-    this.reactionCardEl = container.querySelector(".reaction-card")!;
-    
-    this.bindInputs();
+    this.container = container;
+    this.bindInputs(container);
     
     this.lastTime = performance.now();
     requestAnimationFrame(this.tick);
   }
   
-  private bindInputs(): void {
-    // Click / touch input on the main reaction card
-    this.reactionCardEl.addEventListener("mousedown", this.handleInteraction);
-    this.reactionCardEl.addEventListener("touchstart", this.handleTouchInteraction, { passive: false });
-    
+  private bindInputs(container: HTMLElement): void {
+    // Click / touch input. Va sobre el container y no sobre la reaction-card
+    // porque las pantallas de inicio y de fin son un overlay que la tapa: en
+    // movil (donde no hay Enter) el toque sobre el cartel moria ahi y no habia
+    // forma de empezar. Un solo `pointerdown` cubre mouse y dedo sin el doble
+    // disparo que obligaba al preventDefault, y el panel de ranking corta la
+    // propagacion de los suyos.
+    container.addEventListener("pointerdown", this.handleInteraction);
+
     // Keyboard input
     window.addEventListener("keydown", this.handleKeyDown);
   }
-  
-  private handleTouchInteraction = (e: TouchEvent): void => {
-    e.preventDefault(); // Prevent double triggers on mobile
-    this.onAction();
-  };
 
-  private handleInteraction = (e: MouseEvent): void => {
-    if (e.button === 0) { // Left click
+  private handleInteraction = (e: PointerEvent): void => {
+    if (e.button === 0) { // Left click / toque
+      e.preventDefault();
       this.onAction();
     }
   };
@@ -309,8 +307,7 @@ export class Game {
   }
   
   dispose(): void {
-    this.reactionCardEl.removeEventListener("mousedown", this.handleInteraction);
-    this.reactionCardEl.removeEventListener("touchstart", this.handleTouchInteraction);
+    this.container?.removeEventListener("pointerdown", this.handleInteraction);
     window.removeEventListener("keydown", this.handleKeyDown);
   }
 }

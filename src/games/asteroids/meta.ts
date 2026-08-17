@@ -10,5 +10,7 @@ export const meta: GameEntry = {
   category: "Arcade",
   order: 90,
   added: "2026-07-03",
+  mobile: true,
+
   roomTimeLimitSec: 180,
 };

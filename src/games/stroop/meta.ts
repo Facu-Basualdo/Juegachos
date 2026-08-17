@@ -10,6 +10,8 @@ export const meta: GameEntry = {
   category: "Reflejos",
   order: 51,
   added: "2026-07-09",
+  mobile: true,
+
 };
 
 // Scoring por defecto: { direction: "higher" } (mas aciertos = mejor). No se

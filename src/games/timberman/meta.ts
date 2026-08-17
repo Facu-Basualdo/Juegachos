@@ -10,4 +10,6 @@ export const meta: GameEntry = {
   category: "Reflejos",
   order: 300,
   added: "2026-07-05",
+  mobile: true,
+
 };

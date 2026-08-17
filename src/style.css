@@ -693,11 +693,21 @@ a {
 }
 
 /* Chips superpuestos a la portada (la imagen ya trae el nombre del juego). */
-.game-card__tag {
+/* La categoria y el chip de "Móvil" comparten fila. El ancho se corta antes del
+   boton de Ranking (arriba a la derecha) para que no se pisen: si los dos chips
+   no entran, el de Móvil baja de linea en vez de meterse abajo del boton. */
+.game-card__tags {
   position: absolute;
   top: 12px;
   left: 12px;
   z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: calc(100% - 100px);
+}
+
+.game-card__tag {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 1px;
@@ -706,6 +716,11 @@ a {
   background: rgba(17, 17, 17, 0.85);
   border-radius: 7px;
   padding: 5px 10px;
+}
+
+/* Atributo, no una segunda categoria: mismo chip, texto en el cian de acento. */
+.game-card__tag--mobile {
+  color: #5fd8e8;
 }
 
 .game-card__ranking {

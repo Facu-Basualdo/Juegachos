@@ -11,4 +11,6 @@ export const meta: GameEntry = {
   category: "Party",
   order: 280,
   added: "2026-07-07",
+  mobile: true,
+
 };

@@ -32,3 +32,12 @@ ends. A near-perfect drop keeps the full width. Plain 2D `<canvas>`, no Three.js
 ## Room mode (multiplayer)
 
 Wired to the shared party mode: the constructor calls `initRoomMode("stack-tower", { getScore: () => this.tower.score })` (see root `CLAUDE.md`, "Salas (multiplayer rooms)"). With `?room=` in the URL the game-over reports the score to the room instead of the global ranking, and the restart input is blocked (one run per round). Without the param nothing changes.
+
+## Arranque por toque (movil)
+
+El arranque/reintento entra por el `InputController` montado sobre el container (antes sobre el canvas).
+**No devolverlo al canvas**: la pantalla de inicio y la de game over son un overlay
+que lo tapa, asi que el toque moria ahi y en celular el juego no se podia empezar
+(no hay Enter). Es `pointerdown` y no `click` porque el `LeaderboardPanel` compartido
+corta la propagacion de los `pointerdown` de su propia UI. Ver el `CLAUDE.md` raiz,
+"El toque de arranque no puede colgar del canvas".

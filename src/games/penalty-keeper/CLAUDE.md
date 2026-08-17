@@ -127,3 +127,12 @@ judgment plane.
 **Enter-to-start countdown.** Standard repo pattern: 3 / 2 / 1 / YA
 (`COUNTDOWN_LABELS`, `COUNTDOWN_STEP` in `Game.ts`), 0.6 s restart guard after
 dying, and in room mode there is no retry (single run per round).
+
+## Arranque por toque (movil)
+
+El arranque/reintento entra por el `InputController` montado sobre el container (antes sobre `renderer.domElement`).
+**No devolverlo al canvas**: la pantalla de inicio y la de game over son un overlay
+que lo tapa, asi que el toque moria ahi y en celular el juego no se podia empezar
+(no hay Enter). Es `pointerdown` y no `click` porque el `LeaderboardPanel` compartido
+corta la propagacion de los `pointerdown` de su propia UI. Ver el `CLAUDE.md` raiz,
+"El toque de arranque no puede colgar del canvas".

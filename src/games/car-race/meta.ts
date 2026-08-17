@@ -11,6 +11,8 @@ export const meta: GameEntry = {
   category: "Carreras",
   order: 110,
   added: "2026-07-03",
+  mobile: true,
+
   roomTimeLimitSec: 240,
 };
 

@@ -73,7 +73,7 @@ export class Game {
       onStart: () => this.beginCountdown(),
     });
 
-    this.bindInputs();
+    this.bindInputs(container);
     this.resize();
     window.addEventListener("resize", this.resize);
 
@@ -81,7 +81,7 @@ export class Game {
     requestAnimationFrame(this.tick);
   }
 
-  private bindInputs(): void {
+  private bindInputs(container: HTMLElement): void {
     window.addEventListener("keydown", (e) => {
       switch (e.key) {
         case "ArrowUp":
@@ -112,13 +112,17 @@ export class Game {
 
     // Swipe / drag controls: while playing, a movement past the threshold in the
     // dominant axis queues a turn and resets the anchor so a drag can chain turns.
-    this.canvas.addEventListener("pointerdown", (e) => {
+    // Van sobre el container y no sobre el canvas porque la pantalla de inicio /
+    // game over es un overlay que lo tapa: en movil (donde no hay Enter) el toque
+    // sobre el cartel moria en el overlay y no se podia arrancar. El panel de
+    // ranking corta la propagacion de sus propios pointerdown.
+    container.addEventListener("pointerdown", (e) => {
       this.pointerActive = true;
       this.pointerX = e.clientX;
       this.pointerY = e.clientY;
       if (this.state === "ready" || this.state === "dead") this.onAction();
     });
-    this.canvas.addEventListener("pointermove", (e) => {
+    container.addEventListener("pointermove", (e) => {
       if (!this.pointerActive || this.state !== "playing") return;
       const dx = e.clientX - this.pointerX;
       const dy = e.clientY - this.pointerY;
@@ -132,8 +136,8 @@ export class Game {
     const endPointer = () => {
       this.pointerActive = false;
     };
-    this.canvas.addEventListener("pointerup", endPointer);
-    this.canvas.addEventListener("pointercancel", endPointer);
+    container.addEventListener("pointerup", endPointer);
+    container.addEventListener("pointercancel", endPointer);
     this.canvas.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
   }
 

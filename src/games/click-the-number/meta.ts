@@ -11,6 +11,8 @@ export const meta: GameEntry = {
   category: "Reflejos",
   order: 400,
   added: "2026-07-16",
+  mobile: true,
+
   roomTimeLimitSec: 90,
 };
 
