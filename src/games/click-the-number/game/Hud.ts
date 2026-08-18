@@ -145,7 +145,7 @@ export class Hud {
 
     this.updateBestScoreDisplay(this.currentGridSize);
 
-    this.hintEl.textContent = "presiona ENTER para comenzar";
+    this.hintEl.textContent = "tocá la pantalla o presioná ENTER para comenzar";
 
     this.leaderboard.clear();
   }
@@ -282,7 +282,7 @@ export class Hud {
     this.bestScoresEl.style.display = "block";
     this.bestScoresEl.innerHTML = `MEJOR TIEMPO (1-${size * size}):<br>${this.formatTime(bestTime)}`;
 
-    this.hintEl.textContent = "presiona ENTER para volver a jugar";
+    this.hintEl.textContent = "tocá la pantalla o presioná ENTER para volver a jugar";
   }
 
   /** "M:SS.CC" con centesimas, igual formato que el ranking (formatClock). */

@@ -25,3 +25,22 @@ If tuning fairness: raise `FROG_HITBOX_HALF` (constants.ts) to make cars deadlie
 ## Room mode (multiplayer)
 
 Wired to the shared party mode: the constructor calls `initRoomMode("mini-frogger", { getScore: () => this.score })` (see root `CLAUDE.md`, "Salas (multiplayer rooms)"). With `?room=` in the URL the game-over reports the score to the room instead of the global ranking, and the restart input is blocked (one run per round). Without the param nothing changes.
+
+## Arranque: countdown y toque
+
+Implementa el countdown 3 / 2 / 1 / YA obligatorio del repo (`COUNTDOWN_LABELS` /
+`COUNTDOWN_STEP` en `Game.ts`, `Hud.showCountdown`, `.countdown` + `countdown-pop`
+en `style.css`, `SoundEffects.playCountdownTick`). Lo tenia pendiente: antes
+`onAction` llamaba directo a `start()`. El reparto quedo asi: `resetWorld()` prepara
+el mapa y la rana, `beginCountdown()` lo llama y cuenta, y `start()` solo pasa a
+`playing` y apaga la etiqueta. El `onStart` de sala entra por `beginCountdown()`,
+como el resto del roster.
+
+El arranque tambien entra por un `pointerdown` en el container, ignorando los
+`<button>` (el JUGAR del cartel ya tiene su handler, y los `.mobile-btn` frenan la
+propagacion de los suyos). Antes solo arrancaba con ese boton: en el celular era
+jugable, pero un toque en la pantalla no hacia nada.
+
+**Ojo al auditar**: su overlay se oculta con `opacity: 0`, no con `display: none`,
+asi que `innerText` sigue leyendo el cartel y un chequeo por texto lo da como roto
+estando sano. Medir el `.countdown` o la clase `hidden` del overlay.
