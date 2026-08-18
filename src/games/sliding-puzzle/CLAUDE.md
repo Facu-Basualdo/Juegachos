@@ -53,3 +53,15 @@ Declares its scoring (`export const scoring`, see root `CLAUDE.md`) in its `meta
 Wired to the shared party mode: the constructor calls `initRoomMode("sliding-puzzle", { getScore: () => encodeSlidingScore(this.elapsedTime, this.moves) })` (see root `CLAUDE.md`, "Salas (multiplayer rooms)"). With `?room=` in the URL the board size is fixed to 3x3 (`ROOM_VARIANTS["sliding-puzzle"]`) and the size selector is hidden so everyone solves the same puzzle; `handleVictory()` reports the same encoded time+moves score to the room instead of the global ranking (so room placement is by time too) and the Enter-to-retry on victory is blocked (one run per round). The timeout partial is the current encoded score with `finished=false` — since this game is `direction: "lower"`, `points.ts` treats unsolved partials as non-comparable and ranks them behind every solved board. The round is capped at 90s (`roomTimeLimitSec` in `meta.ts`).
 
 **F5 doesn't restart the run.** In room mode the board, the move count and the run's start instant are persisted to `sessionStorage` through `src/shared/room/roomRun.ts` (key: room + round + game). `beginCountdown()` returns early when `resumeSavedRun()` finds a snapshot, restoring the same scramble with no countdown; the empty cell is re-derived from the grid rather than stored. Time is saved as `startedAt` (epoch), and `update()` recomputes it with `elapsedSince()` whenever a room is active — so a reload neither resets nor pauses the clock (solo play still accumulates `dt`). `handleVictory()` clears the snapshot.
+
+## Arranque por toque (movil)
+
+El arranque/reintento entra por un `pointerdown` en el container, con **los botones de tamano (3x3 / 4x4 / 5x5)
+exentos** (`e.target.closest(".overlay__size-selector")` devuelve temprano): tocar una opcion la
+elige y muestra su record, y el toque en cualquier otro lado arranca.
+
+Antes el unico arranque era `Enter`, porque el handler del selector solo guardaba
+la opcion y no empezaba nada: en el telefono se podia elegir el tamano y despues
+no habia forma de jugar. Por eso el hint dice "toca la pantalla o presiona ENTER"
+— un toque que arranca desde todos lados menos los botones no se adivina solo.
+Ver el `CLAUDE.md` raiz, "El toque de arranque no puede colgar del canvas".

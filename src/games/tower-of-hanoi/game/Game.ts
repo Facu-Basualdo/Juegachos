@@ -68,7 +68,7 @@ export class Game {
       this.roomVote = new RoomVote(this.room, this.hud, (discs) => this.startWithDiscs(discs));
     }
 
-    this.bindInputs();
+    this.bindInputs(container);
 
     this.lastTime = performance.now();
     requestAnimationFrame(this.tick);
@@ -134,9 +134,22 @@ export class Game {
     this.beginCountdown();
   }
 
-  private bindInputs(): void {
+  private bindInputs(container: HTMLElement): void {
     window.addEventListener("keydown", this.handleKeyDown);
+    // En movil no hay Enter: el toque tiene que poder arrancar. Va sobre el
+    // container porque la pantalla de inicio es un overlay que tapa al resto,
+    // y se exenta el selector (.overlay__disc-selector), que sigue
+    // siendo solo un selector para poder mirar el record de cada opcion antes
+    // de jugar. El panel de ranking corta la propagacion de sus pointerdown.
+    container.addEventListener("pointerdown", this.handlePointerDown);
   }
+
+  private handlePointerDown = (e: PointerEvent): void => {
+    if ((e.target as HTMLElement).closest(".overlay__disc-selector")) return;
+    if (this.room) return;
+    if (this.state === "ready" || this.state === "victory") this.beginCountdown();
+  };
+
 
   private handleKeyDown = (e: KeyboardEvent): void => {
     if (e.key === "Enter") {

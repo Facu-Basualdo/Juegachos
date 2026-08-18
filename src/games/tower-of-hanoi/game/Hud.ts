@@ -164,7 +164,7 @@ export class Hud {
     });
 
     this.updateBestScoreDisplay(this.currentDiscs);
-    this.hintEl.textContent = "elegí los discos y presioná ENTER para comenzar";
+    this.hintEl.textContent = "elegí los discos y tocá la pantalla (o ENTER) para comenzar";
     this.leaderboard.clear();
   }
 

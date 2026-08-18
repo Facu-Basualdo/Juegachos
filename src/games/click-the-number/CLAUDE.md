@@ -38,3 +38,15 @@ El rating del overlay de victoria se mide en **segundos por celda**, no en tiemp
 **Tope de ronda: 90 s** (`roomTimeLimitSec`). Es obligatorio: el juego no puede terminar solo, un jugador que no toca nada dejaria la ronda colgada para siempre. El parcial por timeout es el tiempo corrido; como el juego es `direction: "lower"`, `points.ts` empata todos los parciales detras de los que si limpiaron la grilla y los muestra como "sin terminar".
 
 **F5 no reinicia la partida.** En sala el layout, el progreso (`next`) y el arranque del cronometro se persisten en `sessionStorage` via `src/shared/room/roomRun.ts` (clave por sala+ronda+juego). `beginCountdown()` corta temprano si `resumeSavedRun()` encuentra un snapshot: retoma el mismo tablero, en el mismo numero, sin countdown. `next` se guarda en vez de derivarse porque el layout **no** registra que celdas se apagaron (no es un cursor derivable, es el progreso mismo). El tiempo va como `startedAt` epoch y `update()` lo recalcula con `elapsedSince()` mientras haya sala — recargar no reinicia ni pausa el reloj (sin sala se sigue sumando `dt`). `handleVictory()` limpia el snapshot.
+
+## Arranque por toque (movil)
+
+El arranque/reintento entra por un `pointerdown` en el container, con **los botones de tamano (1-9 / 1-16 / 1-25)
+exentos** (`e.target.closest(".overlay__size-selector")` devuelve temprano): tocar una opcion la
+elige y muestra su record, y el toque en cualquier otro lado arranca.
+
+Antes el unico arranque era `Enter`, porque el handler del selector solo guardaba
+la opcion y no empezaba nada: en el telefono se podia elegir el tamano y despues
+no habia forma de jugar. Por eso el hint dice "toca la pantalla o presiona ENTER"
+— un toque que arranca desde todos lados menos los botones no se adivina solo.
+Ver el `CLAUDE.md` raiz, "El toque de arranque no puede colgar del canvas".

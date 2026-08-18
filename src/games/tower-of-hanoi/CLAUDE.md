@@ -112,3 +112,15 @@ tiempo se guarda como `startedAt` epoch y `update()` lo recalcula con
 (sin sala se sigue sumando `dt`). `handleVictory()` limpia el snapshot. Sin esto,
 al recargar se rearmaba la torre con `moves = 0` y el cronometro desde cero, lo
 que ademas era ventaja: el ranking es `direction: "lower"`.
+
+## Arranque por toque (movil)
+
+El arranque/reintento entra por un `pointerdown` en el container, con **los botones de discos (3 a 7)
+exentos** (`e.target.closest(".overlay__disc-selector")` devuelve temprano): tocar una opcion la
+elige y muestra su record, y el toque en cualquier otro lado arranca.
+
+Antes el unico arranque era `Enter`, porque el handler del selector solo guardaba
+la opcion y no empezaba nada: en el telefono se podia elegir el tamano y despues
+no habia forma de jugar. Por eso el hint dice "toca la pantalla o presiona ENTER"
+— un toque que arranca desde todos lados menos los botones no se adivina solo.
+Ver el `CLAUDE.md` raiz, "El toque de arranque no puede colgar del canvas".
