@@ -60,6 +60,15 @@ export class Game {
     });
     this.hud.showStart(this.bests);
 
+    // En movil no hay Enter: el toque tiene que poder arrancar desde cualquier
+    // parte de la pantalla, no solo desde los botones de modo. Se ignoran los <button>, que
+    // ya tienen su propio handler (y son los que eligen la opcion), para no
+    // arrancar dos veces ni pisar la eleccion.
+    container.addEventListener("pointerdown", (e) => {
+      if ((e.target as HTMLElement).closest("button")) return;
+      this.pickMode(this.lastMode);
+    });
+
     // Parcial por timeout en salas: los digitos recordados hasta ahora. En sala
     // el modo es siempre "aleatorio" (no hay eleccion por jugador).
     this.room = initRoomMode("number-memory", {
