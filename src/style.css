@@ -613,6 +613,13 @@ a {
   animation-delay: calc(var(--i, 0) * 60ms);
 }
 
+/* Una vez reordenada, la grilla no vuelve a animar la entrada (ver applyOrder). */
+.grid.is-settled .game-card {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
+
 .game-card__cover {
   position: relative;
   aspect-ratio: 1 / 1;
@@ -694,18 +701,18 @@ a {
 }
 
 /* Chips superpuestos a la portada (la imagen ya trae el nombre del juego). */
-/* La categoria y el chip de "Móvil" comparten fila. El ancho se corta antes del
-   boton de Ranking (arriba a la derecha) para que no se pisen: si los dos chips
-   no entran, el de Móvil baja de linea en vez de meterse abajo del boton. */
+/* La categoria y los chips de plataforma comparten fila, al pie de la portada:
+   arriba quedan los dos controles (el corazon a la izquierda, Ranking a la
+   derecha), asi que abajo la fila puede usar todo el ancho. */
 .game-card__tags {
   position: absolute;
-  top: 12px;
+  bottom: 12px;
   left: 12px;
   z-index: 2;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  max-width: calc(100% - 100px);
+  max-width: calc(100% - 24px);
 }
 
 .game-card__tag {
@@ -739,6 +746,47 @@ a {
    solo el del celular, que es el que aporta la informacion. */
 .game-card__tag--mobile {
   color: #ffffff;
+}
+
+/* Corazon de favorito, arriba a la izquierda de la portada. Siempre visible
+   (nada de mostrarlo con :hover: en un celular no hay hover y seria invisible);
+   sin marcar es el contorno sobre el mismo chip oscuro que los tags, y marcado
+   se rellena de rojo. */
+.game-card__fav {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: #efeee6;
+  background: rgba(17, 17, 17, 0.85);
+  border: none;
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.game-card__fav svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+}
+
+.game-card__fav:hover {
+  transform: scale(1.12);
+}
+
+.game-card__fav.is-active {
+  color: #ff4d5e;
+}
+
+.game-card__fav.is-active svg {
+  fill: currentColor;
 }
 
 .game-card__ranking {
