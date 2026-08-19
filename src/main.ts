@@ -129,6 +129,49 @@ for (const cat of categories) {
   filters.append(btn);
 }
 
+// ---------- Favoritos ----------
+
+// Se marcan con el corazon de cada card y viven solo en este navegador
+// (localStorage `mg:favorites`), igual que el nombre, la categoria y el orden:
+// no hay cuenta ni sincronizacion, asi que no siguen al jugador de un
+// dispositivo a otro. El array esta ordenado del mas reciente al mas viejo, que
+// es como se muestran: marcar un juego lo pone primero de todo, arriba de los
+// favoritos anteriores. No hay tope de cantidad.
+const FAVORITES_KEY = "mg:favorites";
+let favorites: string[] = readFavorites();
+
+function readFavorites(): string[] {
+  try {
+    const raw = localStorage.getItem(FAVORITES_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    // Se validan contra el roster de hoy: el favorito de un juego que se saco
+    // (o que quedo `hidden`) se descarta en vez de arrastrarse para siempre.
+    const ids = new Set(games.map((g) => g.id));
+    return parsed.filter((id): id is string => typeof id === "string" && ids.has(id));
+  } catch {
+    return [];
+  }
+}
+
+function isFavorite(id: string): boolean {
+  return favorites.includes(id);
+}
+
+/** Marca / desmarca y devuelve el estado nuevo (true = quedo como favorito). */
+function toggleFavorite(id: string): boolean {
+  const rest = favorites.filter((f) => f !== id);
+  const nowFav = rest.length === favorites.length;
+  favorites = nowFav ? [id, ...rest] : rest;
+  try {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+  } catch {
+    // ignore
+  }
+  return nowFav;
+}
+
 // ---------- Control de orden ----------
 
 // Orden de las cards, elegible desde el control de la barra de filtros:
@@ -264,7 +307,24 @@ function readSortMode(): SortMode {
   return "recent";
 }
 
+/**
+ * El orden final de la grilla: los favoritos fijos arriba (en el orden en que
+ * se marcaron, el ultimo primero) y abajo el resto segun el modo elegido. El
+ * pin gana sobre los tres modos a proposito — un cuarto modo "Favoritos" en el
+ * dropdown no lo encontraria nadie.
+ */
 function orderedGames(): GameEntry[] {
+  const sorted = sortedGames();
+  if (favorites.length === 0) return sorted;
+  const byId = new Map(sorted.map((g) => [g.id, g]));
+  const pinned = favorites
+    .map((id) => byId.get(id))
+    .filter((g): g is GameEntry => g !== undefined);
+  const pinnedIds = new Set(pinned.map((g) => g.id));
+  return [...pinned, ...sorted.filter((g) => !pinnedIds.has(g.id))];
+}
+
+function sortedGames(): GameEntry[] {
   if (sortMode === "alpha") {
     return [...games].sort((a, b) => a.title.localeCompare(b.title));
   }
@@ -293,6 +353,20 @@ function orderedGames(): GameEntry[] {
 const PC_BADGE = `<span class="game-card__tag game-card__tag--icon" role="img" aria-label="Se puede jugar en la computadora" title="Se puede jugar en la computadora"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M12 17v3" /><path d="M8.5 20h7" /></svg></span>`;
 
 const MOBILE_BADGE = `<span class="game-card__tag game-card__tag--icon game-card__tag--mobile" role="img" aria-label="Se puede jugar en el celular" title="Se puede jugar en el celular"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="7" y="2" width="10" height="20" rx="2.5" /><path d="M10.5 18.5h3" /></svg></span>`;
+
+const HEART_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>`;
+
+/**
+ * Estado del corazon. Es un <button> con `aria-pressed` (no un icono decorativo)
+ * para que un lector de pantalla lo lea como lo que es: un interruptor.
+ */
+function setFavState(btn: HTMLButtonElement, fav: boolean): void {
+  btn.classList.toggle("is-active", fav);
+  btn.setAttribute("aria-pressed", String(fav));
+  const label = fav ? "Quitar de favoritos" : "Agregar a favoritos";
+  btn.setAttribute("aria-label", label);
+  btn.title = label;
+}
 
 orderedGames().forEach((game, i) => {
   const card = document.createElement("a");
@@ -334,6 +408,23 @@ orderedGames().forEach((game, i) => {
   img.loading = "lazy";
   img.addEventListener("error", () => img.remove());
   card.querySelector(".game-card__cover")!.append(img);
+
+  // Corazon de favorito: arriba a la izquierda de la portada (el lugar que
+  // antes ocupaban los chips, que bajaron al pie). La card es un <a>, asi que
+  // el clic tiene que cortarse aca — si navegara, marcar un favorito abriria el
+  // juego y ademas le sumaria una partida al contador de populares.
+  const favBtn = document.createElement("button");
+  favBtn.className = "game-card__fav";
+  favBtn.type = "button";
+  favBtn.innerHTML = HEART_ICON;
+  setFavState(favBtn, isFavorite(game.id));
+  favBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFavState(favBtn, toggleFavorite(game.id));
+    applyOrder();
+  });
+  card.querySelector(".game-card__cover")!.append(favBtn);
 
   if (roomsOn) {
     const rankBtn = document.createElement("button");
@@ -387,7 +478,7 @@ if (roomsOn) {
       <h2 class="rooms-banner__title">&iexcl;Jug&aacute; con amigos!</h2>
       <p class="rooms-banner__subtitle">Cre&aacute; una sala, compart&iacute; el c&oacute;digo y compitan ronda a ronda por el mejor puntaje.</p>
     </div>
-    <span class="rooms-banner__cta">Crear sala <span class="rooms-banner__arrow">&rarr;</span></span>
+    <span class="rooms-banner__cta">Salas <span class="rooms-banner__arrow">&rarr;</span></span>
   `;
 
   // Fondo ilustrado del banner; si el archivo no existe queda el glow solo.
@@ -593,6 +684,13 @@ if (roomsOn) {
 // Reordena las cards segun el modo actual: mueve los nodos existentes al nuevo
 // orden (no los recrea) y refresca el stagger `--i`.
 function applyOrder(): void {
+  // Reordenar es re-insertar los nodos, y eso vuelve a disparar la animacion de
+  // entrada de cada card (con su retraso escalonado, o sea varios segundos de
+  // grilla desvaneciendose). El "rise" es para la carga de la pagina y nada mas,
+  // asi que en el primer reordenamiento la grilla queda "asentada" y de ahi en
+  // mas los cambios de orden son instantaneos — que importa sobre todo con los
+  // favoritos, donde se reordena a cada clic.
+  grid.classList.add("is-settled");
   orderedGames().forEach((game, i) => {
     const card = cardById.get(game.id);
     if (!card) return;
