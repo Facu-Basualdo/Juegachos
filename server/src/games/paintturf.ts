@@ -70,11 +70,31 @@ const MATCH_MS = 90_000;
 const PREROLL_MS = 3000;
 /** Espera desde el primer join a que llegue el resto del roster antes de largar. */
 const START_GRACE_MS = 8000;
-/** Paso fijo de la simulacion (40 Hz). */
-const TICK_MS = 25;
+/** Paso fijo de la simulacion (50 Hz). */
+const TICK_MS = 20;
 const STEP_DT = TICK_MS / 1000;
-/** Un snapshot cada N pasos: 40 Hz / 2 = 20 Hz de broadcast. */
-const BROADCAST_EVERY = 2;
+/**
+ * Cada cuanto TIEMPO DE SIMULACION se difunde un snapshot: 40 ms, o sea 25 Hz.
+ *
+ * Dos detalles que parecen menores y son la diferencia entre que los rivales se
+ * vean fluidos o a los tirones, porque esto es lo que consume la interpolacion del
+ * cliente:
+ *
+ * 1. Se mide en tiempo de SIMULACION, no en despertares del timer. La primera
+ *    version emitia "uno de cada dos despertares", y un despertar puede simular
+ *    cero, uno o dos pasos segun cuanto se atraso el `setInterval` (en Windows la
+ *    resolucion es de ~15.6 ms): el espaciado terminaba oscilando entre 25 y 100 ms.
+ * 2. El chequeo va DENTRO del bucle de pasos. Afuera vuelve a heredar el jitter del
+ *    timer, aunque se mida en simTime: medido asi daba 50 u 75 ms alternados.
+ *
+ * Ademas es multiplo exacto de TICK_MS (dos pasos), asi que el espaciado no puede
+ * ser otra cosa que 40 ms. Con esa linea de tiempo pareja, el retraso de
+ * interpolacion del cliente (INTERP_DELAY) cubre siempre el mismo margen.
+ *
+ * Presupuesto: 8 jugadores x 25/s = 200 emits/s por sala, menos de la mitad de lo
+ * que ya mueve PONG (60 Hz x 8).
+ */
+const BROADCAST_MS = 40;
 /**
  * Tope de tiempo real absorbido por despertar. Si el event loop se atrasa se
  * descarta el excedente en vez de simular cien pasos de golpe.
@@ -92,6 +112,9 @@ class Brush {
   cooldown = 0;
   /** Salpicon pedido por el cliente, pendiente de resolverse en el proximo paso. */
   wantsSplat = false;
+  /** Numero del ultimo `pt:input` aplicado, que vuelve en el snapshot para que el
+   *  cliente sepa hasta donde lo escucho el server (ver `reconcile` del cliente). */
+  lastSeq = 0;
 
   constructor(readonly seat: number) {}
 }
@@ -117,7 +140,8 @@ export class PaintTurfSim implements RoomSim {
   private acc = 0;
   /** Reloj de la simulacion (ms): avanza de a TICK_MS exactos y viaja en `pt:state.t`. */
   private simTime = 0;
-  private steps = 0;
+  /** simTime del ultimo snapshot difundido. */
+  private lastBroadcast = 0;
   /** Momento (en simTime) en que largan los pinceles y en que termina la partida. */
   private launchAt = 0;
   private endAt = 0;
@@ -178,6 +202,11 @@ export class PaintTurfSim implements RoomSim {
     if (payload && typeof payload === "object" && (payload as { s?: unknown }).s === true) {
       brush.wantsSplat = true;
     }
+
+    const seq = readInt(payload, "n");
+    // Solo hacia adelante: un mensaje que llega fuera de orden no puede hacer que el
+    // cliente reconcilie contra un input que ya quedo viejo.
+    if (seq !== null && seq > brush.lastSeq) brush.lastSeq = seq;
   }
 
   dispose(): void {
@@ -200,7 +229,7 @@ export class PaintTurfSim implements RoomSim {
     this.dirty.clear();
     this.brushes.clear();
     this.simTime = 0;
-    this.steps = 0;
+    this.lastBroadcast = 0;
     this.acc = 0;
 
     // Repartidos en un ovalo alrededor del centro: todos a la misma distancia del
@@ -231,6 +260,7 @@ export class PaintTurfSim implements RoomSim {
     }
     this.phase = "preroll";
     this.launchAt = this.simTime + PREROLL_MS;
+    this.lastBroadcast = this.simTime;
     this.broadcastState();
   }
 
@@ -239,17 +269,17 @@ export class PaintTurfSim implements RoomSim {
     this.acc = Math.min(this.acc + (now - this.lastTick), MAX_CATCHUP_MS);
     this.lastTick = now;
 
-    let stepped = false;
     while (this.acc >= TICK_MS) {
       this.acc -= TICK_MS;
       this.simTime += TICK_MS;
       this.step();
-      stepped = true;
+      // Adentro del bucle: es lo que hace que el espaciado sea exactamente
+      // BROADCAST_MS y no lo que haya durado el despertar del timer.
+      if (this.simTime - this.lastBroadcast >= BROADCAST_MS) {
+        this.lastBroadcast = this.simTime;
+        this.broadcastState();
+      }
     }
-    if (!stepped) return;
-
-    this.steps++;
-    if (this.steps % BROADCAST_EVERY === 0) this.broadcastState();
   }
 
   private step(): void {
@@ -268,6 +298,7 @@ export class PaintTurfSim implements RoomSim {
 
     if (this.simTime >= this.endAt) {
       this.phase = "over";
+      this.lastBroadcast = this.simTime;
       this.broadcastState();
       // Se corta la simulacion, pero el room sigue vivo hasta que se vayan los
       // sockets: el cliente todavia muestra el tablero final.
@@ -359,6 +390,7 @@ export class PaintTurfSim implements RoomSim {
         st: Math.round(brush.stun),
         cd: Math.round(brush.cooldown),
         on: this.room.isConnected(nickname),
+        n: brush.lastSeq,
       });
     }
 

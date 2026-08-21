@@ -14,10 +14,10 @@ reparto:
 
 - **Server** (`server/src/games/paintturf.ts`, namespace `/paintturf`): duenio de
   la grilla, de las posiciones, del aturdimiento y del puntaje. Simulacion con
-  paso fijo a 40 Hz, broadcast a 20 Hz.
-- **Cliente** (`game/Game.ts`): manda su direccion, predice su propio pincel para
-  que el control se sienta inmediato, e interpola a los rivales sobre el reloj del
-  server.
+  paso fijo a 50 Hz, broadcast cada 40 ms exactos de tiempo de simulacion.
+- **Cliente** (`game/Game.ts`): manda su direccion numerada, predice su propio
+  pincel, reconcilia reproduciendo los inputs que el server todavia no acuso, e
+  interpola a los rivales sobre el reloj del server.
 - **Supabase / RoomMode**: lobby, marcador, rejoin y el reporte del puntaje, como
   en todas las salas. El server no toca la DB.
 
@@ -49,8 +49,9 @@ del pincel se tapa con el **disco de pigmento fresco** que dibuja el Renderer
 
 ### Trafico
 
-8 jugadores x 20 broadcasts/s = **~160 emits/s por sala**, un tercio de lo que ya
-mueve PONG (60 Hz x 8). La grilla completa (805 celdas, un caracter por celda)
+8 jugadores x 25 broadcasts/s = **~200 emits/s por sala**, menos de la mitad de lo
+que ya mueve PONG (60 Hz x 8). De subida son otros 240/s (30 Hz de input), que para
+el server no es nada. La grilla completa (805 celdas, un caracter por celda)
 viaja **solo** en el `pt:init` del join / reconexion; los snapshots llevan
 unicamente las celdas cambiadas desde el anterior (`c`, aplanado
 `[indice, asiento, ...]`).
@@ -71,7 +72,9 @@ dos lados.**
 | `STUN_MS` / `STUN_SPEED_FACTOR` | 1100 / 0.4 | aturdido no pinta y va lento |
 | `START_BLOB_RADIUS` | 46 | ~12 celdas (1.5%) para no largar en blanco |
 | `MATCH_MS` / `PREROLL_MS` | 90000 / 3000 | el preroll cubre el 3/2/1/YA |
-| `TICK_MS` / `BROADCAST_EVERY` | 25 / 2 | 40 Hz de simulacion, 20 Hz de red |
+| `TICK_MS` / `BROADCAST_MS` | 20 / 40 | 50 Hz de simulacion, 25 Hz de red |
+| `INPUT_INTERVAL` (cliente) | 33 ms | 30 Hz de subida |
+| `INTERP_DELAY` (cliente) | 110 ms | ~2.75 espaciados de snapshot |
 
 **`BRUSH_RADIUS` no baja de 21.** Yendo en diagonal, los centros de las celdas
 vecinas a la trayectoria caen a `CELL / raiz(2)` = **16.97 px** de ella. Con radio
@@ -79,8 +82,61 @@ vecinas a la trayectoria caen a `CELL / raiz(2)` = **16.97 px** de ella. Con rad
 como un tablero de ajedrez (se vio en la primera prueba con dos clientes); con 21
 la fila de al lado entra siempre y el trazo es una banda continua.
 
+## La red: lo que se rompio en el primer deploy
+
+En local todo se veia perfecto porque la latencia era cero. Con el server real
+(~150 ms de ida y vuelta contra Railway) aparecieron dos sintomas, y cada uno tenia
+su propia causa. Las dos son faciles de reintroducir, asi que estan documentadas.
+
+### "El control responde tarde"
+
+La primera version reconciliaba interpolando la posicion propia hacia la del ultimo
+snapshot. Con latencia real eso es un elastico: el snapshot dice donde estaba el
+pincel hace ~100 ms, asi que la correccion tira permanentemente hacia atras contra
+la prediccion y cada cambio de direccion arrastra un rato la trayectoria vieja.
+**Medido**: al girar, el pincel recorria el **47%** de lo que deberia en los
+primeros 200 ms.
+
+Ojo con el arreglo intuitivo, que tambien esta mal: comparar contra "donde estaba yo
+cuando el server capturo el snapshot" deja un desfase de ida MAS vuelta (~30 px a
+esta velocidad) y, como se vuelve a medir igual en cada snapshot, arrastra el pincel
+hacia atras sin parar.
+
+La unica forma de no adivinar latencias es que el server **acuse el input**: cada
+`pt:input` lleva un `n` y el snapshot devuelve, por jugador, el ultimo `n` que el
+server tenia aplicado (`PtPlayerView.n`). Con eso el cliente parte de la posicion
+autoritativa y **vuelve a aplicar los inputs posteriores** con la misma fisica
+(`reconcile` en `Game.ts`). Moviendose derecho no queda correccion ninguna; solo se
+corrige lo que el cliente no predijo (aturdimiento, tope contra el borde, paquete
+perdido). **Medido despues**: 99-103% de la respuesta ideal con 150 ms emulados.
+
+### "Los rivales se mueven a los tirones"
+
+El espaciado de los snapshots **en la linea de tiempo de la simulacion** era
+irregular: el sim emitia "uno de cada dos despertares del timer", y un despertar
+simula cero, uno o dos pasos segun cuanto se atraso el `setInterval` (en Windows la
+resolucion es de ~15.6 ms). **Medido con un cliente crudo de socket.io**: espaciado
+de 60 a 80 ms, media 62, desvio 6.1 — contra un `INTERP_DELAY` de 80 ms, o sea
+**cero margen**. Con el jitter de una red real el buffer del cliente se queda seco,
+y ahi el rival se congela en su ultima posicion y pega un salto cuando llega el
+snapshot siguiente.
+
+Tres cambios: el broadcast se mide en `simTime` y **el chequeo va adentro del bucle
+de pasos** (afuera vuelve a heredar el jitter del timer: medido daba 50 u 80 ms
+alternados), `BROADCAST_MS` es multiplo exacto de `TICK_MS`, y el `INTERP_DELAY`
+subio a 110 ms. **Medido despues**: 40 ms exactos, desvio 0.0. Ademas, cuando falta
+un snapshot el cliente **extrapola** el ultimo tramo hasta `EXTRAPOLATE_MS` en vez
+de congelar al rival.
+
+Advertencia honesta sobre esta segunda mitad: el sintoma **no se pudo reproducir en
+el banco de pruebas**, porque la latencia emulada por CDP es constante y sin jitter
+(y su `packetLoss` no alcanzo a generarlo sobre TCP). Lo verificado es la causa —el
+espaciado— y el margen, no el sintoma.
+
 ## Gotchas
 
+- **No reintroducir un lerp hacia la posicion del snapshot.** Es la correccion que
+  parece obvia y es exactamente la que se siente como lag (ver arriba).
 - **El estado del server esta scopeado por RONDA.** El `round` viaja en el
   `pt:join` y una ronda mas nueva tira el tablero anterior. Entre rondas los
   clientes navegan de una pagina a la otra y no todos a la vez, asi que el
