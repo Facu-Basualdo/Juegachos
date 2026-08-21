@@ -13,6 +13,7 @@ import {
 import { Runner } from "./Runner";
 import { BeamField } from "./BeamField";
 import { Particles } from "./Particles";
+import { Blood } from "./Blood";
 import { Renderer, WARNING_LIFE, type RunnerView, type Warning } from "./Renderer";
 import { InputController } from "./InputController";
 import { Hud } from "./Hud";
@@ -49,6 +50,8 @@ export class Game {
   private readonly field = new BeamField();
   private readonly renderer = new Renderer();
   private readonly particles = new Particles();
+  /** Manchas de sangre pegadas al piso y al muro. Duran hasta la proxima partida. */
+  private readonly blood = new Blood();
   private readonly hud: Hud;
   private readonly input: InputController;
   /** Modo sala (multijugador): activo solo con ?room= en la URL. */
@@ -279,6 +282,8 @@ export class Game {
     this.field.reset(seed);
     for (const r of this.remotes.values()) r.runner.reset();
     this.particles.clear();
+    this.blood.clear();
+    this.hud.clearBlood();
     this.warnings.length = 0;
     this.score = 0;
     this.state = "countdown";
@@ -309,8 +314,18 @@ export class Game {
     this.runner.kill();
     this.input.clear();
     this.input.showZones(false);
-    this.particles.burst(this.runner.x, this.runner.y, 0.5, "212, 59, 59", 20);
+    // Reventon: primero la sangre en el aire, despues el polvo de piedra que
+    // levanta la viga. Las manchas del piso y del muro las pone `blood` y quedan
+    // ahi hasta la proxima partida.
+    this.particles.burst(this.runner.x, this.runner.y, 0.55, "142, 10, 22", 30);
+    this.particles.burst(this.runner.x, this.runner.y, 0.38, "196, 30, 40", 18);
     this.particles.burst(this.runner.x, this.runner.y, 0.35, "168, 128, 79", 14);
+    this.blood.explode(this.runner.x, this.runner.y);
+    // La sangre en el lente NO va en sala: ahi el caido se queda mirando correr
+    // a los demas (`onReportedWaiting`), y un velo opaco encima lo dejaria sin
+    // ver la ronda. Lo que queda en el piso y en los muros si va en los dos
+    // modos: eso es la sala, no la camara.
+    if (!this.room) this.hud.showBlood();
     SoundEffects.playHit();
     this.hud.showScore(false);
     this.emit("dead");
@@ -432,7 +447,7 @@ export class Game {
     for (const r of this.remotes.values()) {
       views.push({ runner: r.runner, self: false, score: r.score });
     }
-    this.renderer.draw(ctx, this.field, views, this.particles, this.warnings, !!this.room);
+    this.renderer.draw(ctx, this.field, views, this.particles, this.warnings, !!this.room, this.blood);
     ctx.restore();
   }
 

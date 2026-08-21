@@ -18,8 +18,11 @@ export const TILE_HH = 17;
 export const Z_SCALE = 56;
 export const ORIGIN_X = 416;
 export const ORIGIN_Y = 205;
-/** Altura de los muros del fondo (unidades). */
-export const WALL_H = 3.2;
+/** Altura de los muros del fondo (unidades). Sube hasta salirse del cuadro por
+ * arriba: con muros bajos quedaba vacio negro entre el remate y el borde de la
+ * pantalla, y la sala se leia como una maqueta al aire libre en vez de como una
+ * camara enterrada. */
+export const WALL_H = 4.2;
 /** Alto del vano por el que entran las vigas: el muro de la izquierda solo
  * existe por ENCIMA de esto, si no taparia el pasillo. */
 export const TUNNEL_H = 1.9;

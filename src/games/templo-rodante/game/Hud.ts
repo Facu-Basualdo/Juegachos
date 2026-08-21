@@ -11,6 +11,8 @@ export class Hud {
   private readonly hintEl: HTMLDivElement;
   private readonly countdownEl: HTMLDivElement;
   private readonly spectateEl: HTMLDivElement;
+  /** Sangre pegada al "lente" tras el reventon. */
+  private readonly bloodEl: HTMLDivElement;
   private readonly leaderboard = new LeaderboardPanel();
 
   constructor(container: HTMLElement) {
@@ -56,7 +58,12 @@ export class Hud {
     this.spectateEl = document.createElement("div");
     this.spectateEl.className = "spectate";
 
-    container.append(hud, this.overlayEl, this.countdownEl, this.spectateEl);
+    this.bloodEl = document.createElement("div");
+    this.bloodEl.className = "blood";
+
+    // La sangre va DEBAJO del overlay de game over: el texto tiene que seguir
+    // leyendose por encima de las manchas.
+    container.append(hud, this.bloodEl, this.overlayEl, this.countdownEl, this.spectateEl);
   }
 
   /** Muestra una etiqueta de la cuenta ("3" / "2" / "1" / "YA"), o la oculta con null. */
@@ -119,6 +126,54 @@ export class Hud {
   /** Muestra el ranking global del juego en la pantalla de game-over. */
   showRanking(gameId: string, score: number): void {
     void this.leaderboard.render(gameId, { score });
+  }
+
+  /**
+   * Sangre en la camara al reventar: las manchas aparecen de golpe y despues
+   * **chorrean hacia abajo** (los hilos se generan aca y bajan por CSS). Queda
+   * hasta que arranca la partida siguiente.
+   */
+  showBlood(): void {
+    this.bloodEl.replaceChildren();
+    for (let i = 0; i < 16; i++) {
+      const drip = document.createElement("div");
+      drip.className = "blood__drip";
+      drip.style.left = `${Math.random() * 100}%`;
+      drip.style.top = `${Math.random() * 58}%`;
+      drip.style.width = `${5 + Math.random() * 15}px`;
+      drip.style.setProperty("--run", `${16 + Math.random() * 44}vh`);
+      drip.style.animationDelay = `${Math.random() * 1.3}s`;
+      drip.style.animationDuration = `${2 + Math.random() * 3.2}s`;
+      this.bloodEl.append(drip);
+    }
+    for (let i = 0; i < 14; i++) {
+      const spot = document.createElement("div");
+      spot.className = "blood__spot";
+      spot.style.left = `${Math.random() * 100}%`;
+      spot.style.top = `${Math.random() * 80}%`;
+      const d = 14 + Math.random() * 62;
+      spot.style.width = `${d}px`;
+      spot.style.height = `${d * (0.6 + Math.random() * 0.5)}px`;
+      spot.style.transform = `rotate(${Math.random() * 360}deg)`;
+      // Contorno irregular generado punto a punto. Con `border-radius` -- por
+      // mas asimetrico que se lo escriba -- la forma sale siempre demasiado
+      // suave y a este tamaño lee como una pelota, no como una salpicadura.
+      const n = 13;
+      const pts: string[] = [];
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2;
+        const r = 24 + Math.random() * 26;
+        pts.push(`${(50 + Math.cos(a) * r).toFixed(1)}% ${(50 + Math.sin(a) * r).toFixed(1)}%`);
+      }
+      spot.style.clipPath = `polygon(${pts.join(",")})`;
+      this.bloodEl.append(spot);
+    }
+    this.bloodEl.classList.add("is-shown");
+  }
+
+  clearBlood(): void {
+    this.bloodEl.classList.remove("is-shown");
+    this.bloodEl.replaceChildren();
   }
 
   hide(): void {
