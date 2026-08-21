@@ -8,11 +8,13 @@ import {
   COLS,
   COUNTDOWN_LABELS,
   COUNTDOWN_STEP,
+  ERROR_FADE_RATE,
+  EXTRAPOLATE_MS,
+  HISTORY_MS,
   INPUT_INTERVAL,
   INTERP_DELAY,
   MATCH_MS,
   MAX_DT,
-  RECONCILE_RATE,
   ROWS,
   SNAP_DIST,
   SPEED,
@@ -24,7 +26,7 @@ import {
 import { Hud, type ScoreRow } from "./Hud";
 import { InputController } from "./InputController";
 import { PaintTurfSocket } from "./PaintTurfSocket";
-import type { PtInit, PtState } from "./PaintTurfProtocol";
+import type { PtInit, PtPlayerView, PtState } from "./PaintTurfProtocol";
 import { Renderer, type BrushView } from "./Renderer";
 import { SoundEffects } from "./SoundEffects";
 
@@ -92,6 +94,14 @@ export class Game {
   /** Pincel propio predicho localmente (el server sigue siendo el autoritativo). */
   private myX = VIEW_WIDTH / 2;
   private myY = VIEW_HEIGHT / 2;
+  /** Inputs propios ya enviados, con el momento en que se mandaron. Es lo que se
+   *  vuelve a aplicar sobre la posicion del server para reconciliar. */
+  private inputs: { n: number; t: number; dx: number; dy: number }[] = [];
+  /** Numero del proximo `pt:input`. */
+  private inputSeq = 0;
+  /** Resto visual de la ultima correccion, que se disuelve en pantalla. */
+  private visX = 0;
+  private visY = 0;
   private myStun = 0;
   private myCooldown = 0;
   private hadStun = false;
@@ -268,13 +278,7 @@ export class Game {
       if (mine.st > 0 && !this.hadStun) SoundEffects.playStunned();
       this.hadStun = mine.st > 0;
 
-      // Reconciliacion: si el server dice que estoy en otro lado (rebote contra el
-      // borde, paquete perdido, aturdimiento que no habia predicho) se corrige
-      // suave; un salto grande no se suaviza, se acepta de una.
-      if (Math.hypot(mine.x - this.myX, mine.y - this.myY) > SNAP_DIST) {
-        this.myX = mine.x;
-        this.myY = mine.y;
-      }
+      if (this.state === "playing") this.reconcile(mine);
     }
 
     if (state.phase === "playing" && this.state === "countdown") {
@@ -319,6 +323,9 @@ export class Game {
       this.myX = mine.x;
       this.myY = mine.y;
     }
+    this.inputs.length = 0;
+    this.visX = 0;
+    this.visY = 0;
   }
 
   private finish(): void {
@@ -404,13 +411,76 @@ export class Game {
       this.myY = clamp(this.myY + (dir.y / len) * speed * dt, 0, VIEW_HEIGHT);
     }
 
-    // Deriva contra el autoritativo: se cierra de a poco para que no se note.
-    const mine = this.latest?.players.find((p) => p.i === this.mySeat);
-    if (mine) {
-      const k = 1 - Math.exp(-RECONCILE_RATE * dt);
-      this.myX += (mine.x - this.myX) * k;
-      this.myY += (mine.y - this.myY) * k;
+    // La correccion ya se aplico a la posicion logica; lo que queda es disolver el
+    // salto en pantalla para que el ojo no lo vea.
+    const decay = Math.exp(-ERROR_FADE_RATE * dt);
+    this.visX *= decay;
+    this.visY *= decay;
+  }
+
+  /**
+   * Reconciliacion contra el server, por reproduccion de inputs.
+   *
+   * El problema a resolver: el snapshot describe donde estaba el pincel cuando el
+   * server lo capturo, y para entonces el server tenia aplicados los inputs que le
+   * habian llegado, no los que el jugador acababa de apretar. Corregir la posicion
+   * actual contra ese numero — que es lo que hacia la primera version — tira
+   * permanentemente hacia atras: con ~150 ms de ida y vuelta contra Railway el
+   * pincel se siente atado con un elastico, y cada cambio de direccion arrastra un
+   * rato la trayectoria vieja. En local no se notaba porque el retraso era cero.
+   *
+   * Comparar contra "donde estaba yo cuando el server capturo" tampoco alcanza: el
+   * desfase pasa a ser de ida MAS vuelta (~30 px a esta velocidad) y, como se vuelve
+   * a medir igual en cada snapshot, arrastraria el pincel hacia atras sin parar.
+   *
+   * La unica forma de no adivinar latencias es que el server diga **hasta que input
+   * escucho** (`mine.n`). Con eso el cliente parte de la posicion autoritativa y
+   * vuelve a aplicar por su cuenta, con la misma fisica, todos los inputs que mando
+   * despues. Moviendose derecho el resultado coincide con la prediccion y no hay
+   * correccion ninguna: el control responde al toque. Lo que queda es error real —
+   * un aturdimiento, un tope contra el borde, un paquete perdido — y ese si se
+   * corrige.
+   */
+  private reconcile(mine: PtPlayerView): void {
+    // Server viejo (todavia sin redeployar): sin acuse no hay forma de reconciliar
+    // sin inventar una latencia, y equivocarse es peor que no tocar nada.
+    if (typeof mine.n !== "number") return;
+
+    const from = this.inputs.findIndex((i) => i.n === mine.n);
+    if (from < 0) return;
+    // Todo lo anterior al acuse ya no hace falta.
+    if (from > 0) this.inputs.splice(0, from);
+
+    const now = performance.now();
+    // El aturdimiento se aplica entero al tramo: dura mas que el tramo reproducido,
+    // asi que partirlo no cambiaria nada apreciable.
+    const speed = SPEED * (mine.st > 0 ? STUN_SPEED_FACTOR : 1);
+    let x = mine.x;
+    let y = mine.y;
+    for (let i = 0; i < this.inputs.length; i++) {
+      const input = this.inputs[i];
+      const until = i + 1 < this.inputs.length ? this.inputs[i + 1].t : now;
+      const dt = (until - input.t) / 1000;
+      if (dt <= 0) continue;
+      x = clamp(x + input.dx * speed * dt, 0, VIEW_WIDTH);
+      y = clamp(y + input.dy * speed * dt, 0, VIEW_HEIGHT);
     }
+
+    const dx = x - this.myX;
+    const dy = y - this.myY;
+    if (dx === 0 && dy === 0) return;
+    this.myX = x;
+    this.myY = y;
+
+    // Un salto grande (reconexion, teletransporte) se muestra tal cual: disolverlo
+    // dejaria el pincel dibujado lejos de donde el server dice que esta.
+    if (Math.hypot(dx, dy) > SNAP_DIST) {
+      this.visX = 0;
+      this.visY = 0;
+      return;
+    }
+    this.visX -= dx;
+    this.visY -= dy;
   }
 
   private sendInput(dt: number): void {
@@ -419,9 +489,23 @@ export class Game {
     if (!splat && this.inputTimer < INPUT_INTERVAL) return;
     this.inputTimer = 0;
     const dir = this.worldDir();
+    // Normalizado igual que en el server, para que la reproduccion de `reconcile`
+    // use exactamente el mismo vector que el server va a aplicar.
+    const len = Math.hypot(dir.x, dir.y);
+    const dx = len > 0.001 ? dir.x / len : 0;
+    const dy = len > 0.001 ? dir.y / len : 0;
+
+    const n = ++this.inputSeq;
+    this.inputs.push({ n, t: performance.now(), dx, dy });
+    // Red de seguridad: si el acuse del server no llega (server viejo, o el input
+    // se perdio), la lista no puede crecer para siempre.
+    while (this.inputs.length > 2 && this.inputs[0].t < performance.now() - HISTORY_MS) {
+      this.inputs.shift();
+    }
+
     // El salpicon no espera al proximo tick de envio: es una accion de reflejos y
-    // 50 ms de cola se sienten como que el boton no responde.
-    this.socket?.sendInput(dir.x, dir.y, splat);
+    // esperar el envio siguiente se siente como que el boton no responde.
+    this.socket?.sendInput(dx, dy, splat, n);
     if (splat && this.myCooldown === 0) this.myCooldown = SPLAT_COOLDOWN_MS;
   }
 
@@ -483,7 +567,12 @@ export class Game {
     } else if (rt <= a.t) {
       b = a; // antes del buffer: se fija al mas viejo
     } else if (rt >= b.t) {
-      a = b; // buffer agotado (falta red): se fija al mas nuevo
+      // Buffer agotado: falto un snapshot. Antes se fijaba al mas nuevo, o sea que
+      // el rival se plantaba en seco y arrancaba de un salto cuando la red se
+      // recuperaba. Se sigue su ultimo tramo un ratito (EXTRAPOLATE_MS), que es
+      // casi siempre lo que el rival efectivamente hizo: los pinceles se mueven en
+      // linea recta a velocidad constante.
+      a = this.snaps.length > 1 ? this.snaps[this.snaps.length - 2] : b;
     } else {
       for (let i = this.snaps.length - 1; i > 0; i--) {
         if (this.snaps[i - 1].t <= rt && rt <= this.snaps[i].t) {
@@ -494,7 +583,11 @@ export class Game {
       }
     }
     const span = b.t - a.t;
-    const f = span > 0 ? (rt - a.t) / span : 0;
+    // f > 1 es extrapolacion, y se topea para no mandar al rival a la loma del
+    // orto si la red se corta del todo.
+    const raw = span > 0 ? (rt - a.t) / span : 0;
+    const maxF = span > 0 ? 1 + EXTRAPOLATE_MS / span : 1;
+    const f = Math.min(raw, maxF);
 
     const views: BrushView[] = [];
     for (const player of state.players) {
@@ -502,8 +595,8 @@ export class Game {
       let x: number;
       let y: number;
       if (mine) {
-        x = this.myX;
-        y = this.myY;
+        x = this.myX + this.visX;
+        y = this.myY + this.visY;
       } else {
         const pa = a.pos.get(player.i) ?? { x: player.x, y: player.y };
         const pb = b.pos.get(player.i) ?? pa;

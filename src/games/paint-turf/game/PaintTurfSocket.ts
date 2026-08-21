@@ -79,10 +79,14 @@ export class PaintTurfSocket {
     this.errorCb = cb;
   }
 
-  /** Direccion deseada (el server la normaliza) y, opcionalmente, el salpicon. */
-  sendInput(dx: number, dy: number, splat: boolean): void {
-    if (splat) this.socket?.emit("pt:input", { dx, dy, s: true });
-    else this.socket?.emit("pt:input", { dx, dy });
+  /**
+   * Direccion deseada, salpicon y numero de secuencia. El `n` vuelve en el snapshot
+   * (`PtPlayerView.n`) y es lo que le permite al cliente reconciliar sabiendo hasta
+   * donde lo escucho el server, sin tener que adivinar la latencia.
+   */
+  sendInput(dx: number, dy: number, splat: boolean, n: number): void {
+    if (splat) this.socket?.emit("pt:input", { dx, dy, n, s: true });
+    else this.socket?.emit("pt:input", { dx, dy, n });
   }
 
   dispose(): void {

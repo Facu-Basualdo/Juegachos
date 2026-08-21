@@ -17,6 +17,9 @@ export interface PtPlayerView {
   cd: number;
   /** Conectado al server ahora mismo. */
   on: boolean;
+  /** Ultimo `pt:input` propio que el server tenia aplicado al tomar el snapshot
+   *  (ver `reconcile` en Game.ts). Ausente contra un server viejo. */
+  n?: number;
 }
 
 export type PtPhase = "waiting" | "preroll" | "playing" | "over";

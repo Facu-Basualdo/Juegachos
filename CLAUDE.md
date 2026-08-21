@@ -136,7 +136,7 @@ Some room games stream each player's live position over their own **ephemeral br
 | --- | --- | --- |
 | `car-race` | 8 x 10/s = **80/s** | **Migrado al server** (`/carrace`). Rozaba el tope: el socket moria y desaparecian todos. |
 | `cannon-dodge` | 8 x 10/s = **80/s** | **Mismo perfil que car-race: el candidato obvio si vuelve a pasar.** Hoy aguanta por el canal resiliente + el keepalive de `NET_IDLE_MS`, pero el techo es el mismo. |
-| `paint-turf` | 8 x 20/s = **160/s** | **Nacio en el server**, no en un canal: a esa cadencia Supabase lo mata. Es un tercio de lo que ya mueve PONG. |
+| `paint-turf` | 8 x 25/s = **200/s** | **Nacio en el server**, no en un canal: a esa cadencia Supabase lo mata. Es menos de la mitad de lo que ya mueve PONG. |
 | `rocket-arena` | 8 x 12.5/s = **100/s** | **Pasado de tope** (`NET_SEND_MS` 80). Deuda conocida; esta `hidden` igual. Si se revive, va al server. |
 | `templo-rodante` | 8 x ~3/s = **24/s** | **No califica.** Manda eventos de pose, no posiciones: el rival se anima solo. |
 | `typing-race` | 8 x ~0.5/s = **4/s** | **No califica.** Emite al completar frase / morir / heartbeat de 2s. Lejisimos del tope. |
@@ -283,9 +283,15 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   (`tc:chain`): juntar 8 dibujos en un mensaje se acerca al `maxHttpBufferSize` de socket.io.
   Un partido es una vuelta completa. Ver el `CLAUDE.md` de `telefono-cortado`.
 - `src/games/paintturf.ts` — `PaintTurfSim`: Manchon. Captura de territorio en
-  tiempo real sobre una grilla de 35x23. Corre la simulacion con **paso fijo** a 40 Hz
+  tiempo real sobre una grilla de 35x23. Corre la simulacion con **paso fijo** a 50 Hz
   (acumulador + `STEP_DT`, y su `simTime` viaja en `pt:state.t`: ver "Interpolar
-  sobre el reloj del server") y difunde a 20 Hz. Es autoritativo **porque la grilla
+  sobre el reloj del server") y difunde cada **40 ms exactos de simTime**, con el
+  chequeo del broadcast **adentro** del bucle de pasos: afuera, o contando
+  despertares del timer, el espaciado sale irregular (medido: 60-80 ms) y ahi el
+  buffer de interpolacion del cliente se queda seco y los rivales se ven a los
+  tirones. El snapshot ademas **acusa el ultimo input** de cada jugador
+  (`PtPlayerView.n`), que es lo que le permite al cliente reconciliar sin adivinar
+  latencias (ver el `CLAUDE.md` del juego). Es autoritativo **porque la grilla
   es estado compartido**: si cada cliente simulara lo suyo, el orden de llegada de
   los mensajes decidiria quien se quedo con cada celda y cada pantalla tendria otro
   ganador. El cliente manda **input** (una direccion que el server normaliza), nunca
@@ -319,10 +325,32 @@ hora de llegada del paquete. Dos mitades, las dos obligatorias:
    31.2 ms de forma despareja) y ese jitter entra directo en la velocidad de las
    entidades. Acumulador + pasos de `STEP_DT` exactos, un reloj `simTime` que avanza
    en escalones, y ese `simTime` viaja en el snapshot (`pg:state.t` en PONG).
+   **El broadcast tambien se paga con esa moneda**: la decision de emitir va
+   **adentro** del bucle de pasos y se mide en `simTime`, con una cadencia que sea
+   multiplo exacto del paso. Emitir "uno de cada N despertares" — o incluso medir
+   `simTime` pero chequear afuera del bucle — deja el espaciado a merced del timer;
+   medido en Manchon daba 60-80 ms cuando el cliente esperaba ~50, y con eso el
+   buffer de interpolacion se queda seco y los rivales se congelan y saltan.
 2. **Cliente: offset de reloj.** Fechar cada snapshot con `t + clockOffset`, donde
    `clockOffset` se estima con el **minimo** de `(llegada - t)` visto (la muestra que
    menos jitter comio), corregido lento hacia arriba por la deriva entre relojes.
-   Descartar los que llegan fuera de orden.
+   Descartar los que llegan fuera de orden. Y dejar **al menos dos espaciados de
+   snapshot** de margen en el retraso de interpolacion: con uno solo, cualquier hipo
+   de red seca el buffer.
+
+3. **Cliente: reconciliar con acuse de input, nunca con un lerp.** Vale para todo
+   juego donde el cliente predice su propia entidad. La correccion que parece obvia
+   —interpolar la posicion propia hacia la del ultimo snapshot— es un elastico:
+   el snapshot dice donde estabas hace media vuelta de red, asi que tira
+   permanentemente hacia atras y cada cambio de direccion arrastra la trayectoria
+   vieja. Medido en Manchon: al girar, el pincel recorria el **47%** de lo que
+   deberia. Comparar contra "donde estaba yo cuando el server capturo" tampoco sirve
+   (el desfase pasa a ser ida MAS vuelta, y se vuelve a medir igual en cada
+   snapshot). Lo que funciona es que **cada input lleve un numero y el snapshot
+   devuelva el ultimo aplicado**: el cliente parte de la posicion autoritativa y
+   vuelve a aplicar los inputs posteriores con la misma fisica. Moviendose derecho no
+   queda correccion, y solo se corrige lo que el cliente no predijo. Medido despues:
+   99-103%.
 
 Fechar el buffer con `performance.now()` de la llegada — como hacia PONG antes — mete
 el jitter de entrega en la interpolacion: dos snapshots que llegan pegados describen un
