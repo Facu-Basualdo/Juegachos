@@ -8,10 +8,17 @@ import { getSupabase } from "../supabase";
  * cargar; navegar entre juegos tira el canal y el estado durable vive en
  * Postgres, asi que reconectar es solo volver a suscribirse.
  */
-/** Puntaje en vivo que un jugador emite mientras juega (efimero, no toca la DB). */
-export interface LiveScore {
+/**
+ * Valores efimeros que un juego emite en vivo por el canal (posicion del
+ * jugador, animacion, puntaje parcial). **No tocan la DB ni el puntaje oficial**:
+ * si un paquete se pierde, se pierde. Pensado para lo cosmetico — ver a los
+ * rivales moverse — a una tasa de unos pocos envios por segundo.
+ */
+export type LiveData = Record<string, number | string | boolean>;
+
+export interface LiveMessage {
   player: string;
-  score: number;
+  data: LiveData;
 }
 
 export class RoomChannel {
@@ -19,7 +26,7 @@ export class RoomChannel {
   private readonly player: string;
   private readonly syncCbs: Array<() => void> = [];
   private readonly presenceCbs: Array<() => void> = [];
-  private readonly liveCbs: Array<(live: LiveScore) => void> = [];
+  private readonly liveCbs: Array<(live: LiveMessage) => void> = [];
   private tracked = false;
 
   constructor(code: string, player: string, opts: { track?: boolean } = {}) {
@@ -41,8 +48,8 @@ export class RoomChannel {
       for (const cb of this.syncCbs) cb();
     });
     this.channel.on("broadcast", { event: "live" }, ({ payload }) => {
-      const live = payload as LiveScore;
-      if (live && typeof live.player === "string" && Number.isFinite(live.score)) {
+      const live = payload as LiveMessage;
+      if (live && typeof live.player === "string" && live.data && typeof live.data === "object") {
         for (const cb of this.liveCbs) cb(live);
       }
     });
@@ -69,10 +76,10 @@ export class RoomChannel {
     void this.channel.send({ type: "broadcast", event: "sync", payload: {} });
   }
 
-  /** Emite el puntaje propio en vivo (para el ranking en tiempo real). */
-  broadcastLive(score: number): void {
-    if (!this.channel || !Number.isFinite(score)) return;
-    const payload: LiveScore = { player: this.player, score };
+  /** Emite estado efimero propio al resto de la sala. */
+  broadcastLive(data: LiveData): void {
+    if (!this.channel) return;
+    const payload: LiveMessage = { player: this.player, data };
     void this.channel.send({ type: "broadcast", event: "live", payload });
   }
 
@@ -81,8 +88,8 @@ export class RoomChannel {
     this.syncCbs.push(cb);
   }
 
-  /** Se dispara con cada puntaje en vivo emitido por otro jugador. */
-  onLive(cb: (live: LiveScore) => void): void {
+  /** Se dispara con cada estado en vivo emitido por otro jugador. */
+  onLive(cb: (live: LiveMessage) => void): void {
     this.liveCbs.push(cb);
   }
 

@@ -30,9 +30,11 @@ export interface GameEntry {
    * 2. Que se pueda **jugar** sin teclado fisico: puntero/tactil, botones en
    *    pantalla, o su propio teclado en pantalla (como `wordle`).
    *
-   * Hoy solo `mecano`, `typing-race` y `hackerman` son `false`: escuchan
+   * Hoy son `false`: `mecano`, `typing-race` y `hackerman` (escuchan
    * `window keydown` sin ningun `<input>`, asi que en un telefono el teclado
-   * virtual no aparece nunca y no hay con que jugarlos.
+   * virtual no aparece nunca y no hay con que jugarlos) y `la-escalera`, que
+   * si trae cruceta en pantalla pero probado en un telefono real no se puede
+   * jugar.
    */
   mobile: boolean;
   /** Ocultar del roster sin borrar la entrada (landing y salas). El juego sigue en el repo. */
