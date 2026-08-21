@@ -133,6 +133,8 @@ function ensureStyles(): void {
 export interface WaitingEntry {
   player: string;
   state: "done" | "playing" | "offline";
+  /** Puntaje ya formateado del jugador que termino (solo state "done"). */
+  scoreText?: string;
 }
 
 /** Una luz de jugador en el strip: viva (verde), muerta (roja) o desconectada (gris). */
@@ -407,10 +409,18 @@ export class RoomOverlay {
     const list = document.createElement("ul");
     list.className = "mg-room__list";
     for (const e of entries) {
-      const state = document.createElement("span");
-      state.className = `mg-room__state mg-room__state--${e.state}`;
-      state.textContent = STATE_LABELS[e.state];
-      list.append(this.buildRow(e.state === "done" ? "OK" : "...", e.player, state, e.player === me));
+      let right: HTMLSpanElement;
+      if (e.state === "done" && e.scoreText) {
+        // Ya termino: mostramos su resultado en lugar de "listo".
+        right = document.createElement("span");
+        right.className = "mg-room__value";
+        right.textContent = e.scoreText;
+      } else {
+        right = document.createElement("span");
+        right.className = `mg-room__state mg-room__state--${e.state}`;
+        right.textContent = STATE_LABELS[e.state];
+      }
+      list.append(this.buildRow(e.state === "done" ? "OK" : "...", e.player, right, e.player === me));
     }
     this.boxEl.append(list);
   }

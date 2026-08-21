@@ -20,12 +20,14 @@ tiempo local); modo sala = todos corren el mismo circuito con posiciones en vivo
     auto). Por eso `applyWalls` maneja la velocidad inline: anula el componente
     solo cuando `vn > 0` (empuja hacia afuera). Usar `Car.bounce` aca pegaba el
     auto a la pared (no podia despegarse) y era la causa del "no puedo avanzar".
-- **Geometria de pistas verificada**: los trazados por waypoints estan chequeados
-  para que el radio de curvatura minimo sea mayor que el medio ancho (el borde
-  interno no colapsa) y sin autointersecciones, y ademas se simulo el manejo real
-  (fisica + paredes) para confirmar que ningun circuito atrapa al auto. Al editar
-  waypoints o anchos hay que re-verificar (una horquilla mas cerrada que el medio
-  ancho vuelve a trabar).
+- **Anchos de pista**: las calles son anchas a pedido (monaco 112, shanghai 152,
+  silverstone 138, red-dune 200, glacier 196, magma 205). El limite real de
+  ensanche no es el radio de curva (el juego tolera medio-ancho > radio porque
+  `applyWalls` reubica al auto), sino el **auto-acercamiento** del trazado (que
+  dos tramos distintos no fusionen su asfalto): el ancho debe quedar bien por
+  debajo de la distancia minima entre tramos no adyacentes. Al cambiar anchos o
+  waypoints, re-verificar con un autopilot que da vueltas (no debe quedar
+  trabado); ver scratchpad, se testeo asi tras ensanchar.
 - **Circuitos por spline** ([tracks.ts](game/tracks.ts)): cada `TrackDef` define
   los nodos de control de una spline Catmull-Rom cerrada de dos formas posibles:
   `nodes` polares `[anguloGrados, radio]` con angulos crecientes (no se
@@ -51,10 +53,11 @@ tiempo local); modo sala = todos corren el mismo circuito con posiciones en vivo
   (grid, estrellas, dunas, hielo, follaje, brasas). Solo cambian colores/adornos,
   no la geometria.
 - **Obstaculos deterministas** ([obstacles.ts](game/obstacles.ts)):
-  `buildObstacles(track, seed)` recorre el circuito con **densidad alta** y
-  coloca **boost pads** al centro de las rectas, **barreras** parciales a un lado
-  (rebote solido), **chicanes** de conos en diagonal cruzando media pista, y
-  filas de **conos** sobre el borde interno de las curvas (incluidas las medias). Todo sale de un PRNG mulberry32 sembrado, asi en sala todos ven el
+  `buildObstacles(track, seed)` recorre el circuito y en las **rectas** coloca
+  **boost pads** y **barreras** parciales a un lado (rebote solido). **Sin conos**
+  (se sacaron a pedido; `cones` se devuelve vacio para no tocar Renderer/Game,
+  que siguen iterando una lista vacia). Todo sale de un PRNG mulberry32 sembrado,
+  asi en sala todos ven el
   mismo layout. El **boost** no es un salto instantaneo: `Car.applyBoost` solo
   arranca un timer y `Car.update` aplica `BOOST_ACCEL` sostenido (evita el tiron
   visual que daba el kick de velocidad).
@@ -89,9 +92,10 @@ tiempo local); modo sala = todos corren el mismo circuito con posiciones en vivo
   muestra el puntaje via `lastResult`). El **mejor tiempo local** tambien es por
   circuito (`car-race:best:<id>`, ver `bestKey()`).
 - **Colisiones y derrape** ([Game.ts](game/Game.ts)): `handleCollisions` maneja
-  boost (envion en el flanco de entrada), barreras (capsula: empuje fuera +
-  `Car.bounce`) y conos (`Car.slowDown` con cooldown + golpe visual).
-  `recordSkids` deja marcas de goma cuando `car.slip` es alto, que se desvanecen.
+  boost (envion en el flanco de entrada) y barreras (capsula: empuje fuera +
+  `Car.bounce`). El manejo de conos (`Car.slowDown`) sigue en el codigo pero
+  quedo inerte (ya no se generan conos). `recordSkids` deja marcas de goma cuando
+  `car.slip` es alto, que se desvanecen.
 
 ## Seed
 
