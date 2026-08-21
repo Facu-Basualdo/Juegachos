@@ -616,3 +616,100 @@ export interface TcServerToClient {
   "tc:chain": (msg: TcChainView) => void;
   "tc:gameover": (msg: TcGameover) => void;
 }
+
+/* ========================== MANCHON (namespace /paintturf) ========================== */
+
+/**
+ * Contrato de mensajes socket.io de Manchon (namespace `/paintturf`).
+ *
+ * Captura de territorio en tiempo real: cada jugador es un pincel que pinta las celdas
+ * por las que pasa, y pisar celda ajena la roba. Gana el que mas celdas tiene cuando se
+ * acaba el tiempo.
+ *
+ * El server es AUTORITATIVO, y tiene que serlo: la grilla es un estado COMPARTIDO en el
+ * que todos escriben a la vez. Con un relay estilo Neon Drift (cada cliente simulando lo
+ * suyo) dos clientes veriamos duenios distintos para la misma celda segun el orden en que
+ * les llegan los mensajes, y el puntaje final seria distinto en cada pantalla. Asi que el
+ * server corre la simulacion con paso fijo y difunde la verdad.
+ *
+ * El cliente manda INPUT (una direccion), nunca su posicion: si declarara `{x, y}` como
+ * la paleta de PONG, cualquiera con las devtools se teletransporta y pinta el tablero
+ * entero. A diferencia de un puntaje spoofeado (nivel de confianza que el repo ya acepta),
+ * eso arruina la partida de los demas mientras se juega.
+ *
+ * Presupuesto de trafico: la sala llena son 8 jugadores y el broadcast va a 20 Hz, o sea
+ * ~160 emits/s por sala — un tercio de lo que ya mueve PONG (60 Hz x 8). El estado de la
+ * grilla NO viaja entero en cada snapshot: solo las celdas que cambiaron desde el ultimo
+ * broadcast (`c`), y la grilla completa solo al entrar o reconectar (`pt:init`).
+ */
+
+/** Vista publica de un pincel dentro de la partida. */
+export interface PtPlayerView {
+  /** Asiento (indice en `seats` del `pt:init`): identifica color y puntaje. */
+  i: number;
+  x: number;
+  y: number;
+  /** Ms de aturdimiento que le quedan (0 = normal). Aturdido no pinta y va lento. */
+  st: number;
+  /** Ms que le faltan para volver a tener el salpicon listo (0 = listo). */
+  cd: number;
+  /** Conectado al server ahora mismo (para las luces del cliente). */
+  on: boolean;
+}
+
+export type PtPhase = "waiting" | "preroll" | "playing" | "over";
+
+/**
+ * Estado inicial: geometria, asientos y la grilla COMPLETA. Se manda al entrar y en
+ * cada reconexion (un F5 no puede dejar al jugador con el tablero en blanco).
+ */
+export interface PtInit {
+  /** Asiento propio, o -1 para un espectador / alguien fuera del roster. */
+  seat: number;
+  /** Nicknames por asiento (el indice es el asiento y decide el color). */
+  seats: string[];
+  cols: number;
+  rows: number;
+  cell: number;
+  /**
+   * Grilla completa, un caracter por celda en orden fila-por-fila: "." = sin pintar,
+   * "0".."7" = asiento duenio. Es un string y no un array de numeros porque son ~800
+   * celdas y el JSON de un array pesa el triple.
+   */
+  grid: string;
+}
+
+/** Snapshot periodico de la simulacion. */
+export interface PtState {
+  /**
+   * Reloj de la simulacion del server (ms), que avanza de a pasos FIJOS. Es la linea de
+   * tiempo sobre la que el cliente interpola a los rivales. Fechar los snapshots con su
+   * hora de llegada mete el jitter de red adentro del movimiento dibujado (ver el
+   * CLAUDE.md raiz, "Interpolar sobre el reloj del server").
+   */
+  t: number;
+  phase: PtPhase;
+  /** Ms que faltan para que termine la partida (o para que largue, en "preroll"). */
+  msLeft: number;
+  players: PtPlayerView[];
+  /** Celdas pintadas desde el ultimo snapshot, aplanadas: [indice, asiento, ...]. */
+  c: number[];
+  /** Celdas de cada asiento, mismo indice que `seats`. */
+  scores: number[];
+}
+
+/** Cliente -> Server. */
+export interface PtClientToServer {
+  /** `round` scopea la partida: una ronda nueva descarta el tablero de la anterior. */
+  "pt:join": (msg: { code: string; nickname: string; roster: string[]; round: number }) => void;
+  /** Direccion deseada (se normaliza en el server) y pedido de salpicon. */
+  "pt:input": (msg: { dx: number; dy: number; s?: boolean }) => void;
+}
+
+/** Server -> Cliente. */
+export interface PtServerToClient {
+  "pt:init": (msg: PtInit) => void;
+  "pt:state": (msg: PtState) => void;
+  /** Un salpicon se disparo (para el sonido y la animacion; no viaja en el state). */
+  "pt:splat": (msg: { i: number; x: number; y: number }) => void;
+}
