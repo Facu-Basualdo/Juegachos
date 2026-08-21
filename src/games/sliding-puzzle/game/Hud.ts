@@ -144,7 +144,7 @@ export class Hud {
 
     this.updateBestScoreDisplay(this.currentGridSize);
 
-    this.hintEl.textContent = "presiona ENTER o haz clic en cualquier lugar para comenzar";
+    this.hintEl.textContent = "tocá la pantalla o presioná ENTER para comenzar";
 
     this.leaderboard.clear();
   }
@@ -328,7 +328,7 @@ export class Hud {
     this.bestScoresEl.style.display = "block";
     this.bestScoresEl.innerHTML = `MEJOR RECORD (${size}x${size}):<br>${bestMoves} movimientos en ${this.formatTime(bestTime)}`;
 
-    this.hintEl.textContent = "presiona ENTER o haz clic para volver a jugar";
+    this.hintEl.textContent = "tocá la pantalla o presioná ENTER para volver a jugar";
   }
 
   private formatTime(totalSeconds: number): string {

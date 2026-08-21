@@ -18,3 +18,13 @@ export const AI_SPEED = 310;
 export const AI_MARGIN = 30;
 
 export const MAX_DT = 0.032;
+
+/**
+ * URL del game server autoritativo (socket.io) para el modo sala. Sin ella (o
+ * jugando solo) el juego funciona igual: la landing es 1 jugador y, en sala sin
+ * server configurado, cada uno cae a un partido local contra la IA. En sala CON
+ * server, el PvP lo arbitra el server (`/pong`). Ver el CLAUDE.md del juego.
+ */
+// La URL la resuelve `shared/server-status.ts` (principal, con caida al respaldo si
+// esta configurado): `Game.ts` usa `isGameServerConfigured()` para decidir el modo y
+// `resolveGameServerUrl()` al conectar.

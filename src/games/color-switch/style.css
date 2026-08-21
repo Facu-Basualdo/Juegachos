@@ -1,0 +1,190 @@
+:root {
+  color-scheme: dark;
+  --bg: #0c0a12;
+  --cream: #fff4fb;
+  --ash: #8a83a6;
+  --depth: #2a2140;
+  --arcade: "Consolas", "Courier New", monospace;
+  --sans: "Archivo", "Helvetica Neue", Arial, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  font-family: var(--arcade);
+  color: var(--cream);
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.game-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  touch-action: none;
+}
+
+.back-link {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 30;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--ash);
+  text-decoration: none;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  opacity: 0.9;
+}
+
+.back-link:hover {
+  color: var(--cream);
+}
+
+/* ---------- HUD (score en vivo) ---------- */
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 10;
+}
+
+.hud__score {
+  margin-top: 44px;
+  font-size: 58px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--cream);
+  text-shadow:
+    2px 2px 0 var(--depth),
+    -2px 2px 0 var(--depth),
+    0 5px 14px rgba(0, 0, 0, 0.6);
+}
+
+.hud__best {
+  margin-top: 6px;
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: var(--cream);
+  opacity: 0.85;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------- Overlay inicio / fin ---------- */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px 22px calc(32px + env(safe-area-inset-bottom));
+  text-align: center;
+  overflow-y: auto;
+  background: radial-gradient(circle at center, rgba(40, 20, 60, 0.35) 0%, rgba(6, 4, 12, 0.75) 90%);
+  pointer-events: auto;
+  z-index: 20;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay__title {
+  line-height: 1;
+}
+
+/* Wordmark espectral: los 4 colores del juego recortados en el texto. */
+.overlay__wordmark {
+  display: inline-block;
+  font-size: clamp(40px, 10vw, 68px);
+  font-weight: 700;
+  letter-spacing: 4px;
+  background: linear-gradient(100deg, #ff3d81 0%, #2ee6ff 36%, #b8ff3d 68%, #ffb03d 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 18px rgba(255, 61, 129, 0.25));
+}
+
+.overlay__subtitle {
+  max-width: 32ch;
+  font-size: 15px;
+  letter-spacing: 1.5px;
+  line-height: 1.5;
+  color: var(--cream);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.overlay__score {
+  font-size: 19px;
+  letter-spacing: 1.5px;
+  color: var(--cream);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.overlay__hint {
+  margin-top: 8px;
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--ash);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------- Countdown ---------- */
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 25;
+  font-size: clamp(100px, 26vw, 168px);
+  font-weight: 700;
+  letter-spacing: 6px;
+  color: var(--cream);
+  text-shadow:
+    4px 4px 0 var(--depth),
+    0 8px 28px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+}
+
+.countdown.is-shown {
+  animation: countdown-pop 0.75s ease-out;
+}
+
+@keyframes countdown-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  20% { opacity: 1; transform: scale(1.12); }
+  40% { transform: scale(1); }
+  80% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .countdown.is-shown {
+    animation-duration: 0.01ms;
+  }
+}

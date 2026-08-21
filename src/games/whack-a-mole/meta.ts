@@ -9,4 +9,8 @@ export const meta: GameEntry = {
   accent: "#6bbf5e",
   category: "Precisión",
   order: 250,
+  added: "2026-07-03",
+  mobile: true,
+
+  roomTimeLimitSec: 120,
 };

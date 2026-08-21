@@ -1,5 +1,6 @@
 import {
   createMatchState,
+  CREATE_FALLBACK_MS,
   fetchMatchState,
   updateMatchState,
 } from "../../../shared/room/matchState";
@@ -15,7 +16,7 @@ import {
   skipTurn,
   type MemoryState,
 } from "./board";
-import { AFK_SKIP_MS, MATCH_POLL_MS, REVEAL_HOLD_MS } from "./constants";
+import { AFK_ABSENT_SKIP_MS, AFK_SKIP_MS, MATCH_POLL_MS, REVEAL_HOLD_MS } from "./constants";
 import type { Hud } from "./Hud";
 import { SoundEffects } from "./SoundEffects";
 
@@ -69,8 +70,13 @@ export class SharedMatch {
    * Espera (o crea, si somos el host) el estado inicial de la ronda. El insert
    * ante la carrera host-viejo/host-nuevo lo gana el primero; despues todos
    * releen lo que haya quedado.
+   *
+   * Si el host no aparece (se desconecto antes de cargar la ronda), pasado
+   * CREATE_FALLBACK_MS lo crea cualquier jugador: si no, la sala entera se
+   * quedaba en "Preparando el tablero..." hasta que alguien tomara el control.
    */
   private async boot(): Promise<void> {
+    const since = Date.now();
     for (;;) {
       if (this.state) return; // un refresh concurrente ya lo adopto
       const row = await fetchMatchState<MemoryState>(this.room.code, this.room.round());
@@ -79,7 +85,8 @@ export class SharedMatch {
         return;
       }
       const players = this.room.players();
-      if (this.room.isHost() && players.length > 0) {
+      const mayCreate = this.room.isHost() || Date.now() - since > CREATE_FALLBACK_MS;
+      if (mayCreate && players.length > 0) {
         const dims = boardDimsFor(players.length);
         const ok = await createMatchState(
           this.room.code,
@@ -188,20 +195,42 @@ export class SharedMatch {
     }, REVEAL_HOLD_MS);
   }
 
-  /** Host: si el jugador de turno no mueve en AFK_SKIP_MS, pasa el turno. */
+  /**
+   * Host: si el jugador de turno no mueve en AFK_SKIP_MS, pasa el turno.
+   *
+   * Un jugador **desconectado** no se espera: no va a mover nunca, asi que se lo
+   * saltea a los AFK_ABSENT_SKIP_MS y, en la misma escritura, se saltea a todos
+   * los ausentes que vengan detras. Sin esto, cada vuelta de turnos regalaba la
+   * ventana AFK completa (20s) por cada jugador que se fue, que con dos o tres
+   * caidos deja el tablero practicamente parado.
+   */
   private async maybeSkipAfk(): Promise<void> {
     const state = this.state;
     if (!state || this.finished || this.animating || !this.room.isHost()) return;
     if (isComplete(state)) return;
-    if (Date.now() - this.lastChangeAt < AFK_SKIP_MS) return;
+
+    // Con la lista de presentes vacia (canal aun sin sincronizar) no se asume
+    // que se fueron todos: se usa la ventana AFK de siempre.
+    const present = this.room.presentPlayers();
+    const absent = present.length > 0 && !present.includes(currentPlayer(state));
+    if (Date.now() - this.lastChangeAt < (absent ? AFK_ABSENT_SKIP_MS : AFK_SKIP_MS)) return;
 
     this.lastChangeAt = Date.now(); // un intento por ventana de inactividad
     const expected = this.version;
-    const next = skipTurn(state);
+    const next = absent ? this.skipAbsent(state, present) : skipTurn(state);
     this.state = next;
     this.version = expected + 1;
     this.render();
     this.queueWrite(next, expected);
+  }
+
+  /** Saltea el turno y sigue salteando mientras el que sigue este desconectado. */
+  private skipAbsent(state: MemoryState, present: string[]): MemoryState {
+    let next = skipTurn(state);
+    for (let i = 0; i < state.turnOrder.length && !present.includes(currentPlayer(next)); i++) {
+      next = skipTurn(next);
+    }
+    return next;
   }
 
   /**

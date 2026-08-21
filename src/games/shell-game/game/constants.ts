@@ -38,3 +38,24 @@ export function getLevelConfig(level: number): LevelConfig {
   const speed = Math.max(200, 300 - (level - 5) * 20);
   return { cups, swaps, speed };
 }
+
+// Room mode (Battle Royale) difficulty: harsher than solo from the first level.
+// A room round has to eliminate players quickly, and everyone watches the same
+// shuffle, so the easy ramp-up of the solo game just made level 1 a formality
+// that nobody failed. It starts already at the 5-cup cap and at a speed the solo
+// curve only reaches around level 4.
+export const ROOM_LEVEL_CONFIGS: Record<number, LevelConfig> = {
+  1: { cups: 5, swaps: 8, speed: 380 },
+  2: { cups: 5, swaps: 11, speed: 330 },
+  3: { cups: 5, swaps: 14, speed: 290 },
+  4: { cups: 5, swaps: 17, speed: 250 },
+  5: { cups: 5, swaps: 20, speed: 220 },
+};
+
+export function getRoomLevelConfig(level: number): LevelConfig {
+  if (ROOM_LEVEL_CONFIGS[level]) return ROOM_LEVEL_CONFIGS[level];
+  const cups = 5;
+  const swaps = 20 + (level - 5) * 3;
+  const speed = Math.max(160, 220 - (level - 5) * 15);
+  return { cups, swaps, speed };
+}

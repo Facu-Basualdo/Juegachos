@@ -9,4 +9,7 @@ export const meta: GameEntry = {
   accent: "#39ff14",
   category: "Arcade",
   order: 100,
+  added: "2026-07-03",
+  mobile: true,
+
 };

@@ -135,8 +135,12 @@ export class Game {
     this.hud.showHud(false);
     this.hud.showStart();
 
+    // El target es el container y no el canvas de WebGL: las pantallas de inicio
+    // y game over son un overlay que lo tapa, asi que en movil (donde no hay
+    // Enter) el toque sobre el cartel no llegaba a arrancar. El panel de ranking
+    // corta la propagacion de sus propios pointerdown.
     this.input = new InputController(
-      this.renderer.domElement,
+      container,
       (clientX) => this.onMove(clientX),
       () => this.onJump(),
       () => this.requestStart(),

@@ -40,6 +40,15 @@ export class Game {
   private pending: number[] = [];
   /** Se incrementa en cada partida: los timeouts viejos se descartan. */
   private runId = 0;
+  /**
+   * True solo cuando el overlay de inicio / fin esta realmente en pantalla. Al
+   * perder, el estado pasa a "gameOver" pero el overlay aparece
+   * `GAME_OVER_REVEAL_MS` despues (revelado del error): sin este guard un Enter en
+   * esa ventana reiniciaba la partida y el setTimeout del revelado (crudo, que ni
+   * el runId cubria) disparaba igual, tapando el juego nuevo. Nunca se mostraba el
+   * puntaje.
+   */
+  private menuVisible = true;
 
   constructor(container: HTMLElement) {
     const savedBest = localStorage.getItem(BEST_KEY);
@@ -77,6 +86,9 @@ export class Game {
   };
 
   private tryStart(): void {
+    // Solo se arranca con el overlay realmente en pantalla, nunca durante el
+    // revelado del error (estado "gameOver" pero overlay aun oculto).
+    if (!this.menuVisible) return;
     if (this.state === "ready") {
       this.beginCountdown();
     } else if (this.state === "gameOver") {
@@ -88,6 +100,7 @@ export class Game {
 
   private beginCountdown(): void {
     this.cancelPending();
+    this.menuVisible = false;
     this.state = "countdown";
     this.score = 0;
     this.sequence = [];
@@ -176,7 +189,10 @@ export class Game {
     }
     this.hud.updateBest(this.best);
 
-    window.setTimeout(() => {
+    // Via schedule() (ligado al runId) para que un reinicio lo cancele en vez de
+    // dispararse huerfano sobre la partida nueva.
+    this.schedule(() => {
+      this.menuVisible = true;
       SoundEffects.playGameOver();
       this.hud.clearBoard();
       this.hud.showGameOver(this.score, isNewBest, this.best!, this.room !== null);

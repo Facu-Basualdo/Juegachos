@@ -106,6 +106,80 @@ a {
   color: rgba(239, 238, 230, 0.6);
 }
 
+/* Estado del game server: pastilla al tono de .topbar__name (fondo ink), con el
+   color del punto y del texto diciendo el estado. */
+.topbar__server {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  background: var(--ink);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: rgba(239, 238, 230, 0.6);
+  cursor: default;
+}
+
+.topbar__server-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+/* El ping va en un tono mas apagado que el estado: es el dato secundario. */
+.topbar__server-ping {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(239, 238, 230, 0.55);
+  padding-left: 8px;
+  border-left: 1px solid rgba(239, 238, 230, 0.2);
+}
+
+.topbar__server.is-online {
+  color: #4ade80;
+}
+
+/* Respaldo: anda, pero no es el server que deberia estar contestando. */
+.topbar__server.is-fallback {
+  color: #fbbf24;
+}
+
+.topbar__server.is-fallback .topbar__server-dot {
+  box-shadow: 0 0 8px #fbbf24;
+}
+
+.topbar__server.is-online .topbar__server-dot {
+  box-shadow: 0 0 8px #4ade80;
+}
+
+.topbar__server.is-offline {
+  color: #f87171;
+}
+
+.topbar__server.is-offline .topbar__server-dot {
+  box-shadow: 0 0 8px #f87171;
+  animation: coin-blink 1.4s steps(2, jump-none) infinite;
+}
+
+/* En pantallas chicas la barra ya va justa: queda solo el punto (el estado y el
+   ping siguen en el title). */
+@media (max-width: 640px) {
+
+  .topbar__server-text,
+  .topbar__server-ping {
+    display: none;
+  }
+
+  .topbar__server {
+    padding: 9px 11px;
+  }
+}
+
 /* ---------- Contenido ---------- */
 .page {
   width: 100%;
@@ -308,7 +382,7 @@ a {
   margin-bottom: 40px;
 }
 
-.banners-row > * {
+.banners-row>* {
   flex: 1 1 0;
   min-width: 0;
   margin-bottom: 0;
@@ -539,6 +613,13 @@ a {
   animation-delay: calc(var(--i, 0) * 60ms);
 }
 
+/* Una vez reordenada, la grilla no vuelve a animar la entrada (ver applyOrder). */
+.grid.is-settled .game-card {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
+
 .game-card__cover {
   position: relative;
   aspect-ratio: 1 / 1;
@@ -620,11 +701,21 @@ a {
 }
 
 /* Chips superpuestos a la portada (la imagen ya trae el nombre del juego). */
-.game-card__tag {
+/* La categoria y los chips de plataforma comparten fila, al pie de la portada:
+   arriba quedan los dos controles (el corazon a la izquierda, Ranking a la
+   derecha), asi que abajo la fila puede usar todo el ancho. */
+.game-card__tags {
   position: absolute;
-  top: 12px;
+  bottom: 12px;
   left: 12px;
   z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+}
+
+.game-card__tag {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 1px;
@@ -633,6 +724,69 @@ a {
   background: rgba(17, 17, 17, 0.85);
   border-radius: 7px;
   padding: 5px 10px;
+}
+
+/* Chips de plataforma (PC / celular): mismo chip que la categoria pero con un
+   icono en lugar de texto. El padding es mas angosto para que queden cuadrados,
+   y el alto termina igual que el chip de texto (13px de icono + 5px arriba y
+   abajo = los ~23px de la categoria), asi la fila queda pareja. */
+.game-card__tag--icon {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 7px;
+}
+
+.game-card__tag--icon svg {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+/* El de PC esta en todas las cards, asi que va en el color base; el cian lo usa
+   solo el del celular, que es el que aporta la informacion. */
+.game-card__tag--mobile {
+  color: #ffffff;
+}
+
+/* Corazon de favorito, arriba a la izquierda de la portada. Siempre visible
+   (nada de mostrarlo con :hover: en un celular no hay hover y seria invisible);
+   sin marcar es el contorno sobre el mismo chip oscuro que los tags, y marcado
+   se rellena de rojo. */
+.game-card__fav {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: #efeee6;
+  background: rgba(17, 17, 17, 0.85);
+  border: none;
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.game-card__fav svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+}
+
+.game-card__fav:hover {
+  transform: scale(1.12);
+}
+
+.game-card__fav.is-active {
+  color: #ff4d5e;
+}
+
+.game-card__fav.is-active svg {
+  fill: currentColor;
 }
 
 .game-card__ranking {
@@ -802,6 +956,8 @@ a {
   animation: coin-blink 1.4s steps(2, jump-none) infinite;
 }
 
+/* (El estado del game server vive en la topbar: ver .topbar__server) */
+
 .site-footer__links {
   display: flex;
   flex-direction: column;
@@ -903,7 +1059,8 @@ a {
 @media (prefers-reduced-motion: reduce) {
 
   .site-footer__strip,
-  .site-footer__coin-dot {
+  .site-footer__coin-dot,
+  .topbar__server.is-offline .topbar__server-dot {
     animation: none;
   }
 }
@@ -1001,6 +1158,539 @@ a {
   background: var(--ink);
   color: #efeee6;
   border-style: solid;
+}
+
+/* ---------- Salon de la fama (podio de lideres de salas) ---------- */
+.fame {
+  --fame-gold: #f4c542;
+  --fame-cream: #efeee6;
+  position: relative;
+  overflow: hidden;
+  padding: clamp(24px, 3vw, 38px) clamp(20px, 4vw, 48px) clamp(20px, 3vw, 34px);
+  background: #131313;
+  color: var(--fame-cream);
+  border: 2.5px solid var(--ink);
+  border-radius: var(--card-radius);
+  box-shadow: 0 12px 0 -6px var(--ink);
+}
+
+/* Resplandor dorado detras del podio, a juego con las coronas. */
+.fame__glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 120% at 50% 0%, rgba(244, 197, 66, 0.22), transparent 60%),
+    radial-gradient(50% 140% at 50% 110%, rgba(244, 197, 66, 0.12), transparent 60%);
+}
+
+.fame__head {
+  position: relative;
+  text-align: center;
+  margin-bottom: clamp(20px, 3vw, 34px);
+}
+
+.fame__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--fame-gold);
+}
+
+.fame__title {
+  font-size: clamp(26px, 4vw, 42px);
+  font-weight: 900;
+  letter-spacing: -1px;
+  margin: 6px 0 6px;
+}
+
+.fame__subtitle {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: rgba(239, 238, 230, 0.62);
+  max-width: 460px;
+  margin: 0 auto;
+}
+
+/* Podio: tres columnas con el campeon al centro y elevado. */
+.fame__podium {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: clamp(10px, 2.5vw, 26px);
+}
+
+.fame__slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: clamp(88px, 22vw, 150px);
+  text-align: center;
+}
+
+.fame__medal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--fame-cream);
+  background: rgba(239, 238, 230, 0.12);
+  border: 1.6px solid rgba(239, 238, 230, 0.3);
+  margin-bottom: 10px;
+}
+
+.fame__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(48px, 11vw, 72px);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  font-size: clamp(20px, 4.5vw, 30px);
+  font-weight: 900;
+  color: var(--ink);
+  background: var(--fame-cream);
+  border: 2.5px solid var(--ink);
+  box-shadow: 0 6px 0 -3px rgba(0, 0, 0, 0.6);
+}
+
+.fame__name {
+  margin-top: 11px;
+  font-size: clamp(13px, 2vw, 16px);
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fame__wins {
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--fame-gold);
+}
+
+/* Bloque del podio: la altura marca el puesto. */
+.fame__pillar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  margin-top: 12px;
+  padding-top: 10px;
+  font-size: 20px;
+  font-weight: 900;
+  color: rgba(239, 238, 230, 0.5);
+  background: linear-gradient(180deg, rgba(239, 238, 230, 0.14), rgba(239, 238, 230, 0.04));
+  border: 1.6px solid rgba(239, 238, 230, 0.16);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+}
+
+.fame__slot--p1 .fame__pillar {
+  height: clamp(64px, 11vw, 96px);
+}
+
+.fame__slot--p2 .fame__pillar {
+  height: clamp(44px, 8vw, 66px);
+}
+
+.fame__slot--p3 .fame__pillar {
+  height: clamp(30px, 6vw, 46px);
+}
+
+/* El campeon: corona dorada, avatar dorado y acentos. */
+.fame__slot--p1 {
+  order: 2;
+}
+
+.fame__slot--p2 {
+  order: 1;
+}
+
+.fame__slot--p3 {
+  order: 3;
+}
+
+.fame__slot--p1 .fame__medal {
+  color: var(--ink);
+  background: var(--fame-gold);
+  border-color: var(--fame-gold);
+  box-shadow: 0 0 16px rgba(244, 197, 66, 0.6);
+}
+
+.fame__slot--p1 .fame__avatar {
+  background: var(--fame-gold);
+  box-shadow: 0 6px 0 -3px rgba(0, 0, 0, 0.6), 0 0 26px rgba(244, 197, 66, 0.55);
+}
+
+.fame__slot--p1 .fame__pillar {
+  color: var(--fame-gold);
+  background: linear-gradient(180deg, rgba(244, 197, 66, 0.32), rgba(244, 197, 66, 0.06));
+  border-color: rgba(244, 197, 66, 0.4);
+}
+
+.fame__crown-icon {
+  display: block;
+}
+
+/* Lista del 4.o en adelante. */
+.fame__list {
+  position: relative;
+  list-style: none;
+  margin: clamp(20px, 3vw, 30px) auto 0;
+  padding: 0;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fame__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+  border-radius: 12px;
+  background: rgba(239, 238, 230, 0.06);
+  font-size: 14px;
+}
+
+.fame__rank {
+  flex-shrink: 0;
+  width: 22px;
+  font-weight: 900;
+  color: rgba(239, 238, 230, 0.45);
+  text-align: center;
+}
+
+.fame__row-name {
+  flex: 1;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fame__row-wins {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-weight: 900;
+  color: var(--fame-gold);
+}
+
+@media (max-width: 420px) {
+  .fame__podium {
+    gap: 6px;
+  }
+
+  .fame__slot {
+    width: 30vw;
+  }
+}
+
+/* En la pagina dedicada /fame/ la placa es el centro: mas aire y ancho acotado. */
+.fame--page {
+  margin: clamp(10px, 3vw, 26px) auto clamp(20px, 4vw, 40px);
+  max-width: 720px;
+}
+
+/* Avatar chico para las filas de la lista (4.o en adelante). */
+.fame__avatar--sm {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  font-size: 14px;
+  border-width: 2px;
+  box-shadow: none;
+}
+
+/* Estado vacio de la pagina dedicada. */
+.fame__empty-cta {
+  display: inline-flex;
+  align-self: center;
+  margin: 6px auto 4px;
+  padding: 13px 26px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--fame-gold);
+  border-radius: 999px;
+  text-decoration: none;
+  transition: transform 0.15s ease;
+}
+
+.fame__empty-cta:hover {
+  transform: translateY(-2px);
+}
+
+.fame--page .fame__head {
+  margin-bottom: clamp(14px, 2vw, 20px);
+}
+
+/* Stats bajo el subtitulo: juegos con lider / cantidad de lideres. */
+.fame__stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.fame__stat {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(239, 238, 230, 0.72);
+  background: rgba(239, 238, 230, 0.07);
+  border: 1.4px solid rgba(239, 238, 230, 0.14);
+  border-radius: 999px;
+}
+
+.fame__stat b {
+  color: var(--fame-gold);
+  font-weight: 900;
+}
+
+/* ---------- Banner del salon de la fama (landing) ---------- */
+.fame-banner {
+  --fame-gold: #f4c542;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin: 18px 0 34px;
+  padding: 22px 26px;
+  background: #131313;
+  border: 2.5px solid var(--ink);
+  border-radius: var(--card-radius);
+  color: #efeee6;
+  text-decoration: none;
+  overflow: hidden;
+  transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.3, 1), box-shadow 0.22s ease;
+}
+
+.fame-banner:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 0 -6px var(--ink);
+}
+
+.fame-banner__glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 130% at 8% 50%, rgba(244, 197, 66, 0.28), transparent 60%),
+    radial-gradient(60% 140% at 95% 50%, rgba(244, 197, 66, 0.16), transparent 62%);
+}
+
+.fame-banner__text {
+  position: relative;
+  min-width: min(220px, 100%);
+}
+
+.fame-banner__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--fame-gold);
+}
+
+.fame-banner__title {
+  font-size: clamp(20px, 2.2vw, 25px);
+  font-weight: 900;
+  letter-spacing: -0.6px;
+  margin: 4px 0 5px;
+}
+
+.fame-banner__subtitle {
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(239, 238, 230, 0.7);
+  max-width: 420px;
+}
+
+/* Mini-podio: el mismo podio de /fame/ en chico (2.o - 1.o - 3.o), con
+   escalones para que lea como podio y no como circulos flotando. El resto de la
+   lista, en /fame/. */
+.fame-banner__podium {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 0 0 auto;
+  padding-bottom: 2px;
+}
+
+.fame-banner__podium:empty {
+  display: none;
+}
+
+.fbp__slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 72px;
+  text-align: center;
+}
+
+.fbp__slot--p1 {
+  order: 2;
+}
+
+.fbp__slot--p2 {
+  order: 1;
+}
+
+.fbp__slot--p3 {
+  order: 3;
+}
+
+.fbp__crown {
+  color: var(--fame-gold);
+  line-height: 0;
+  margin-bottom: 4px;
+  filter: drop-shadow(0 0 6px rgba(244, 197, 66, 0.55));
+}
+
+.fbp__av {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--ink);
+  background: #efeee6;
+  border: 2px solid rgba(239, 238, 230, 0.85);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+/* El campeon: mas grande, dorado y con corona. */
+.fbp__slot--p1 .fbp__av {
+  width: 46px;
+  height: 46px;
+  font-size: 20px;
+  border-color: var(--fame-gold);
+  background: var(--fame-gold);
+  box-shadow: 0 0 20px rgba(244, 197, 66, 0.6);
+}
+
+.fbp__name {
+  margin-top: 7px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fbp__count {
+  margin-top: 1px;
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--fame-gold);
+}
+
+.fbp__count em {
+  font-style: normal;
+  font-weight: 700;
+  color: rgba(239, 238, 230, 0.45);
+}
+
+/* Escalon (pedestal) bajo cada jugador: la altura marca el puesto. */
+.fbp__base {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 4px;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(239, 238, 230, 0.42);
+  background: linear-gradient(180deg, rgba(239, 238, 230, 0.16), rgba(239, 238, 230, 0.03));
+  border: 1.4px solid rgba(239, 238, 230, 0.14);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+}
+
+.fbp__slot--p1 .fbp__base {
+  height: 42px;
+  color: var(--fame-gold);
+  background: linear-gradient(180deg, rgba(244, 197, 66, 0.34), rgba(244, 197, 66, 0.05));
+  border-color: rgba(244, 197, 66, 0.4);
+}
+
+.fbp__slot--p2 .fbp__base {
+  height: 28px;
+}
+
+.fbp__slot--p3 .fbp__base {
+  height: 20px;
+}
+
+/* En pantallas chicas el podio del banner ocupa mucho: se oculta (el CTA basta). */
+@media (max-width: 720px) {
+  .fame-banner__podium {
+    display: none;
+  }
+}
+
+.fame-banner__cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #131313;
+  background: #efeee6;
+  border-radius: 999px;
+  padding: 12px 22px;
+  transition: background 0.15s ease;
+}
+
+.fame-banner:hover .fame-banner__cta {
+  background: var(--fame-gold);
+}
+
+.fame-banner__arrow {
+  transition: transform 0.22s ease;
+}
+
+.fame-banner:hover .fame-banner__arrow {
+  transform: translateX(5px);
 }
 
 /* El LeaderboardPanel compartido asume fondo oscuro; adaptarlo al modal claro. */

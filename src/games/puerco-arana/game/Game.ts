@@ -92,6 +92,23 @@ export class Game {
     this.ctx = this.canvas.getContext("2d")!;
 
     this.hud = new Hud(container, () => this.onPrimary());
+
+
+    // En movil no hay Enter: el toque tiene que poder arrancar desde cualquier
+
+    // parte de la pantalla, no solo desde el boton del cartel. Va sobre el
+
+    // container (el overlay de inicio tapa al canvas) y se ignoran los <button>,
+
+    // que ya tienen su propio handler, para no arrancar dos veces.
+
+    container.addEventListener("pointerdown", (e) => {
+
+      if ((e.target as HTMLElement).closest("button")) return;
+
+      this.onPrimary();
+
+    });
     this.hud.setBest(this.best);
     this.hud.showStart();
 
@@ -186,8 +203,8 @@ export class Game {
   }
 
   /**
-   * Best grabbable anchor: above the pig, at most WEB_RANGE away and not too
-   * far behind; among candidates the one farthest ahead wins.
+   * First grabbable anchor: above the pig, at most WEB_RANGE away and not too
+   * far behind; selects the first matching one found.
    */
   private tryAttach(): void {
     if (this.attached || this.state !== "playing") return;
@@ -197,7 +214,8 @@ export class Game {
       if (dx < WEB_AHEAD_MIN) continue;
       if (a.y >= this.pigY - 10) continue;
       if (Math.hypot(dx, a.y - this.pigY) > WEB_RANGE) continue;
-      if (!bestAnchor || a.x > bestAnchor.x) bestAnchor = a;
+      bestAnchor = a;
+      break;
     }
     if (!bestAnchor) return;
 

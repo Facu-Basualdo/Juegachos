@@ -1,0 +1,365 @@
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@500;700&display=swap");
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #060a12;
+  font-family: "Outfit", "Consolas", "Courier New", monospace;
+  color: #e8f4ff;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+}
+
+/* --- Back Link --- */
+.back-link {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 50;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: rgba(232, 244, 255, 0.55);
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: color 0.2s ease, transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.back-link:hover {
+  color: #fff;
+  transform: translateX(-2px);
+}
+
+/* --- HUD Top Bar --- */
+/* Cifras tabulares: el reloj corriendo no debe tironear el ojo cambiando de ancho. */
+.hud-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: 20px;
+  padding: 14px 28px;
+  background: rgba(16, 26, 43, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(232, 244, 255, 0.07);
+  border-radius: 16px;
+  pointer-events: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  transition: opacity 0.3s ease;
+  z-index: 20;
+}
+
+.hud-bar.hidden {
+  display: none;
+}
+
+.hud-bar__next,
+.hud-bar__size,
+.hud-bar__time {
+  font-family: "JetBrains Mono", "Consolas", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  color: rgba(232, 244, 255, 0.55);
+  text-transform: uppercase;
+}
+
+.hud-bar__next {
+  color: #22d3ee;
+  font-weight: 700;
+}
+
+/* --- Board Container --- */
+.board-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+}
+
+.number-board {
+  --grid-size: 5;
+  display: grid;
+  grid-template-columns: repeat(var(--grid-size), 1fr);
+  grid-template-rows: repeat(var(--grid-size), 1fr);
+  gap: 8px;
+  width: clamp(280px, 85vw, 460px);
+  height: clamp(280px, 85vw, 460px);
+  background: rgba(11, 18, 30, 0.7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(34, 211, 238, 0.12);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.65),
+    inset 0 0 20px rgba(34, 211, 238, 0.03);
+  border-radius: 20px;
+  padding: 12px;
+}
+
+.number-board.hidden {
+  display: none;
+}
+
+/* --- Number Cells --- */
+/* Placa de metal pintado bajo luz indirecta: un hairline y nada mas. */
+.number-cell {
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.number-cell-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #101a2b;
+  border: 1px solid rgba(232, 244, 255, 0.1);
+  border-radius: 10px;
+  box-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(232, 244, 255, 0.06);
+  /* El digito manda: mono, tabular, blanco puro, sin sombra ni degrade. */
+  font-family: "JetBrains Mono", "Consolas", monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: clamp(16px, calc(52vw / var(--grid-size) / 2.6), 34px);
+  color: #f5fbff;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    color 0.12s ease,
+    transform 0.09s ease;
+}
+
+.number-cell:hover .number-cell-inner {
+  border-color: rgba(34, 211, 238, 0.4);
+}
+
+.number-cell:active .number-cell-inner {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+/* Cazada: la tecla toca fondo y la placa queda muerta. Menos de lo que tarda
+   el dedo en llegar a la proxima celda. */
+.number-cell.is-done {
+  cursor: default;
+}
+
+.number-cell.is-done .number-cell-inner {
+  background: #0a111d;
+  border-color: rgba(34, 211, 238, 0.16);
+  color: transparent;
+  transform: translateY(2px);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.number-cell.is-done:hover .number-cell-inner {
+  border-color: rgba(34, 211, 238, 0.16);
+}
+
+/* Error: avisa y se olvida. No persiste, no acumula. */
+.number-cell.is-error .number-cell-inner {
+  background: #3b1220;
+  border-color: rgba(244, 63, 94, 0.75);
+  color: #ffe4e9;
+}
+
+/* --- Overlays (Start / Victory) --- */
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 10, 18, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  z-index: 40;
+  text-align: center;
+  transition: opacity 0.3s ease;
+}
+
+.overlay.hidden {
+  display: none !important;
+}
+
+.overlay__title {
+  font-size: clamp(28px, 7vw, 46px);
+  font-weight: 700;
+  letter-spacing: 4px;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, #fff 30%, #22d3ee 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.overlay__subtitle {
+  font-size: 15px;
+  font-weight: 300;
+  letter-spacing: 1px;
+  color: rgba(232, 244, 255, 0.55);
+  margin-bottom: 28px;
+  max-width: 440px;
+  line-height: 1.5;
+}
+
+.overlay__score {
+  font-family: "JetBrains Mono", "Consolas", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #fff;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.overlay__rating {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 6px 18px;
+  border-radius: 9999px;
+  margin-bottom: 28px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.rating-divine {
+  background: linear-gradient(135deg, #22d3ee, #6366f1);
+  color: #04121a;
+}
+
+.rating-ultra {
+  background: #22d3ee;
+  color: #04121a;
+}
+
+.rating-fast {
+  background: #2c7a8c;
+  color: #eaffff;
+}
+
+.rating-average {
+  background: #4b5563;
+  color: #fff;
+}
+
+/* --- Size Selector --- */
+.overlay__size-selector {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.size-btn {
+  font-family: "JetBrains Mono", "Consolas", monospace;
+  font-variant-numeric: tabular-nums;
+  background: rgba(232, 244, 255, 0.03);
+  border: 1px solid rgba(232, 244, 255, 0.14);
+  color: rgba(232, 244, 255, 0.65);
+  padding: 10px 22px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.size-btn:hover {
+  background: rgba(232, 244, 255, 0.08);
+  border-color: rgba(34, 211, 238, 0.4);
+  color: #fff;
+}
+
+.size-btn.active {
+  background: #22d3ee;
+  border-color: #22d3ee;
+  color: #04121a;
+  font-weight: 700;
+}
+
+.overlay__bests {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  color: rgba(232, 244, 255, 0.45);
+  margin-bottom: 36px;
+  line-height: 1.6;
+}
+
+.overlay__hint {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  color: rgba(232, 244, 255, 0.35);
+  text-transform: uppercase;
+}
+
+/* --- Countdown Overlay --- */
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 45;
+  font-family: "JetBrains Mono", "Consolas", monospace;
+  font-size: 150px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: #fff;
+  text-shadow: 0 0 40px rgba(34, 211, 238, 0.35), 0 10px 40px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+}
+
+.countdown.is-shown {
+  animation: countdown-pop 0.75s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes countdown-pop {
+  0% { opacity: 0; transform: scale(0.3); }
+  25% { opacity: 1; transform: scale(1.1); }
+  45% { transform: scale(1); }
+  85% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.2); }
+}

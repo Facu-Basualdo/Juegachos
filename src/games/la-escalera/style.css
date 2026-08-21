@@ -1,0 +1,289 @@
+/* La Escalera — "Descenso Pintado" (ver DESIGN.md).
+   Historieta gorda y legible (Pizza Express) apagada hasta el registro casi
+   negro de Danger Wings: hierro, un ambar de aviso y el rubi del pozo. */
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #06070a;
+  font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+canvas {
+  display: block;
+  touch-action: none;
+}
+
+.back-link {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 30;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #c9a24a;
+  text-decoration: none;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+  opacity: 0.85;
+}
+
+.back-link:hover {
+  opacity: 1;
+}
+
+/* Golpe: destello rubi desde los bordes */
+.flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 28;
+  background: radial-gradient(circle at center, rgba(196, 21, 48, 0) 25%, rgba(150, 10, 30, 0.6) 100%);
+  opacity: 0;
+}
+
+.flash.is-hit {
+  animation: escalera-flash 0.45s ease-out;
+}
+
+@keyframes escalera-flash {
+  0% { opacity: 0; }
+  10% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* El puntaje va arriba a la derecha: el centro del cuadro es del rack de
+   pantallas, que es lo unico que el jugador tiene que leer. */
+/* Sangre pegada al "lente" tras el empalamiento */
+.blood {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 26;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 0.18s ease-out;
+}
+
+.blood.is-shown {
+  opacity: 0.92;
+}
+
+/* Cada hilo nace arriba y se alarga hacia abajo, con su propio retardo */
+.blood__drip {
+  position: absolute;
+  top: 0;
+  height: 0;
+  border-radius: 0 0 60% 60%;
+  background: linear-gradient(to bottom, rgba(86, 4, 11, 0.95), rgba(58, 2, 8, 0.75));
+  animation-name: blood-run;
+  animation-timing-function: cubic-bezier(0.3, 0, 0.6, 1);
+  animation-fill-mode: forwards;
+}
+
+@keyframes blood-run {
+  from { height: 0; }
+  to { height: var(--run, 30vh); }
+}
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding-right: 30px;
+  z-index: 10;
+}
+
+.hud__score {
+  margin-top: 18px;
+  font-size: 68px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #f0ead8;
+  text-shadow:
+    0 0 20px rgba(255, 122, 42, 0.28),
+    0 4px 14px rgba(0, 0, 0, 0.85);
+  transition: transform 0.1s ease-out;
+}
+
+.hud__best {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: #c9a24a;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
+  opacity: 0.85;
+}
+
+.hud__combo {
+  margin-top: 8px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: #ff7a2a;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+  min-height: 24px;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  background: radial-gradient(circle at center, rgba(6, 7, 10, 0.4) 0%, rgba(4, 5, 8, 0.92) 92%);
+  text-align: center;
+  pointer-events: auto;
+  z-index: 20;
+  transition: opacity 0.3s ease;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay__title {
+  font-size: 60px;
+  font-weight: 800;
+  letter-spacing: 6px;
+  color: #f0ead8;
+  text-shadow:
+    0 0 26px rgba(255, 122, 42, 0.35),
+    3px 4px 0 rgba(196, 21, 48, 0.55),
+    0 8px 26px rgba(0, 0, 0, 0.9);
+}
+
+.overlay__subtitle {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #d8d2c2;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
+}
+
+.overlay__score {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #ff7a2a;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
+}
+
+.overlay__hint {
+  margin-top: 6px;
+  max-width: 460px;
+  font-size: 13px;
+  letter-spacing: 1px;
+  line-height: 1.55;
+  color: #8d94a2;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
+}
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 25;
+  font-size: 170px;
+  font-weight: 800;
+  letter-spacing: 6px;
+  color: #f0ead8;
+  text-shadow:
+    0 0 30px rgba(255, 122, 42, 0.45),
+    0 8px 34px rgba(0, 0, 0, 0.8);
+  opacity: 0;
+}
+
+.countdown.is-shown {
+  animation: countdown-pop 0.75s ease-out;
+}
+
+@keyframes countdown-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  20% { opacity: 1; transform: scale(1.15); }
+  40% { transform: scale(1); }
+  80% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.4); }
+}
+
+/* Cruceta tactil: solo en punteros gruesos */
+.touch-pad {
+  display: none;
+  position: absolute;
+  right: 18px;
+  bottom: 22px;
+  z-index: 22;
+  grid-template-columns: repeat(3, 60px);
+  grid-template-rows: repeat(3, 60px);
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.touch-btn {
+  width: 60px;
+  height: 60px;
+  border-radius: 14px;
+  border: 2px solid rgba(255, 122, 42, 0.45);
+  background: rgba(18, 14, 12, 0.6);
+  color: #f0ead8;
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 800;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  touch-action: none;
+}
+
+.touch-btn:active {
+  background: rgba(255, 122, 42, 0.45);
+  border-color: #f0ead8;
+}
+
+.touch-btn--left { grid-area: 2 / 1; }
+.touch-btn--up { grid-area: 1 / 2; }
+.touch-btn--down { grid-area: 3 / 2; }
+.touch-btn--right { grid-area: 2 / 3; }
+
+@media (hover: none), (pointer: coarse) {
+  .touch-pad {
+    display: grid;
+  }
+
+  .hud__score {
+    font-size: 52px;
+  }
+
+  .overlay__title {
+    font-size: 40px;
+    letter-spacing: 4px;
+  }
+}

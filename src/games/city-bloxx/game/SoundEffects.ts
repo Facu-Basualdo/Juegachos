@@ -115,7 +115,55 @@ export class SoundEffects {
     });
   }
 
-  /** Low rumbling crumble when the tower topples or a drop misses. */
+  /** Descending honk when a block misses and a life is lost. */
+  static playLifeLost(): void {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume();
+
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(320, now);
+    osc.frequency.exponentialRampToValueAtTime(90, now + 0.4);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(0.16, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+
+    osc.start(now);
+    osc.stop(now + 0.45);
+  }
+
+  /** Bright three-note fanfare when a building's roof is placed. */
+  static playRoof(): void {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume();
+
+    const now = ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((freq, i) => {
+      const t = now + i * 0.1;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(0.13, t + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+      osc.start(t);
+      osc.stop(t + 0.24);
+    });
+  }
+
+  /** Low rumbling crumble when the tower topples or the run ends. */
   static playCollapse(): void {
     const ctx = getAudioContext();
     if (!ctx) return;

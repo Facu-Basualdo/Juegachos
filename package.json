@@ -19,6 +19,7 @@
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",
     "@supabase/supabase-js": "^2.47.10",
+    "socket.io-client": "^4.8.1",
     "three": "^0.185.0"
   }
 }

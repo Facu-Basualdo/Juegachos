@@ -10,6 +10,7 @@ import {
 } from "./constants";
 import { Hud, type RoundStatus } from "./Hud";
 import { initRoomMode, type RoomMode } from "../../../shared/room/roomMode";
+import { clearRoomRun, loadRoomRun, saveRoomRun } from "../../../shared/room/roomRun";
 import { SoundEffects } from "./SoundEffects";
 
 type State = "ready" | "countdown" | "running" | "blind" | "stopped" | "earlyClick" | "gameOver";
@@ -19,6 +20,18 @@ interface RoundResult {
   stopped: number;
   diff: number;
   foul: boolean;
+}
+
+/**
+ * Rondas ya jugadas, persistidas en sala para sobrevivir un F5 (ver roomRun.ts).
+ * Sin esto, recargar borraba los resultados y dejaba reintentar las rondas malas:
+ * el puntaje es el error promedio y `direction` es "lower", asi que reiniciar tras
+ * una mala estimacion MEJORABA el resultado. La ronda a jugar se deriva de
+ * `roundsData.length` (un foul repite la ronda sin registrar resultado).
+ */
+interface SavedRun {
+  roundsData: RoundResult[];
+  roundStatuses: RoundStatus[];
 }
 
 export class Game {
@@ -141,13 +154,50 @@ export class Game {
   }
 
   private beginCountdown(): void {
+    // En sala, un F5 vuelve a pasar por aca (la ronda sigue en "playing" y
+    // RoomMode redispara onStart): si hay rondas ya jugadas se retoman.
+    if (this.room && this.resumeSavedRun()) return;
+
     this.currentRound = 1;
     this.roundsData = [];
     this.roundStatuses = Array(TOTAL_ROUNDS).fill("empty");
     this.lastCountdownIndex = -1;
-    
+
     this.hud.hideOverlay();
     this.startRound();
+  }
+
+  /**
+   * Retoma las rondas ya jugadas tras un reload. La que estaba en curso se rehace
+   * (no habia resultado registrado); las completadas no se pueden reintentar.
+   */
+  private resumeSavedRun(): boolean {
+    const s = loadRoomRun<SavedRun>(this.room!, "blind-time");
+    if (!s || !Array.isArray(s.roundsData) || !Array.isArray(s.roundStatuses)) return false;
+    if (s.roundStatuses.length !== TOTAL_ROUNDS) return false;
+    if (s.roundsData.length === 0 || s.roundsData.length > TOTAL_ROUNDS) return false;
+    if (s.roundsData.some((r) => !r || !Number.isFinite(r.diff))) return false;
+
+    this.roundsData = [...s.roundsData];
+    this.roundStatuses = [...s.roundStatuses];
+    this.currentRound = this.roundsData.length + 1;
+    this.lastCountdownIndex = -1;
+
+    this.hud.hideOverlay();
+    // Ya estaban todas: la corrida termino durante el reload, se cierra sin rejugar.
+    if (this.roundsData.length >= TOTAL_ROUNDS) this.endGame();
+    else this.startRound();
+    return true;
+  }
+
+  /** Snapshot de las rondas jugadas. No hace nada fuera de sala. */
+  private saveRun(): void {
+    if (!this.room) return;
+    const data: SavedRun = {
+      roundsData: this.roundsData,
+      roundStatuses: this.roundStatuses,
+    };
+    saveRoomRun(this.room, "blind-time", data);
   }
   
   private startRound(): void {
@@ -174,6 +224,7 @@ export class Game {
     this.hud.showEarlyClickState();
     this.hud.updateRoundProgress(this.currentRound, this.roundStatuses);
     SoundEffects.playFail();
+    this.saveRun();
   }
   
   private handleStop(): void {
@@ -194,6 +245,8 @@ export class Game {
     
     this.hud.showResultState(this.stoppedTime, this.targetTime, diffMs);
     this.hud.updateRoundProgress(this.currentRound, this.roundStatuses);
+    // Recien aca la ronda quedo registrada: es el momento de persistirla.
+    this.saveRun();
 
     if (Math.abs(diffMs) < 150) {
       SoundEffects.playSuccess();
@@ -220,6 +273,8 @@ export class Game {
     this.hud.showGameOver(this.roundsData, average, isNewBest, this.bestAverage);
     
     if (this.room) {
+      // La corrida de la ronda termino: un reload ya no debe retomarla.
+      clearRoomRun(this.room, "blind-time");
       this.room.reportScore(average);
     } else {
       this.hud.showRanking("blind-time", average);

@@ -60,25 +60,6 @@ export class SoundEffects {
     osc.stop(now + 0.16);
   }
 
-  static playWallJump(): void {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-    if (ctx.state === "suspended") ctx.resume();
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(240, now);
-    osc.frequency.exponentialRampToValueAtTime(520, now + 0.14);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.linearRampToValueAtTime(0.08, now + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
-    osc.start(now);
-    osc.stop(now + 0.18);
-  }
-
   /** Airy filtered-noise whoosh for the dash. */
   static playDash(): void {
     const ctx = getAudioContext();

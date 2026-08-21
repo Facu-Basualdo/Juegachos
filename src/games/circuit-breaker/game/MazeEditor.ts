@@ -11,7 +11,7 @@ import {
   COLOR_DEST,
 } from "./constants";
 
-type Tool = "corridor" | "wall" | "start" | "end";
+type Tool = "corridor" | "wall" | "start" | "end" | "timer";
 
 export class MazeEditor {
   private cols: number;
@@ -19,6 +19,7 @@ export class MazeEditor {
   private wall: boolean[][]; // [y][x] true = pared
   private start = { x: 1, y: 1 };
   private end = { x: 1, y: 1 };
+  private timer: { x: number; y: number } | null = null; // ancla del HUD (cronometro)
 
   private tool: Tool = "corridor";
   private brush = 3;
@@ -39,6 +40,7 @@ export class MazeEditor {
     this.wall = lvl.grid.map((row) => row.split("").map((c) => c === "#"));
     this.start = { ...lvl.start };
     this.end = { ...lvl.end };
+    this.timer = lvl.hud ? { ...lvl.hud } : null;
 
     const root = document.createElement("div");
     Object.assign(root.style, {
@@ -70,6 +72,7 @@ export class MazeEditor {
       ["wall", "Pared"],
       ["start", "Inicio A"],
       ["end", "Destino B"],
+      ["timer", "Cronometro"],
     ];
     for (const [t, label] of tools) {
       const b = this.mkBtn(label, () => this.setTool(t));
@@ -241,6 +244,7 @@ export class MazeEditor {
     this.wall = lvl.grid.map((row) => row.split("").map((c) => c === "#"));
     this.start = { ...lvl.start };
     this.end = { ...lvl.end };
+    this.timer = lvl.hud ? { ...lvl.hud } : null;
     this.render();
   }
 
@@ -277,6 +281,10 @@ export class MazeEditor {
     if (this.tool === "end") {
       this.end = { x: cx, y: cy };
       this.wall[cy][cx] = false;
+      return;
+    }
+    if (this.tool === "timer") {
+      this.timer = { x: cx, y: cy }; // no cambia pared/corredor (es solo el ancla del HUD)
       return;
     }
     const w = this.tool === "wall";
@@ -323,10 +331,40 @@ export class MazeEditor {
       ctx.lineTo(this.canvas.width, y * cellPx);
     }
     ctx.stroke();
-    // A y B.
+    // Cronometro (ancla del HUD), A y B.
+    if (this.timer) this.drawClock(this.timer);
     this.drawMarker(this.start, COLOR_SOURCE, "A");
     this.drawMarker(this.end, COLOR_DEST, "B");
     this.updateStatus();
+  }
+
+  /** Marca del cronometro: un reloj sobre la celda ancla del HUD. */
+  private drawClock(c: { x: number; y: number }): void {
+    const { ctx, cellPx } = this;
+    const cx = (c.x + 0.5) * cellPx;
+    const cy = (c.y + 0.5) * cellPx;
+    const r = cellPx * 0.4;
+    ctx.save();
+    ctx.strokeStyle = "#ffd27a";
+    ctx.fillStyle = "rgba(255, 210, 122, 0.18)";
+    ctx.lineWidth = Math.max(1.5, cellPx * 0.09);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Boton superior.
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx, cy - r - cellPx * 0.16);
+    ctx.stroke();
+    // Agujas.
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx, cy - r * 0.6);
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + r * 0.5, cy);
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawMarker(c: { x: number; y: number }, color: string, label: string): void {
@@ -382,6 +420,8 @@ export class MazeEditor {
       for (let x = 0; x < this.cols; x++) {
         if (x === this.start.x && y === this.start.y) s += "A";
         else if (x === this.end.x && y === this.end.y) s += "B";
+        else if (this.timer && x === this.timer.x && y === this.timer.y)
+          s += this.wall[y][x] ? "T" : "t"; // ancla del HUD (T sobre pared, t sobre corredor)
         else s += this.wall[y][x] ? "#" : ".";
       }
       lines.push(s);

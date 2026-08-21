@@ -9,6 +9,7 @@ import {
   STEP_MIN,
   STEP_DECREMENT,
   MAX_DT,
+  TURN_EARLY_FRACTION,
   COUNTDOWN_LABELS,
   COUNTDOWN_STEP,
   BEST_KEY,
@@ -72,7 +73,7 @@ export class Game {
       onStart: () => this.beginCountdown(),
     });
 
-    this.bindInputs();
+    this.bindInputs(container);
     this.resize();
     window.addEventListener("resize", this.resize);
 
@@ -80,7 +81,7 @@ export class Game {
     requestAnimationFrame(this.tick);
   }
 
-  private bindInputs(): void {
+  private bindInputs(container: HTMLElement): void {
     window.addEventListener("keydown", (e) => {
       switch (e.key) {
         case "ArrowUp":
@@ -111,13 +112,17 @@ export class Game {
 
     // Swipe / drag controls: while playing, a movement past the threshold in the
     // dominant axis queues a turn and resets the anchor so a drag can chain turns.
-    this.canvas.addEventListener("pointerdown", (e) => {
+    // Van sobre el container y no sobre el canvas porque la pantalla de inicio /
+    // game over es un overlay que lo tapa: en movil (donde no hay Enter) el toque
+    // sobre el cartel moria en el overlay y no se podia arrancar. El panel de
+    // ranking corta la propagacion de sus propios pointerdown.
+    container.addEventListener("pointerdown", (e) => {
       this.pointerActive = true;
       this.pointerX = e.clientX;
       this.pointerY = e.clientY;
       if (this.state === "ready" || this.state === "dead") this.onAction();
     });
-    this.canvas.addEventListener("pointermove", (e) => {
+    container.addEventListener("pointermove", (e) => {
       if (!this.pointerActive || this.state !== "playing") return;
       const dx = e.clientX - this.pointerX;
       const dy = e.clientY - this.pointerY;
@@ -131,8 +136,8 @@ export class Game {
     const endPointer = () => {
       this.pointerActive = false;
     };
-    this.canvas.addEventListener("pointerup", endPointer);
-    this.canvas.addEventListener("pointercancel", endPointer);
+    container.addEventListener("pointerup", endPointer);
+    container.addEventListener("pointercancel", endPointer);
     this.canvas.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
   }
 
@@ -145,7 +150,21 @@ export class Game {
     if (this.dirQueue.length < 2) {
       this.dirQueue.push({ x, y });
       SoundEffects.playTurn();
+      this.tryEarlyStep();
     }
+  }
+
+  /**
+   * Adelanta el paso cuando el giro llega pasada la mitad del tick. Sin esto el giro
+   * espera hasta el proximo borde de paso (hasta STEP_INITIAL = 140 ms al principio) y
+   * eso es lo que se siente como delay en los controles. Solo aplica al giro que se
+   * ejecuta en este paso (cola de 1); el segundo bufferado sigue siendo del paso que viene.
+   */
+  private tryEarlyStep(): void {
+    if (this.dirQueue.length !== 1) return;
+    if (this.stepAccum < this.stepInterval * TURN_EARLY_FRACTION) return;
+    this.stepAccum = 0;
+    this.stepSnake();
   }
 
   private onAction(): void {
@@ -400,7 +419,9 @@ export class Game {
 
   private drawSnake(): void {
     const { ctx } = this;
-    const t = this.state === "playing" ? Math.min(this.stepAccum / this.stepInterval, 1) : 0;
+    // Fuera de "playing" la interpolacion se congela al final del paso (t = 1): al morir
+    // el paso no se aplica, y un t = 0 dibujaria prevCells (la vibora retrocede una celda).
+    const t = this.state === "playing" ? Math.min(this.stepAccum / this.stepInterval, 1) : 1;
     const n = this.cells.length;
 
     // Centros interpolados de cabeza a cola.

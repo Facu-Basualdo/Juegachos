@@ -38,7 +38,7 @@ export const TRACK_DEFS: TrackDef[] = [
     id: "monaco",
     name: "Mónaco",
     laps: 4,
-    width: 76,
+    width: 112,
     themeId: "city",
     // Callejero angosto trazado sobre el mapa real de Montecarlo (corners 1-19):
     // lento, sinuoso, con horquilla. Angosto a proposito (calle). Geometria
@@ -72,7 +72,7 @@ export const TRACK_DEFS: TrackDef[] = [
     id: "shanghai",
     name: "Shanghái",
     laps: 3,
-    width: 104,
+    width: 152,
     themeId: "space",
     // Semi-fiel a Shanghai: su recta trasera larga caracteristica + horquilla
     // final. El "snail" (espiral de entrada) real es imposible como loop cerrado
@@ -101,7 +101,7 @@ export const TRACK_DEFS: TrackDef[] = [
     id: "silverstone",
     name: "Silverstone",
     laps: 3,
-    width: 96,
+    width: 138,
     themeId: "jungle",
     // Trazado sobre Silverstone: sweeps rapidos + esses (Maggotts/Becketts) y la
     // curva lenta del sector final. Geometria verificada.
@@ -130,7 +130,7 @@ export const TRACK_DEFS: TrackDef[] = [
     id: "red-dune",
     name: "Duna Roja",
     laps: 3,
-    width: 158,
+    width: 200,
     themeId: "desert",
     nodes: [
       [0, 1320],
@@ -152,7 +152,7 @@ export const TRACK_DEFS: TrackDef[] = [
     id: "glacier-loop",
     name: "Glaciar",
     laps: 3,
-    width: 150,
+    width: 196,
     themeId: "ice",
     nodes: [
       [15, 980],
@@ -174,7 +174,7 @@ export const TRACK_DEFS: TrackDef[] = [
     id: "magma-eight",
     name: "Volcán",
     laps: 3,
-    width: 162,
+    width: 205,
     themeId: "volcano",
     nodes: [
       [8, 1300],

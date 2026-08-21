@@ -1,6 +1,9 @@
 import {
   MAX_DT,
+  MAX_SUBSTEP_DIST,
   PADDLE_WIDTH,
+  PADDLE_WIDTH_MIN,
+  PADDLE_SHRINK_PER_HIT,
   PADDLE_HEIGHT,
   PADDLE_BOTTOM_MARGIN,
   PLAYER_SPEED,
@@ -36,6 +39,7 @@ export class Game {
 
   // Paddle
   private paddleX = VIEW_WIDTH / 2 - PADDLE_WIDTH / 2;
+  private paddleWidth = PADDLE_WIDTH;
 
   // Ball
   private ballX = VIEW_WIDTH / 2;
@@ -62,7 +66,7 @@ export class Game {
       onStart: () => this.beginCountdown(),
     });
 
-    this.bindInputs();
+    this.bindInputs(container);
     this.resize();
     window.addEventListener("resize", this.resize);
 
@@ -70,7 +74,7 @@ export class Game {
     requestAnimationFrame(this.tick);
   }
 
-  private bindInputs(): void {
+  private bindInputs(container: HTMLElement): void {
     window.addEventListener("keydown", (e) => {
       if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") this.moveDir = -1;
       if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") this.moveDir = 1;
@@ -87,7 +91,7 @@ export class Game {
       if (this.state !== "playing" && this.state !== "countdown") return;
       const rect = this.canvas.getBoundingClientRect();
       const mx = (e.clientX - rect.left) / this.cssScale - this.offsetX;
-      this.paddleX = mx - PADDLE_WIDTH / 2;
+      this.paddleX = mx - this.paddleWidth / 2;
       this.clampPaddle();
     });
 
@@ -97,17 +101,21 @@ export class Game {
       const rect = this.canvas.getBoundingClientRect();
       const touch = e.touches[0];
       const mx = (touch.clientX - rect.left) / this.cssScale - this.offsetX;
-      this.paddleX = mx - PADDLE_WIDTH / 2;
+      this.paddleX = mx - this.paddleWidth / 2;
       this.clampPaddle();
     }, { passive: false });
 
-    this.canvas.addEventListener("click", () => this.onAction());
-    this.canvas.addEventListener("touchstart", (e) => {
+    // Arranque / reintento por toque. Va sobre el container y no sobre el canvas
+    // porque la pantalla de inicio y la de game over son un overlay que lo tapa:
+    // en movil (donde no hay Enter) el toque sobre el cartel moria ahi y no habia
+    // forma de empezar. Es `pointerdown` (no `click` + `touchstart`) porque el
+    // panel de ranking corta la propagacion de los pointerdown de su propia UI.
+    container.addEventListener("pointerdown", (e) => {
       if (this.state === "ready" || this.state === "dead") {
         e.preventDefault();
         this.onAction();
       }
-    }, { passive: false });
+    });
   }
 
   private onAction(): void {
@@ -127,6 +135,7 @@ export class Game {
     this.countdownTime = 0;
     this.lastCountdownIndex = -1;
     this.score = 0;
+    this.paddleWidth = PADDLE_WIDTH;
     this.paddleX = VIEW_WIDTH / 2 - PADDLE_WIDTH / 2;
     this.ballX = VIEW_WIDTH / 2;
     this.ballY = VIEW_HEIGHT / 2;
@@ -203,6 +212,14 @@ export class Game {
     this.paddleX += this.moveDir * PLAYER_SPEED * dt;
     this.clampPaddle();
 
+    const steps = Math.max(1, Math.ceil((this.ballSpeed * dt) / MAX_SUBSTEP_DIST));
+    const sub = dt / steps;
+    for (let i = 0; i < steps && this.state === "playing"; i++) {
+      this.stepBall(sub);
+    }
+  }
+
+  private stepBall(dt: number): void {
     this.ballX += this.ballVx * dt;
     this.ballY += this.ballVy * dt;
 
@@ -232,14 +249,19 @@ export class Game {
       this.ballY + BALL_RADIUS >= VIEW_HEIGHT - PADDLE_BOTTOM_MARGIN - PADDLE_HEIGHT &&
       this.ballY - BALL_RADIUS <= VIEW_HEIGHT - PADDLE_BOTTOM_MARGIN &&
       this.ballX + BALL_RADIUS >= this.paddleX &&
-      this.ballX - BALL_RADIUS <= this.paddleX + PADDLE_WIDTH
+      this.ballX - BALL_RADIUS <= this.paddleX + this.paddleWidth
     ) {
-      const relX = (this.ballX - (this.paddleX + PADDLE_WIDTH / 2)) / (PADDLE_WIDTH / 2);
+      const relX = (this.ballX - (this.paddleX + this.paddleWidth / 2)) / (this.paddleWidth / 2);
       const angle = -Math.PI / 2 + relX * 0.7;
       this.ballSpeed = Math.min(this.ballSpeed + BALL_SPEED_INCREMENT, BALL_SPEED_MAX);
       this.ballVx = Math.cos(angle) * this.ballSpeed;
       this.ballVy = Math.sin(angle) * this.ballSpeed;
       this.ballY = VIEW_HEIGHT - PADDLE_BOTTOM_MARGIN - PADDLE_HEIGHT - BALL_RADIUS;
+
+      const center = this.paddleX + this.paddleWidth / 2;
+      this.paddleWidth = Math.max(this.paddleWidth - PADDLE_SHRINK_PER_HIT, PADDLE_WIDTH_MIN);
+      this.paddleX = center - this.paddleWidth / 2;
+      this.clampPaddle();
 
       this.score++;
       this.hud.setScore(this.score);
@@ -249,7 +271,7 @@ export class Game {
 
   private clampPaddle(): void {
     if (this.paddleX < 0) this.paddleX = 0;
-    if (this.paddleX + PADDLE_WIDTH > VIEW_WIDTH) this.paddleX = VIEW_WIDTH - PADDLE_WIDTH;
+    if (this.paddleX + this.paddleWidth > VIEW_WIDTH) this.paddleX = VIEW_WIDTH - this.paddleWidth;
   }
 
   private updateCountdown(dt: number): void {
@@ -290,7 +312,7 @@ export class Game {
     ctx.shadowColor = "#64c8ff";
     ctx.shadowBlur = 15;
     ctx.beginPath();
-    ctx.roundRect(this.paddleX, paddleY, PADDLE_WIDTH, PADDLE_HEIGHT, 6);
+    ctx.roundRect(this.paddleX, paddleY, this.paddleWidth, PADDLE_HEIGHT, 6);
     ctx.fill();
     ctx.shadowBlur = 0;
 

@@ -62,11 +62,11 @@ function offset(track: Track, s: number, lane: number): { x: number; y: number; 
 
 /**
  * Genera los obstaculos de una pista de forma determinista (misma seed -> mismo
- * layout, clave para el modo sala). Recorre el circuito y coloca:
- *  - boost pads al centro de las rectas (recompensa),
- *  - barreras parciales a un lado en rectas (obligan a trazar),
- *  - conos en fila sobre el borde interno de las curvas (slalom esquivable).
- * Deja libre la zona de largada.
+ * layout, clave para el modo sala). En las rectas coloca:
+ *  - boost pads (recompensa),
+ *  - barreras parciales a un lado (obligan a trazar).
+ * Sin conos (se sacaron a pedido: los circuitos quedan mas limpios). Deja libre
+ * la zona de largada. `cones` se devuelve vacio para no tocar Renderer/Game.
  */
 export function buildObstacles(track: Track, seed: number): Obstacles {
   const rand = rng(seed);
@@ -75,7 +75,6 @@ export function buildObstacles(track: Track, seed: number): Obstacles {
   const boosts: BoostPad[] = [];
   const half = track.def.width / 2;
 
-  // Densidad alta: obstaculos frecuentes en rectas y curvas (dificultad).
   const STEP = 0.007;
   let cooldown = 0;
 
@@ -84,44 +83,19 @@ export function buildObstacles(track: Track, seed: number): Obstacles {
       cooldown -= STEP;
       continue;
     }
-    const curv = curvatureAtS(track, s);
-
-    if (curv < 0.12) {
-      // Recta: boost, barrera parcial o una chicane de conos que obliga a tejer.
+    // Solo en rectas: boost o barrera parcial.
+    if (curvatureAtS(track, s) < 0.12) {
       const roll = rand();
-      if (roll < 0.28) {
+      if (roll < 0.34) {
         const p = offset(track, s, (rand() - 0.5) * half * 0.4);
         boosts.push({ x: p.x, y: p.y, angle: p.angle });
-        cooldown = 0.09;
-      } else if (roll < 0.62) {
+        cooldown = 0.1;
+      } else if (roll < 0.64) {
         const side = rand() < 0.5 ? -1 : 1;
         const p = offset(track, s, side * half * 0.5);
         barriers.push({ x: p.x, y: p.y, angle: p.angle, half: half * 0.4 });
-        cooldown = 0.11;
-      } else if (roll < 0.86) {
-        // Chicane: fila diagonal de conos cruzando media pista.
-        const side = rand() < 0.5 ? -1 : 1;
-        for (let k = 0; k < 4; k++) {
-          const lane = side * half * (0.7 - k * 0.34);
-          const p = offset(track, s + k * 0.005, lane);
-          cones.push({ x: p.x, y: p.y, ox: 0, oy: 0, hitAt: 0 });
-        }
-        cooldown = 0.08;
+        cooldown = 0.12;
       }
-    } else if (curv > 0.24) {
-      // Curva (incluye las medias): fila de conos sobre el borde interno.
-      const a0 = track.pointAt(s).angle;
-      const a1 = track.pointAt(s + 0.02).angle;
-      let d = a1 - a0;
-      while (d > Math.PI) d -= Math.PI * 2;
-      while (d < -Math.PI) d += Math.PI * 2;
-      const innerSide = d > 0 ? 1 : -1;
-      const count = curv > 0.5 ? 5 : 4;
-      for (let k = 0; k < count; k++) {
-        const p = offset(track, s + k * 0.006, innerSide * half * 0.66);
-        cones.push({ x: p.x, y: p.y, ox: 0, oy: 0, hitAt: 0 });
-      }
-      cooldown = 0.04;
     }
   }
 

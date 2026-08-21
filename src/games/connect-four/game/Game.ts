@@ -38,6 +38,16 @@ export class Game {
   private aiRoomMatch = false;
   /** Resultado de esa partida vs IA (1 gane / 0 perdi-empate), para el parcial. */
   private aiRoomScore = 0;
+  /** Numero de mi tablero PvP (para no espectarme a mi mismo); null si juego vs IA. */
+  private myHumanBoardNo: number | null = null;
+  /** Tablero ajeno que estoy mirando tras terminar mi partida. */
+  private spectator: SharedMatch | null = null;
+  /** Ya arranque a espectar (idempotente: no volver a repartir la cola). */
+  private spectateStarted = false;
+  /** Otras partidas de la ronda para mirar, en orden al azar. */
+  private spectateQueue: Array<{ boardNo: number; seats: [string, string] }> = [];
+  /** Tableros ya mirados hasta el final (no repetir). */
+  private readonly spectatedBoards = new Set<number>();
 
   private state: State = "ready";
 
@@ -56,6 +66,15 @@ export class Game {
   private pending: number[] = [];
   /** Se incrementa en cada partida nueva: los timeouts viejos se descartan. */
   private runId = 0;
+  /**
+   * True solo cuando el overlay de inicio / fin esta realmente en pantalla. Al
+   * perder la racha, el estado pasa a "over" pero el overlay de fin aparece
+   * `SOLO_RESULT_MS` despues (se muestra un momento el tablero perdido): sin este
+   * guard un Enter en esa ventana reiniciaba la partida y su `cancelPending()`
+   * cancelaba el `schedule` del overlay, asi que nunca se mostraba el puntaje ni
+   * el ranking.
+   */
+  private menuVisible = true;
 
   constructor(container: HTMLElement) {
     const savedBest = localStorage.getItem(BEST_KEY);
@@ -67,6 +86,9 @@ export class Game {
     this.room = initRoomMode("connect-four", {
       getScore: () => this.shared?.myScore() ?? this.aiRoomScore,
       onStart: () => this.beginCountdown(),
+      // Al terminar mi partida no muestro la espera generica: paso a mirar otra
+      // partida en curso (true = la manejo yo, RoomMode oculta el "esperando").
+      onReportedWaiting: () => this.beginSpectating(),
     });
 
     this.hud.showStart(this.best, this.room !== null);
@@ -90,6 +112,9 @@ export class Game {
   };
 
   private tryStart(): void {
+    // Solo se arranca con el overlay realmente en pantalla, nunca durante el
+    // tiempo en que se muestra el tablero perdido antes del overlay de fin.
+    if (!this.menuVisible) return;
     if (this.state === "ready") {
       this.beginCountdown();
     } else if (this.state === "over") {
@@ -100,6 +125,7 @@ export class Game {
 
   private beginCountdown(): void {
     this.cancelPending();
+    this.menuVisible = false;
     this.state = "countdown";
     this.countdownTime = 0;
     this.lastCountdownIndex = -1;
@@ -142,10 +168,13 @@ export class Game {
       // Jugador impar: partida local contra la IA que igual reporta 1/0 a la sala.
       this.aiRoomMatch = true;
       this.aiRoomScore = 0;
+      this.myHumanBoardNo = null; // no tengo tablero compartido propio
       this.newSoloMatch();
     } else {
+      this.myHumanBoardNo = pairing.boardNo;
       this.shared = new SharedMatch(room, this.hud, () => {
         this.state = "over";
+        this.beginSpectating();
       }, { boardNo: pairing.boardNo, seats: pairing.seats });
       this.shared.start();
     }
@@ -263,6 +292,52 @@ export class Game {
     this.aiRoomScore = score;
     this.renderSolo();
     this.room!.reportScore(score);
+    this.beginSpectating();
+  }
+
+  // ---------- Espectar otras partidas (sala PvP) ----------
+
+  /**
+   * Al terminar mi partida paso a mirar otra en curso de la ronda en vez de la
+   * pantalla generica "esperando a los demas": con 4 jugadores, la otra; con mas,
+   * una al azar, saltando a la siguiente cuando la mirada termina. Devuelve true
+   * si hay algo para espectar (RoomMode oculta la espera), false si no queda
+   * ninguna (se muestra la espera de siempre). Idempotente.
+   */
+  private beginSpectating(): boolean {
+    if (!this.room) return false;
+    if (!this.spectateStarted) {
+      this.spectateStarted = true;
+      this.shared?.dispose(); // mi tablero ya termino: dejo de sondearlo
+      const boards = humanBoards(this.room.players()).filter(
+        (b) => b.boardNo !== this.myHumanBoardNo,
+      );
+      // Al azar para que ">4 jugadores" mire una cualquiera; con 4 hay una sola.
+      for (let i = boards.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [boards[i], boards[j]] = [boards[j], boards[i]];
+      }
+      this.spectateQueue = boards;
+      this.spectateNext();
+    }
+    return this.spectator !== null;
+  }
+
+  /** Pasa a mirar la siguiente partida no vista; si no queda ninguna, se detiene. */
+  private spectateNext(): void {
+    this.spectator?.dispose();
+    this.spectator = null;
+    const room = this.room;
+    if (!room) return;
+    const next = this.spectateQueue.find((b) => !this.spectatedBoards.has(b.boardNo));
+    if (!next) return; // no queda otra partida en curso para mirar
+    this.spectatedBoards.add(next.boardNo);
+    this.spectator = new SharedMatch(room, this.hud, () => this.spectateNext(), {
+      boardNo: next.boardNo,
+      seats: next.seats,
+      spectate: true,
+    });
+    this.spectator.start();
   }
 
   private onMatchLose(): void {
@@ -284,6 +359,7 @@ export class Game {
     }
 
     this.schedule(() => {
+      this.menuVisible = true;
       this.hud.showGameOver(this.streak, isNewBest, this.best!);
       this.hud.showRanking("connect-four", this.streak);
     }, SOLO_RESULT_MS);

@@ -82,17 +82,43 @@ respaldo. Por turnos, la latencia por jugada no se nota.
   uno (con la pareja correcta) y les destraba el AFK. Corre su propio tablero
   activo mas un `SharedMatch` **pasivo** (`passive: true`) por cada otra pareja
   (`humanBoards`), que no toca HUD/sonido/puntaje. Los tableros vs IA no usan DB,
-  asi que el host no los administra.
-- **Anti-AFK**: si el jugador de turno de un tablero no mueve en `AFK_MOVE_MS`, el
-  host suelta una ficha al azar por el para que la partida avance. El deadline de
-  ronda sigue siendo el corte duro.
+  asi que el host no los administra. Si el host **no aparece** (se desconecto
+  antes de cargar la ronda), pasados `CREATE_FALLBACK_MS` (6s, de `matchState.ts`)
+  cada jugador crea su propio tablero: sin eso la pareja se quedaba en "Esperando
+  un rival..." para siempre.
+- **Anti-AFK**: si el jugador de turno de un tablero no mueve en `AFK_MOVE_MS`
+  (25 s), se suelta una ficha al azar por el para que la partida avance. El
+  deadline de ronda sigue siendo el corte duro.
+- **El destrabe no es exclusivo del host**: tambien lo hace **el rival del jugador
+  parado, en su propio tablero** (nunca su propio turno; para eso esta el host).
+  Hacia falta porque los tableros ajenos los administra el host con instancias
+  `passive` creadas al arrancar la ronda: un host que **toma el control a mitad de
+  ronda** (migracion automatica de `roomMode`) no las tiene, asi que un host caido
+  congelaba duelos en los que ni jugaba.
+- **Al desconectado no se le espera la ventana AFK completa**: si el jugador de
+  turno no esta en `room.presentPlayers()` se juega por el a los
+  `AFK_ABSENT_MOVE_MS` (5 s) en vez de 25 s — no va a mover nunca. Con
+  `presentPlayers()` vacia (canal aun sin sincronizar) se cae a la ventana normal.
 - **Fin**: con `winner` definido, cada cliente reporta 1 (si gano) o 0 via
   `room.reportScore(...)`; el empate reporta 0; los espectadores reportan 0.
   Recargar a mitad de partida reengancha (el estado vive en Postgres y
   `SharedMatch.boot()` lo readopta por `board`).
+- **Espectar al terminar**: como los duelos duran distinto, cuando tu partida
+  termina no ves la pantalla generica "esperando a los demas": pasas a **mirar
+  otra partida en curso** de la ronda (con 4 jugadores, la otra; con mas, una al
+  azar, y saltas a la siguiente cuando la mirada termina). Lo maneja
+  `Game.beginSpectating()`/`spectateNext()`: crean un `SharedMatch` con
+  `spectate: true` (renderiza el tablero ajeno en el HUD pero no juega, no
+  reporta, no crea el tablero ni administra el AFK). RoomMode oculta su overlay
+  de espera via el hook `onReportedWaiting` (devuelve true mientras haya algo que
+  mirar; false cuando no queda ninguna y vuelve la espera de siempre). Al cambiar
+  de tablero espectado se llama `SharedMatch.dispose()` para frenar los intervalos
+  de la instancia anterior (el `onSync` no se puede desuscribir, asi que su
+  `refresh` corta solo por el flag `disposed`).
 
 Usa el contexto extendido de `RoomMode` (`code`, `me`, `round()`, `players()`,
-`isHost()`, `ping()`, `onSync()`) igual que Memoria y Ta-Te-Ti.
+`presentPlayers()`, `isHost()`, `ping()`, `onSync()`) igual que Memoria y
+Ta-Te-Ti.
 
 ## Integraciones estandar
 
@@ -117,3 +143,12 @@ Usa el contexto extendido de `RoomMode` (`code`, `me`, `round()`, `players()`,
 - La IA usa `DEPTH = 6`: subirlo la hace mas fuerte pero mas lenta (el arbol es
   mas grande a tablero vacio). Ajustar dificultad se hace con `DEPTH` y la
   heuristica en `ai.ts`.
+- **`menuVisible` gatea el reinicio (no el estado).** Al perder la racha en solo,
+  `onMatchLose` pone el estado en `over` pero el overlay de fin (con el ranking) se
+  muestra `SOLO_RESULT_MS` despues (se ve un momento el tablero perdido). En esa
+  ventana el estado ya es `over`, asi que gatear el Enter/tap de reinicio por estado
+  hacia que un toque reiniciara la partida — y `beginCountdown`->`cancelPending()`
+  cancelaba el `schedule` del overlay, dejando la corrida sin mostrar puntaje ni
+  reportar al ranking. El flag `menuVisible` es true solo con el overlay realmente
+  en pantalla; la continuacion de racha (victoria/empate) no se ve afectada porque
+  ahi el estado sigue en `playing`.

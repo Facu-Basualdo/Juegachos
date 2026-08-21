@@ -52,6 +52,15 @@ export class Game {
     });
     this.hud.showStart(this.best);
 
+    // En movil no hay Enter: el toque tiene que poder arrancar desde cualquier
+    // parte de la pantalla, no solo desde el boton Comenzar. Se ignoran los <button>, que
+    // ya tienen su propio handler (y son los que eligen la opcion), para no
+    // arrancar dos veces ni pisar la eleccion.
+    container.addEventListener("pointerdown", (e) => {
+      if ((e.target as HTMLElement).closest("button")) return;
+      this.onStartPressed();
+    });
+
     this.room = initRoomMode("color-memory", {
       getScore: () => this.currentAverage() ?? 0,
       onStart: () => this.beginCountdown(),

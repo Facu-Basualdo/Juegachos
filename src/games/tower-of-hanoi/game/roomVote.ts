@@ -1,5 +1,6 @@
 import {
   createMatchState,
+  CREATE_FALLBACK_MS,
   fetchMatchState,
   updateMatchState,
 } from "../../../shared/room/matchState";
@@ -63,10 +64,15 @@ export class RoomVote {
     void this.boot();
   }
 
-  /** Espera (o crea, si es host) la fila de votacion de la ronda. */
+  /**
+   * Espera (o crea, si es host) la fila de votacion de la ronda. Si el host no
+   * aparece (se desconecto antes de cargar la ronda), pasado CREATE_FALLBACK_MS
+   * la crea cualquier jugador: el insert es idempotente por PK, gana el primero.
+   */
   private async boot(): Promise<void> {
     if (this.booted) return;
     this.booted = true;
+    const since = Date.now();
     for (;;) {
       if (this.state) return;
       const row = await fetchMatchState<DiscVoteState>(this.room.code, this.room.round());
@@ -74,7 +80,7 @@ export class RoomVote {
         this.apply(row.state, row.version);
         return;
       }
-      if (this.room.isHost()) {
+      if (this.room.isHost() || Date.now() - since > CREATE_FALLBACK_MS) {
         const initial: DiscVoteState = {
           phase: "voting",
           votes: {},

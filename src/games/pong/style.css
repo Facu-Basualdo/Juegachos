@@ -65,10 +65,20 @@ body {
   text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
 }
 
+/* Modo sala (1v1): marcador de la izquierda (J1), simetrico con hud__score2. */
+.hud__score--room {
+  position: absolute;
+  left: 38%;
+  top: 20px;
+  margin-top: 0;
+  transform: translateX(-50%);
+}
+
 .hud__score2 {
   position: absolute;
-  right: 25%;
+  left: 62%;
   top: 20px;
+  transform: translateX(-50%);
   font-size: 48px;
   font-weight: 700;
   letter-spacing: 4px;

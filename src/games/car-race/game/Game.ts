@@ -1,6 +1,7 @@
 import { getNickname } from "../../../shared/nickname";
 import { fetchRoomState, sanitizeCode } from "../../../shared/room/api";
 import { initRoomMode, type RoomMode } from "../../../shared/room/roomMode";
+import { isGameServerConfigured, resolveGameServerUrl } from "../../../shared/server-status";
 import { getSupabase } from "../../../shared/supabase";
 import { Car, type CarInput } from "./Car";
 import {
@@ -12,7 +13,9 @@ import {
   CONE_HIT_COOLDOWN_MS,
   CONE_SLOW,
   MAX_DT,
+  NET_IDLE_MS,
   NET_SEND_MS,
+  NET_SEND_SERVER_MS,
   REMOTE_STALE_MS,
   WALL_MARGIN,
   WALL_RESTITUTION,
@@ -28,11 +31,28 @@ import {
   buildObstacles,
   type Obstacles,
 } from "./obstacles";
-import { RaceChannel, type MapPayload, type VotePayload } from "./RaceChannel";
+import { clearRoomRun, loadRoomRun, saveRoomRun } from "../../../shared/room/roomRun";
+import { RaceChannel } from "./RaceChannel";
+import { RaceSocket } from "./RaceSocket";
+import type { MapPayload, RaceLink, RacePayload, VotePayload } from "./RaceTransport";
 import { Renderer, type RemoteCar, type Skid } from "./Renderer";
 import { TRACK_DEFS, buildTrack, trackPreview, type Track } from "./tracks";
 
 type State = "loading" | "mapvote" | "ready" | "countdown" | "racing" | "finished";
+
+/**
+ * Carrera en curso persistida en sala, para sobrevivir un F5 (ver roomRun.ts).
+ * No se guarda la posicion del auto: al retomar vuelve a la grilla y hay que
+ * rehacer los sectores de la vuelta. Lo que NO se reinicia es el cronometro:
+ * `startEpoch` es un instante de reloj de pared, asi que recargar cuesta el tiempo
+ * real que tardo. Sin esto, recargar reiniciaba el reloj y mejoraba el tiempo
+ * reportado, porque el ranking es `direction: "lower"`.
+ */
+interface SavedRun {
+  trackIdx: number;
+  lap: number;
+  startEpoch: number;
+}
 
 const COUNTDOWN_SEC = 3;
 /** Duracion de la votacion de circuito en sala. */
@@ -63,8 +83,15 @@ export class Game {
 
   /** Autos de los demas jugadores de la sala, por nickname. */
   private readonly remotes = new Map<string, RemoteCar>();
-  private channel: RaceChannel | null = null;
-  private sendAccMs = 0;
+  private channel: RaceLink | null = null;
+  /** El enlace es el game server (y no el broadcast de Supabase): sin tope de
+   *  mensajes/s, asi que la cadencia de posiciones puede ser mas alta. */
+  private usingServer = false;
+  /** Timer del heartbeat de posicion (fuera del rAF, ver `heartbeat`). */
+  private netTimer: ReturnType<typeof setInterval> | null = null;
+  /** Ultimo snapshot realmente emitido, para no repetir uno igual. */
+  private lastSent: RacePayload | null = null;
+  private lastSentAt = 0;
 
   // ---- Votacion de circuito en sala ----
   private roomIsHost = false;
@@ -81,6 +108,8 @@ export class Game {
 
   private countdownLeft = 0;
   private startTime = 0;
+  /** Instante de largada en reloj de pared (epoch), para el resume tras un F5. */
+  private startEpoch = 0;
   private finalMs = 0;
   private lap = 0;
   private prevS = 0;
@@ -103,6 +132,22 @@ export class Game {
 
     this.hud = new Hud(container, () => this.onAction());
 
+
+    // En movil no hay Enter: el toque tiene que poder arrancar desde cualquier
+
+    // parte de la pantalla, no solo desde el boton del cartel. Va sobre el
+
+    // container (el overlay de inicio tapa al canvas) y se ignoran los <button>,
+
+    // que ya tienen su propio handler, para no arrancar dos veces.
+
+    container.addEventListener("pointerdown", (e) => {
+
+      if ((e.target as HTMLElement).closest("button")) return;
+
+      this.onAction();
+
+    });
     const rawCode = new URLSearchParams(window.location.search).get("room");
     this.roomCode = rawCode ? sanitizeCode(rawCode) : null;
     this.me = getNickname() ?? "yo";
@@ -120,6 +165,13 @@ export class Game {
 
     window.addEventListener("keydown", (e) => this.onKey(e, true));
     window.addEventListener("keyup", (e) => this.onKey(e, false));
+    // Al salir de la pagina (en sala se navega a la ronda siguiente) frena el
+    // heartbeat y suelta el canal en vez de dejarlos colgados.
+    // `persisted` = la pagina se va al bfcache y puede volver viva: ahi no se
+    // toca nada, solo se suelta cuando la pagina se descarta de verdad.
+    window.addEventListener("pagehide", (e) => {
+      if (!e.persisted) this.dispose();
+    });
     this.resize();
     window.addEventListener("resize", () => this.resize());
 
@@ -127,6 +179,25 @@ export class Game {
 
     this.lastTime = performance.now();
     requestAnimationFrame((t) => this.tick(t));
+  }
+
+  /**
+   * Abre el enlace de sala. Con game server configurado va por el (namespace
+   * `/carrace`); si no, cae al broadcast de Supabase. La decision es por
+   * CONFIGURACION y no en runtime a proposito: la env es la misma para todos los
+   * clientes del deploy, asi que todos coinciden en el mismo transporte. Caer al
+   * otro porque a este cliente le fallo la conexion partiria la sala en dos
+   * grupos que no se ven — un bug mudo, peor que quedarse sin rivales en pantalla.
+   * Ver [RaceTransport](RaceTransport.ts).
+   */
+  private async openLink(round: number, roster: string[]): Promise<RaceLink> {
+    if (!isGameServerConfigured()) return new RaceChannel(this.roomCode!, round);
+    const url = await resolveGameServerUrl();
+    if (!url) return new RaceChannel(this.roomCode!, round);
+    const socket = new RaceSocket(url, this.roomCode!, this.me, roster, round);
+    await socket.connect();
+    this.usingServer = true;
+    return socket;
   }
 
   /**
@@ -151,7 +222,7 @@ export class Game {
       this.roomSeed = seed;
       this.voteFallbackIdx = trackIdx;
 
-      this.channel = new RaceChannel(this.roomCode, round);
+      this.channel = await this.openLink(round, state?.players ?? []);
       this.channel.onVote((v) => this.onVote(v));
       this.channel.onMap((m) => this.onMap(m));
       this.channel.onPos((p) => {
@@ -183,6 +254,10 @@ export class Game {
         car.finished = p.f;
         car.lastAt = Date.now();
       });
+      // Heartbeat por timer, no por rAF: una pestaña de fondo lo frena y el auto
+      // desaparece de la pantalla del resto.
+      const interval = this.usingServer ? NET_SEND_SERVER_MS : NET_SEND_MS;
+      this.netTimer = setInterval(() => this.heartbeat(), interval);
     }
 
     // El mapa por defecto (por seed) queda de fondo detras del overlay hasta
@@ -344,14 +419,52 @@ export class Game {
     this.state = "countdown";
     this.countdownLeft = COUNTDOWN_SEC;
     this.lastResult = null;
+    this.lastSent = null; // arranca de cero: el keepalive no debe callar la largada
     this.hud.hideOverlay();
   }
 
   private go(): void {
     this.state = "racing";
     this.startTime = performance.now();
+    this.saveRun(Date.now());
     this.hud.showCountdown("¡YA!", this.track.theme.accent);
     window.setTimeout(() => this.hud.hideCountdown(), 700);
+  }
+
+  /**
+   * Retoma la carrera guardada de esta ronda tras un reload. El auto vuelve a la
+   * grilla y los sectores de la vuelta en curso se rehacen, pero el reloj arranca
+   * donde estaba: `startTime` se retrasa por el tiempo real ya corrido, asi
+   * recargar no lo reinicia (seria ventaja: el ranking es "lower").
+   */
+  private resumeSavedRun(): boolean {
+    const s = loadRoomRun<SavedRun>(this.room!, "car-race");
+    if (!s || !Number.isFinite(s.trackIdx) || !Number.isFinite(s.startEpoch)) return false;
+    if (!Number.isFinite(s.lap) || s.lap < 0) return false;
+    if (s.trackIdx < 0 || s.trackIdx >= TRACK_DEFS.length) return false;
+
+    this.mapDecided = true;
+    // setupTrack -> placeAtGrid ya deja el auto en la grilla con `lap` en 0,
+    // `sectors` limpios y `prevS` justo antes de la meta (no pisar ese valor: en 0
+    // no se detectaria el cruce de meta). Solo hay que restaurar la vuelta.
+    this.setupTrack(s.trackIdx, this.roomSeed);
+    if (s.lap >= this.track.def.laps) return false; // ya deberia haber reportado
+
+    this.lap = s.lap;
+    this.startEpoch = s.startEpoch;
+    this.startTime = performance.now() - (Date.now() - s.startEpoch);
+    this.state = "racing";
+    this.hud.hideOverlay();
+    this.hud.setLap(this.lap + 1, this.track.def.laps);
+    return true;
+  }
+
+  /** Snapshot de la carrera. No hace nada fuera de sala. */
+  private saveRun(startEpoch = this.startEpoch): void {
+    if (!this.room) return;
+    this.startEpoch = startEpoch;
+    const data: SavedRun = { trackIdx: this.selectedTrack, lap: this.lap, startEpoch };
+    saveRoomRun(this.room, "car-race", data);
   }
 
   private elapsedMs(): number {
@@ -438,7 +551,11 @@ export class Game {
       // En sala, largar la votacion de circuito recien cuando la sala arranca a
       // jugar (tras el briefing / voto de tiempo). Fuera de sala nunca queda en
       // 'loading' (boot pasa directo a 'ready').
-      if (this.room && this.room.status() === "playing") this.startMapVote();
+      if (this.room && this.room.status() === "playing") {
+        // Un F5 vuelve a caer aca con la sala todavia en 'playing'. Si esta carrera
+        // ya estaba corriendo, se retoma: la votacion de circuito ya paso.
+        if (!this.resumeSavedRun()) this.startMapVote();
+      }
       return;
     }
 
@@ -493,7 +610,7 @@ export class Game {
     }
 
     this.updatePosition();
-    this.netSend(dt);
+    // La posicion propia sale por el heartbeat de `setInterval`, no de aca.
   }
 
   /** Vueltas con checkpoints: hay que pasar los 3 sectores antes de la meta. */
@@ -508,6 +625,7 @@ export class Game {
     if (this.prevS > 0.9 && s < 0.1 && this.sectors.every(Boolean)) {
       this.lap++;
       this.sectors = [false, false, false];
+      this.saveRun(); // la vuelta ganada tiene que sobrevivir un F5
       if (this.lap >= this.track.def.laps) this.finishRace();
     }
     this.prevS = s;
@@ -524,6 +642,8 @@ export class Game {
 
     const ms = Math.round(this.finalMs);
     if (this.room) {
+      // La carrera de la ronda termino: un reload ya no debe retomarla.
+      clearRoomRun(this.room, "car-race");
       this.room.reportScore(ms);
       return;
     }
@@ -663,19 +783,21 @@ export class Game {
 
   // ---------- Red ----------
 
-  private netSend(dt: number): void {
-    if (!this.channel) return;
-    this.sendAccMs += dt * 1000;
-    // Terminado, baja la cadencia: solo mantiene vivo el auto en pantalla.
-    const interval = this.state === "finished" ? NET_SEND_MS * 5 : NET_SEND_MS;
-    if (this.sendAccMs < interval) return;
-    this.sendAccMs = 0;
-    this.emitPos();
+  /**
+   * Heartbeat de posicion. Corre sobre `setInterval` y no sobre el loop de
+   * `requestAnimationFrame` a proposito: el navegador frena el rAF en pestañas
+   * de fondo, asi que un jugador con la pestaña detras dejaba de emitir y
+   * desaparecia de la pantalla de todos al vencer `REMOTE_STALE_MS`.
+   */
+  private heartbeat(): void {
+    if (this.state === "racing" || this.state === "countdown" || this.state === "finished") {
+      this.emitPos();
+    }
   }
 
   private emitPos(): void {
     if (!this.channel) return;
-    this.channel.send({
+    const payload: RacePayload = {
       p: this.me,
       x: Math.round(this.car.x),
       y: Math.round(this.car.y),
@@ -683,7 +805,33 @@ export class Game {
       l: this.lap,
       s: Number(this.prevS.toFixed(4)),
       f: this.state === "finished",
-    });
+    };
+
+    // Un auto quieto (en el countdown, o ya terminado) no necesita repetir el
+    // mismo snapshot 10 veces por segundo: baja a un keepalive. Con la sala
+    // llena esto es la diferencia entre rozar el tope de mensajes/s y no.
+    const now = Date.now();
+    const last = this.lastSent;
+    const same =
+      last !== null &&
+      last.x === payload.x &&
+      last.y === payload.y &&
+      last.a === payload.a &&
+      last.l === payload.l &&
+      last.f === payload.f;
+    if (same && now - this.lastSentAt < NET_IDLE_MS) return;
+
+    this.lastSent = payload;
+    this.lastSentAt = now;
+    this.channel.send(payload);
+  }
+
+  private dispose(): void {
+    if (this.netTimer !== null) {
+      clearInterval(this.netTimer);
+      this.netTimer = null;
+    }
+    this.channel?.dispose();
   }
 
   /** Interpola los autos remotos hacia su ultimo snapshot y purga inactivos. */
@@ -711,7 +859,14 @@ export class Game {
       this.hud.setPos(null);
       return;
     }
-    const myTotal = this.state === "finished" ? this.track.def.laps : this.lap + this.prevS;
+    // El progreso propio se compara REDONDEADO igual que el que viaja por la red
+    // (`emitPos` manda `s.toFixed(4)`). Comparando el propio con precision total
+    // contra el ajeno ya redondeado, un empate exacto se rompia para el lado
+    // equivocado en los DOS clientes a la vez: en la grilla, con los autos
+    // quietos en el mismo punto, cada uno redondeaba el del otro para arriba y
+    // los dos se veian "2°/2". Un empate tiene que dar el mismo puesto a ambos.
+    const myS = Number(this.prevS.toFixed(4));
+    const myTotal = this.state === "finished" ? this.track.def.laps : this.lap + myS;
     let rank = 1;
     for (const car of this.remotes.values()) {
       const theirTotal = car.finished ? this.track.def.laps : car.lap + car.s;

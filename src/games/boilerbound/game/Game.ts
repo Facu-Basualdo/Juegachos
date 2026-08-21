@@ -67,6 +67,14 @@ export class Game {
   private shakeTime = 0;
 
   private state: GameState = "loading";
+  /**
+   * True solo cuando el overlay de inicio / fin esta realmente en pantalla. Al
+   * morir, el estado pasa a "gameover" pero el overlay aparece 550ms despues (la
+   * muerte se ve primero): sin este guard, reiniciar en esa ventana hacia que el
+   * setTimeout del overlay retornara temprano por su propio chequeo de estado y
+   * el puntaje de esa corrida nunca se enviara al ranking.
+   */
+  private menuVisible = true;
   private elapsed = 0;
   private score = 0; // centiseconds survived (for the leaderboard / room mode)
   private best = 0; // centiseconds
@@ -144,11 +152,13 @@ export class Game {
 
   private handleActivate(): void {
     if (this.state === "loading" || this.state === "playing" || this.state === "countdown") return;
+    if (!this.menuVisible) return; // no reiniciar durante la muerte previa al overlay
     if (this.roomMode && this.state === "gameover") return; // one run per round in salas
     this.beginCountdown();
   }
 
   private beginCountdown(): void {
+    this.menuVisible = false;
     this.player.reset();
     this.player.object.visible = true;
     this.field.reset();
@@ -180,7 +190,7 @@ export class Game {
     SoundEffects.playDeath();
 
     const px = this.player.x;
-    const py = this.player.y + 0.7;
+    const py = this.player.visualY + 0.7;
     this.particles.burst(px, py, 24, { speed: 8, up: 3, gravity: 20, color: new THREE.Color(0xffffff) });
     this.particles.burst(px, py, 16, { speed: 6, up: 2, gravity: 22, color: new THREE.Color(WARNING_COLOR) });
     this.emergencyLight.position.set(px, py, 3);
@@ -196,6 +206,7 @@ export class Game {
 
     window.setTimeout(() => {
       if (this.state !== "gameover") return; // player may have restarted
+      this.menuVisible = true;
       this.hud.showGameOver(this.score, this.best);
       if (this.roomMode) this.roomMode.reportScore(this.score);
       else this.hud.showRanking("boilerbound", this.score);
@@ -225,10 +236,9 @@ export class Game {
         dashPressed: this.input.consumeDashPressed(),
       });
       if (events.jumped) SoundEffects.playJump();
-      if (events.wallJumped) SoundEffects.playWallJump();
       if (events.dashed) {
         SoundEffects.playDash();
-        this.particles.burst(this.player.x, this.player.y + 0.5, 8, {
+        this.particles.burst(this.player.x, this.player.visualY + 0.5, 8, {
           speed: 4,
           gravity: 8,
           color: new THREE.Color(0x2ad6ff),
@@ -241,7 +251,7 @@ export class Game {
         this.hud.flashBanner("¡SOBRECARGA!");
       }
 
-      if (!this.player.invulnerable && this.field.isPlayerHit(this.player.x, this.player.halfWidth, this.player.y)) {
+      if (!this.player.invulnerable && this.field.isPlayerHit(this.player.x, this.player.hurtHalfWidth, this.player.y)) {
         this.endGame();
       }
 

@@ -5,6 +5,7 @@ export class Hud {
   private readonly timeEl: HTMLDivElement;
   private readonly crashEl: HTMLDivElement;
   private readonly levelEl: HTMLDivElement;
+  private readonly readoutEl: HTMLDivElement;
   private readonly overlayEl: HTMLDivElement;
   private readonly titleEl: HTMLDivElement;
   private readonly subtitleEl: HTMLDivElement;
@@ -36,7 +37,12 @@ export class Hud {
     this.levelEl.className = "hud__level";
     this.levelEl.textContent = "NIVEL 1";
 
-    hud.append(this.levelEl, this.timeEl, this.crashEl);
+    // Grupo posicionable (por defecto arriba-centro via CSS; el juego puede anclarlo
+    // sobre una celda del tablero con setReadoutPosition).
+    this.readoutEl = document.createElement("div");
+    this.readoutEl.className = "hud__readout";
+    this.readoutEl.append(this.levelEl, this.timeEl, this.crashEl);
+    hud.append(this.readoutEl);
 
     this.overlayEl = document.createElement("div");
     this.overlayEl.className = "overlay";
@@ -105,6 +111,23 @@ export class Hud {
 
   setLevel(index: number, count: number): void {
     this.levelEl.textContent = count > 1 ? `NIVEL ${index}/${count}` : `NIVEL ${index}`;
+  }
+
+  /** Ancla el grupo de lecturas (nivel/tiempo/choques) en un punto de pantalla (px CSS),
+   *  centrado sobre el. `null` vuelve al comportamiento por defecto (arriba-centro). */
+  setReadoutPosition(x: number | null, y = 0): void {
+    const s = this.readoutEl.style;
+    if (x === null) {
+      s.position = "";
+      s.left = "";
+      s.top = "";
+      s.transform = "";
+      return;
+    }
+    s.position = "absolute";
+    s.left = `${x}px`;
+    s.top = `${y}px`;
+    s.transform = "translate(-50%, -50%)";
   }
 
   showHud(visible: boolean): void {

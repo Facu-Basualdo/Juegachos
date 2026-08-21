@@ -69,13 +69,17 @@ export class Hud {
   }
 
   showScore(visible: boolean): void {
+    // Solo (1 jugador): un unico marcador centrado arriba.
+    this.scoreEl.classList.remove("hud__score--room");
     this.scoreEl.style.visibility = visible ? "visible" : "hidden";
     this.score2El.style.visibility = "hidden";
   }
 
   showScoreRoom(s1: number, s2: number): void {
+    // Sala (1v1): dos marcadores simetricos, izquierda (J1) y derecha (J2).
     this.scoreEl.textContent = String(s1);
     this.score2El.textContent = String(s2);
+    this.scoreEl.classList.add("hud__score--room");
     this.scoreEl.style.visibility = "visible";
     this.score2El.style.visibility = "visible";
   }

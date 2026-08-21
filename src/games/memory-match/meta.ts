@@ -10,6 +10,9 @@ export const meta: GameEntry = {
   accent: "#ffd24a",
   category: "Puzzle",
   order: 140,
+  added: "2026-07-03",
+  mobile: true,
+
 };
 
 export const scoring: GameScoring = {

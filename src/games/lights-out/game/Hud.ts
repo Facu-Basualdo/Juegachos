@@ -1,5 +1,6 @@
 import { BEST_KEY_PREFIX } from "./constants";
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { formatClock } from "../../../shared/scoring";
 
 export class Hud {
   private readonly container: HTMLElement;
@@ -50,7 +51,7 @@ export class Hud {
 
     this.timeIndicator = document.createElement("div");
     this.timeIndicator.className = "hud-bar__time";
-    this.timeIndicator.textContent = "TIEMPO: 00:00";
+    this.timeIndicator.textContent = "TIEMPO: 0:00.00";
 
     this.hudBar.append(this.movesIndicator, this.sizeIndicator, this.timeIndicator);
 
@@ -143,7 +144,7 @@ export class Hud {
 
     this.updateBestScoreDisplay(this.currentGridSize);
 
-    this.hintEl.textContent = "presiona ENTER para comenzar";
+    this.hintEl.textContent = "tocá la pantalla o presioná ENTER para comenzar";
 
     this.leaderboard.clear();
   }
@@ -263,14 +264,12 @@ export class Hud {
     this.bestScoresEl.style.display = "block";
     this.bestScoresEl.innerHTML = `MEJOR RECORD (${size}x${size}):<br>${bestMoves} movimientos en ${this.formatTime(bestTime)}`;
 
-    this.hintEl.textContent = "presiona ENTER para volver a jugar";
+    this.hintEl.textContent = "tocá la pantalla o presioná ENTER para volver a jugar";
   }
 
+  /** "M:SS.CC" con centesimas, igual formato que el ranking (formatClock). */
   private formatTime(totalSeconds: number): string {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = Math.floor(totalSeconds % 60);
-    const pad = (num: number) => num.toString().padStart(2, "0");
-    return `${pad(mins)}:${pad(secs)}`;
+    return formatClock(totalSeconds * 100);
   }
 
   private getRatingLabel(moves: number, size: number): string {

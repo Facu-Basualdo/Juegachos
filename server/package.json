@@ -1,0 +1,21 @@
+{
+  "name": "minigames-server",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Servidor autoritativo de tiempo real para los juegos de sala que lo necesitan (v1: Bomba Palabra). Complementa Supabase, no lo reemplaza.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "an-array-of-spanish-words": "^2.0.0",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

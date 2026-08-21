@@ -44,9 +44,10 @@ const fail = async (msg) => {
 // ---- Host crea la sala con rocket-arena como primer juego ----
 await host.goto(`${args.base}/rooms/`, { waitUntil: "networkidle" });
 await host.locator("input.input").first().fill("hostqa");
-await host.locator('.playlist__item[data-id="rocket-arena"]').click();
 await host.locator('button:has-text("Crear sala")').click();
 await host.locator(".lobby__code").waitFor({ timeout: 15000 });
+// La playlist se elige en el lobby (panel "Ajustes" del host).
+await host.locator('.playlist__item[data-id="rocket-arena"]').click();
 const codeText = await host.locator(".lobby__code").textContent();
 const code = codeText?.trim().match(/[A-Z0-9]{6}/)?.[0];
 if (!code) await fail(`no pude leer el código de sala de "${codeText}"`);

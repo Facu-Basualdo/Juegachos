@@ -76,7 +76,9 @@ la ronda pasa a `playing`:
 - Estado durable: `{ phase: "voting" | "playing", votes: Record<player, discos>,
   discs, startedAt }`.
 - El **host** crea la fila al cargar (insert; gana el primero ante la carrera
-  host-viejo/host-nuevo). Todos ven el overlay de votacion (`Hud.showDiscVote`).
+  host-viejo/host-nuevo). Si el host no aparece, pasados `CREATE_FALLBACK_MS`
+  (6s, de `matchState.ts`) la crea cualquier jugador. Todos ven el overlay de
+  votacion (`Hud.showDiscVote`).
 - Cada jugador vota con un UPDATE optimista (version) local-first + ping; ante
   conflicto se refetchea. Patron identico a `sharedMatch.ts` de Memoria.
 - El host cierra la votacion (mayoria; empate al azar) cuando **todos** votaron o
@@ -92,7 +94,33 @@ Cableado estandar (contrato minimo de `RoomMode`) mas el contexto extendido
 `RoomVote`. En el game-over el input manual (Enter) esta bloqueado en modo sala.
 
 Gotcha: la votacion es host-autoritativa (el host tallya). Si el host se
-desconecta durante la votacion no hay takeover (la fase `playing` sin reportar no
-es "estable" para el takeover de `roomMode`); mismo nivel de confiabilidad que
-los tableros compartidos. El tope `VOTE_TIMEOUT_MS` acota la espera y cuenta
-contra el tope de ronda si la sala tiene limite de tiempo.
+desconecta durante la votacion, `roomMode` migra el control **solo** a los 20s
+(antes el takeover era un boton manual que ni se dibujaba en fase `playing`, asi
+que la votacion quedaba trabada hasta el tope de ronda) y el host nuevo la cierra.
+El tope `VOTE_TIMEOUT_MS` acota la espera y cuenta contra el tope de ronda (3 min,
+`roomTimeLimitSec` en `meta.ts`).
+
+## Modo sala: F5 no reinicia la partida
+
+Las varillas, los movimientos y el arranque del cronometro se persisten en
+`sessionStorage` via `src/shared/room/roomRun.ts` (clave por sala+ronda+juego).
+El corte esta en `startRoomVote()` —el hook `onStart`, que un reload vuelve a
+disparar—: si `resumeSavedRun()` encuentra un snapshot, **se saltea la votacion
+de discos** (ya se voto) y se retoma el tablero tal cual, sin countdown. El
+tiempo se guarda como `startedAt` epoch y `update()` lo recalcula con
+`elapsedSince()` mientras haya sala, asi recargar no reinicia ni pausa el reloj
+(sin sala se sigue sumando `dt`). `handleVictory()` limpia el snapshot. Sin esto,
+al recargar se rearmaba la torre con `moves = 0` y el cronometro desde cero, lo
+que ademas era ventaja: el ranking es `direction: "lower"`.
+
+## Arranque por toque (movil)
+
+El arranque/reintento entra por un `pointerdown` en el container, con **los botones de discos (3 a 7)
+exentos** (`e.target.closest(".overlay__disc-selector")` devuelve temprano): tocar una opcion la
+elige y muestra su record, y el toque en cualquier otro lado arranca.
+
+Antes el unico arranque era `Enter`, porque el handler del selector solo guardaba
+la opcion y no empezaba nada: en el telefono se podia elegir el tamano y despues
+no habia forma de jugar. Por eso el hint dice "toca la pantalla o presiona ENTER"
+— un toque que arranca desde todos lados menos los botones no se adivina solo.
+Ver el `CLAUDE.md` raiz, "El toque de arranque no puede colgar del canvas".

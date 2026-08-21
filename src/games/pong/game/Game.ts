@@ -15,24 +15,63 @@ import { InputController } from "./InputController";
 import { Hud } from "./Hud";
 import { SoundEffects } from "./SoundEffects";
 import { initRoomMode, type RoomMode } from "../../../shared/room/roomMode";
-import { PongChannel } from "./PongChannel";
+import { isGameServerConfigured, resolveGameServerUrl } from "../../../shared/server-status";
+import { PongSocket } from "./PongSocket";
+import type { PongMatchState } from "./PongProtocol";
 
 type State = "ready" | "countdown" | "playing" | "dead";
 
+/** Snapshot del server para interpolar entidades. `t` es el reloj de la simulacion
+ *  del server (`pg:state.t`) llevado al reloj local con `clockOffset`. */
+interface PongSnap {
+  t: number;
+  bx: number;
+  by: number;
+  oppY: number;
+}
+
 const BEST_KEY = "pong:best";
-const SCORE_LIMIT = 7;
-/** 25 Hz: cada cliente manda 1 msg/tick, holgado bajo el tope de 40 msg/s. */
-const BROADCAST_INTERVAL = 0.04;
+/** Puntaje que gana el match en sala (primero en llegar). Debe coincidir con el
+ *  SCORE_LIMIT del server (`server/src/games/pong.ts`). */
+const SCORE_LIMIT = 3;
+/** 50 Hz: cada cliente manda su paleta al server. Frecuente a proposito: cuanto
+ *  antes llega tu Y, mas fiel es la colision que resuelve el server. */
+const BROADCAST_INTERVAL = 0.02;
 
 const COUNTDOWN_LABELS = ["3", "2", "1", "YA"];
 const COUNTDOWN_STEP = 0.75;
-/** Velocidad de interpolacion de la paleta rival (mayor = mas pegado, menos suave). */
-const PADDLE_LERP_RATE = 18;
-/** Reconciliacion de la pelota en P2 hacia el snapshot del host (suave, no tironea). */
-const BALL_RECONCILE_RATE = 6;
-/** Adelanto (seg) con que se extrapola el snapshot: compensa que llega del pasado. */
-const SNAPSHOT_LEAD = 0.05;
+/**
+ * Interpolacion de entidades: la pelota y la paleta rival se renderizan a partir
+ * de los snapshots del server reproducidos con este retraso (ms). Es la tecnica
+ * estandar de netcode (estilo Source): absorbe el jitter de red y elimina el
+ * stutter/rubber-band de predecir la pelota localmente (nunca "pasa" la paleta y
+ * vuelve, porque solo se muestran posiciones reales del server).
+ *
+ * El retraso se aplica sobre la LINEA DE TIEMPO DEL SERVER (`pg:state.t`, ver
+ * `pushSnap`), no sobre la hora de llegada del paquete: por eso NO tiene que
+ * cubrir la latencia (esa ya la absorbe el offset de reloj), solo el espaciado
+ * entre snapshots (TICK_MS = 16) mas el jitter de entrega. ~3 ticks alcanzan.
+ * Antes eran 80 ms sobre la hora de llegada, que ademas de ir mas atrasado metia
+ * el jitter directo en la velocidad dibujada de la pelota.
+ */
+const BALL_INTERP_DELAY = 50;
+/** Salto (px) entre snapshots que delata un evento discreto (gol/relanzamiento):
+ *  no se interpola a traves de el, se reinicia el buffer en la posicion nueva. */
+const BALL_SNAP_DIST = 130;
+/** Correccion por snapshot del offset de reloj hacia arriba (fraccion del error).
+ *  Lenta a proposito: baja de golpe (un paquete rapido es informacion buena) y sube
+ *  de a poco, para no seguirle el jitter a cada paquete lento. */
+const CLOCK_DRIFT_RATE = 0.01;
 
+/**
+ * PONG. Solo (landing): 1 jugador contra la IA, endless por devoluciones. En
+ * sala hay dos modos:
+ *  - CON game server (VITE_GAME_SERVER_URL): PvP autoritativo. El server empareja
+ *    de a dos (impar = vs IA), corre la fisica y difunde `pg:state`; el cliente
+ *    solo controla su paleta y renderiza la pelota/rival interpolando snapshots.
+ *  - SIN game server: cada jugador cae a un partido local contra la IA y reporta
+ *    su puntaje (degradacion elegante para que la sala no quede trabada).
+ */
 export class Game {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -45,18 +84,32 @@ export class Game {
   private readonly input: InputController;
   private readonly room: RoomMode | null;
   private readonly isRoomMode: boolean;
-  private pongChan: PongChannel | null = null;
+  /** En sala con game server: PvP arbitrado por el server. */
+  private readonly serverMode: boolean;
+  private socket: PongSocket | null = null;
+  /** Guarda contra doble conexion mientras `connectServer()` resuelve la URL. */
+  private connecting = false;
+  /** Se cayo a un partido local vs IA en esta ronda (server inalcanzable). */
+  private serverFellBack = false;
+  /** Momento del primer error de conexion del socket (0 = ninguno todavia). */
+  private socketErrorAt = 0;
 
-  private amPlayer1 = true;
-  private hasOpponent = false;
-  private rolesReady = false;
-  private opponentPaddleY = VIEW_HEIGHT / 2 - PADDLE_HEIGHT / 2;
-  private opponentPaddleTargetY = VIEW_HEIGHT / 2 - PADDLE_HEIGHT / 2;
+  /** Lado propio segun el server ("p1" izquierda / "p2" derecha); null hasta el 1er estado. */
+  private side: "p1" | "p2" | null = null;
+  private latest: PongMatchState | null = null;
+  private hintFixed = false;
+
   private broadcastTimer = 0;
 
-  private ballTargetX = VIEW_WIDTH / 2;
-  private ballTargetY = VIEW_HEIGHT / 2;
-  private hasReceivedBall = false;
+  /** Buffer de snapshots del server (pelota + paleta rival) para interpolar con
+   *  BALL_INTERP_DELAY de retraso, en la linea de tiempo del server llevada al
+   *  reloj local (ver `pushSnap` / `clockOffset`). */
+  private snaps: PongSnap[] = [];
+  private ballReady = false;
+  /** Offset entre el reloj del server y el local: `tLocal = t + clockOffset`. Se
+   *  estima con el MINIMO de (llegada - t) visto, que es la muestra menos afectada
+   *  por el jitter (el paquete que viajo mas rapido). null hasta el 1er snapshot. */
+  private clockOffset: number | null = null;
 
   private state: State = "ready";
   private score = 0;
@@ -87,15 +140,13 @@ export class Game {
       onStart: () => this.beginCountdown(),
     });
     this.isRoomMode = this.room !== null;
+    this.serverMode = this.isRoomMode && isGameServerConfigured();
 
     this.hud.setHintText(
       this.isRoomMode ? "esperando emparejamiento…" : "mouse / flechas / W S para mover",
     );
 
-    this.input = new InputController(
-      container,
-      () => this.onAction(),
-    );
+    this.input = new InputController(container, () => this.onAction());
 
     // El mouse (y el arrastre tactil) mueve la paleta local: sigue la Y del
     // cursor. El teclado tiene prioridad cuando hay una tecla apretada.
@@ -111,6 +162,9 @@ export class Game {
   private onAction(): void {
     switch (this.state) {
       case "ready":
+        // En modo server la ronda la arranca RoomMode (onStart) con el roster ya
+        // cargado; ignorar el Enter manual evita conectar con un roster parcial.
+        if (this.serverMode) return;
         this.beginCountdown();
         break;
       case "dead":
@@ -120,65 +174,53 @@ export class Game {
     }
   }
 
-  /**
-   * Fija el rol (J1 izquierda / J2 derecha / vs IA) y crea el canal recien
-   * cuando arranca la ronda: en el constructor la lista de jugadores del room
-   * todavia no cargo (boot() es async), asi que hay que resolverla aca, cuando
-   * onStart dispara la cuenta regresiva y room.players() ya esta poblada.
-   */
-  private setupRoles(): void {
-    if (!this.isRoomMode || this.rolesReady) return;
-    const room = this.room!;
-    const players = room.players();
-    const myIdx = players.indexOf(room.me);
-    if (myIdx < 0) return; // lista aun no disponible: reintentar en el proximo inicio
-
-    this.amPlayer1 = myIdx % 2 === 0;
-    const oppIdx = this.amPlayer1 ? myIdx + 1 : myIdx - 1;
-    this.hasOpponent = oppIdx >= 0 && oppIdx < players.length;
-
-    if (this.hasOpponent) {
-      this.pongChan = new PongChannel(room.code, room.me);
-      // P1 recibe la paleta de P2 por su propio evento "paddle".
-      this.pongChan.onPaddle((_player, y) => {
-        this.opponentPaddleTargetY = y;
-      });
-      if (!this.amPlayer1) {
-        this.pongChan.onBall((state) => {
-          this.ballTargetX = state.x;
-          this.ballTargetY = state.y;
-          this.ball.vx = state.vx;
-          this.ball.vy = state.vy;
-          this.ball.speed = state.speed;
-          this.ball.hits = state.hits;
-          this.score = state.p2Score;
-          this.opponentScore = state.p1Score;
-          // La paleta de P1 viaja adosada a la pelota (un solo mensaje).
-          this.opponentPaddleTargetY = state.paddleY;
-          this.hasReceivedBall = true;
-        });
-      }
-    }
-
-    this.hud.setHintText(
-      this.hasOpponent
-        ? this.amPlayer1 ? "mouse / W S — sos J1 (izquierda)" : "mouse / FLECHAS — sos J2 (derecha)"
-        : "mouse / flechas / W S para mover (vs IA)",
+  /** Conecta al game server cuando arranca la ronda (en el constructor la lista
+   *  de jugadores todavia no cargo: boot() es async). El server empareja por el
+   *  roster y responde con `pg:state`, de donde sale el lado propio.
+   *
+   *  Async porque resolver el server puede implicar un health check (ver
+   *  `shared/server-status.ts`); `connecting` cubre la ventana del await, en la que
+   *  `this.socket` todavia es null y una segunda llamada abriria un socket de mas.
+   *  Si no responde ninguna URL, el `SERVER_ERROR_GRACE_MS` de siempre cae al
+   *  partido local vs IA. */
+  private async connectServer(): Promise<void> {
+    if (!this.serverMode || this.socket || this.connecting || !this.room) return;
+    this.connecting = true;
+    const url = await resolveGameServerUrl();
+    this.connecting = false;
+    if (this.socket || !url) return;
+    const socket = new PongSocket(
+      url,
+      this.room.code,
+      this.room.me,
+      this.room.players(),
     );
-    this.rolesReady = true;
+    socket.onState((s) => this.onServerState(s));
+    socket.onError(() => {
+      if (this.socketErrorAt === 0) this.socketErrorAt = performance.now();
+    });
+    this.socket = socket;
+    void socket.connect();
   }
 
   private beginCountdown(): void {
-    this.setupRoles();
+    if (this.state === "countdown" || this.state === "playing") return;
+    if (this.serverMode) void this.connectServer();
+    else if (this.isRoomMode) this.hud.setHintText("mouse / flechas / W S para mover (vs IA)");
+
     this.state = "countdown";
     this.countdownTime = 0;
     this.lastCountdownIndex = -1;
+    this.serverFellBack = false;
+    this.socketErrorAt = 0;
     this.player.reset();
     this.aiPaddle.reset();
     this.ball.reset();
-    this.opponentPaddleY = VIEW_HEIGHT / 2 - PADDLE_HEIGHT / 2;
-    this.opponentPaddleTargetY = VIEW_HEIGHT / 2 - PADDLE_HEIGHT / 2;
-    this.hasReceivedBall = false;
+    this.snaps.length = 0;
+    this.ballReady = false;
+    // El offset se re-estima por ronda: el socket se rearma y el server puede haber
+    // reiniciado su simTime.
+    this.clockOffset = null;
     this.hud.showScore(false);
     this.hud.hide();
     this.hud.showCountdown(COUNTDOWN_LABELS[0]);
@@ -186,22 +228,22 @@ export class Game {
 
   private start(): void {
     this.state = "playing";
-    this.score = 0;
-    this.opponentScore = 0;
     this.broadcastTimer = 0;
-    this.hasReceivedBall = false;
 
-    if (this.isRoomMode) {
+    if (this.serverMode) {
+      // El server es duenio de la pelota y el puntaje; solo se sincroniza al
+      // ultimo snapshot recibido (o el centro si aun no llego ninguno).
+      this.hud.showScoreRoom(this.leftScore(), this.rightScore());
+      if (this.latest) this.pushSnap(this.latest);
+    } else if (this.isRoomMode) {
+      // Sin server: partido local contra la IA (degradacion).
+      this.score = 0;
+      this.opponentScore = 0;
       this.hud.showScoreRoom(0, 0);
-      if (!this.hasOpponent) {
-        // Impar / sin pareja: juega contra la IA, lanza la pelota localmente.
-        this.ball.launch(true);
-      } else if (this.amPlayer1) {
-        this.ball.launch(Math.random() < 0.5);
-        this.broadcastBall();
-      }
-      // J2 con pareja: espera el estado de la pelota por broadcast.
+      this.ball.launch(true);
     } else {
+      this.score = 0;
+      this.opponentScore = 0;
       this.hud.setScore(0);
       this.hud.showScore(true);
       this.ball.launch(true);
@@ -237,13 +279,9 @@ export class Game {
 
   private update(dt: number): void {
     if (this.state === "playing") {
-      if (this.isRoomMode && this.hasOpponent) {
-        this.updateOnline(dt);
-      } else if (this.isRoomMode && !this.hasOpponent) {
-        this.updateUnpaired(dt);
-      } else {
-        this.updateSolo(dt);
-      }
+      if (this.serverMode && !this.serverFellBack) this.updateServer(dt);
+      else if (this.isRoomMode) this.updateUnpaired(dt);
+      else this.updateSolo(dt);
     } else if (this.state === "countdown") {
       this.updateCountdown(dt);
     } else if (this.state === "dead") {
@@ -285,76 +323,177 @@ export class Game {
     this.checkCollisionsRoom();
   }
 
-  /** Suaviza la paleta rival hacia la ultima posicion recibida (anti-salto). */
-  private smoothOpponentPaddle(dt: number): void {
-    const t = Math.min(1, dt * PADDLE_LERP_RATE);
-    this.opponentPaddleY += (this.opponentPaddleTargetY - this.opponentPaddleY) * t;
-  }
+  // ---------- Modo server (PvP autoritativo) ----------
 
-  private updateOnline(dt: number): void {
-    this.smoothOpponentPaddle(dt);
+  private onServerState(s: PongMatchState): void {
+    const prev = this.latest;
+    this.side = s.side;
+    this.latest = s;
 
-    if (this.amPlayer1) {
-      this.movePlayer(this.player, this.input.p1Dir, dt);
-      this.aiPaddle.y = this.opponentPaddleY;
-      this.ball.update(dt);
-      this.checkCollisionsRoom();
+    if (!this.hintFixed) {
+      this.hintFixed = true;
+      this.hud.setHintText(
+        s.vsAi
+          ? "mouse / flechas / W S para mover (vs IA)"
+          : s.side === "p1"
+            ? "mouse / flechas / W S — sos J1 (izquierda)"
+            : "mouse / flechas / W S — sos J2 (derecha)",
+      );
+    }
 
-      if (this.state === "dead") {
-        // Match ended on this frame: push the final score so P2 also ends.
-        this.broadcastBall();
-        return;
-      }
+    this.score = s.side === "p1" ? s.p1Score : s.p2Score;
+    this.opponentScore = s.side === "p1" ? s.p2Score : s.p1Score;
 
-      // P1 manda un solo mensaje por tick: la pelota lleva adosada su paleta.
-      this.broadcastTimer += dt;
-      if (this.broadcastTimer >= BROADCAST_INTERVAL) {
-        this.broadcastTimer = 0;
-        this.broadcastBall();
-      }
-    } else {
-      this.player.y = this.opponentPaddleY;
-      this.movePlayer(this.aiPaddle, this.input.p2Dir, dt);
-
-      if (this.hasReceivedBall) {
-        // Prediccion local con la fisica real del host (avance + rebote en
-        // paredes) para que la pelota se mueva a velocidad real y fluida entre
-        // snapshots, usando el vx/vy/speed que llega en cada broadcast.
-        this.ball.update(dt);
-        // Reconciliacion suave hacia el snapshot, extrapolado hacia adelante
-        // por SNAPSHOT_LEAD: el snapshot es del pasado, asi que corregir hacia
-        // su posicion cruda tironearia la pelota hacia atras (efecto stutter).
-        const k = Math.min(1, dt * BALL_RECONCILE_RATE);
-        this.ball.x += (this.ballTargetX + this.ball.vx * SNAPSHOT_LEAD - this.ball.x) * k;
-        this.ball.y += (this.ballTargetY + this.ball.vy * SNAPSHOT_LEAD - this.ball.y) * k;
-      }
-
-      if (this.score >= SCORE_LIMIT || this.opponentScore >= SCORE_LIMIT) {
-        this.die();
-      }
-      this.hud.showScoreRoom(this.opponentScore, this.score);
-
-      this.broadcastTimer += dt;
-      if (this.broadcastTimer >= BROADCAST_INTERVAL) {
-        this.broadcastTimer = 0;
-        this.pongChan!.sendPaddle(this.aiPaddle.y);
-      }
+    if (this.state === "playing") {
+      this.playSnapSounds(prev, s);
+      this.pushSnap(s);
+      if (s.phase === "over") this.die();
     }
   }
 
-  private broadcastBall(): void {
-    this.pongChan!.sendBall({
-      x: this.ball.x,
-      y: this.ball.y,
-      vx: this.ball.vx,
-      vy: this.ball.vy,
-      speed: this.ball.speed,
-      hits: this.ball.hits,
-      p1Score: this.amPlayer1 ? this.score : this.opponentScore,
-      p2Score: this.amPlayer1 ? this.opponentScore : this.score,
-      // Solo P1 emite la pelota, asi que esta es siempre su paleta izquierda.
-      paddleY: this.player.y,
-    });
+  /** Sonidos a partir del diff del snapshot autoritativo (el server no manda un
+   *  evento por rebote: se infieren del contador de golpes y del puntaje). */
+  private playSnapSounds(prev: PongMatchState | null, s: PongMatchState): void {
+    if (!prev) return;
+    if (s.p1Score !== prev.p1Score || s.p2Score !== prev.p2Score) {
+      SoundEffects.playScore();
+    } else if (s.ball.hits !== prev.ball.hits) {
+      SoundEffects.playHit();
+    }
+  }
+
+  /**
+   * Agrega el snapshot al buffer de interpolacion, fechado con el reloj de la
+   * SIMULACION del server (`s.t`, que avanza de a TICK_MS exactos) traido al reloj
+   * local con `clockOffset`. Fecharlo con la hora de llegada — como se hacia antes —
+   * mete el jitter de entrega en la interpolacion: dos snapshots que llegan pegados
+   * dan un `span` de 2 ms para un movimiento de un tick entero, asi que la pelota se
+   * dibuja pegando un salto y despues frenando. Ese era el temblor.
+   *
+   * Ante un salto grande de la pelota (gol/relanzamiento) reinicia el buffer para no
+   * interpolar el teleport.
+   */
+  private pushSnap(s: PongMatchState): void {
+    const oppY = s.side === "p1" ? s.p2Y : s.p1Y;
+    const now = performance.now();
+
+    let t: number;
+    if (typeof s.t === "number") {
+      // Estimacion del offset: el minimo (llegada - t) es la muestra que menos
+      // jitter comio. Se corrige lento hacia arriba para tolerar la deriva entre
+      // relojes sin quedar pegado a un minimo optimista de hace un rato.
+      const sample = now - s.t;
+      if (this.clockOffset === null || sample < this.clockOffset) this.clockOffset = sample;
+      else this.clockOffset += (sample - this.clockOffset) * CLOCK_DRIFT_RATE;
+      t = s.t + this.clockOffset;
+    } else {
+      // Server viejo sin `t` (no redeployado): se cae a la hora de llegada.
+      t = now;
+    }
+
+    const last = this.snaps[this.snaps.length - 1];
+    if (last && Math.hypot(s.ball.x - last.bx, s.ball.y - last.by) > BALL_SNAP_DIST) {
+      this.snaps.length = 0;
+    }
+    // Fuera de orden (el snapshot llego despues que uno mas nuevo): se descarta.
+    const tail = this.snaps[this.snaps.length - 1];
+    if (tail && t <= tail.t) return;
+
+    this.snaps.push({ t, bx: s.ball.x, by: s.ball.y, oppY });
+    // Descarta lo viejo (queda sobrado para interpolar en renderTime = now - delay).
+    const cutoff = now - 500;
+    while (this.snaps.length > 2 && this.snaps[0].t < cutoff) this.snaps.shift();
+    this.ballReady = true;
+  }
+
+  /** ~3s de errores de conexion sostenidos sin ningun estado -> se cae a vs IA. */
+  private static readonly SERVER_ERROR_GRACE_MS = 3000;
+
+  private updateServer(dt: number): void {
+    if (!this.side) {
+      // Sin estado todavia. Si el socket viene fallando (namespace inexistente,
+      // CORS, URL mala), degradar a un partido local vs IA en vez de congelarse.
+      if (this.socketErrorAt > 0 && performance.now() - this.socketErrorAt > Game.SERVER_ERROR_GRACE_MS) {
+        this.fallbackToLocalAi();
+      }
+      return;
+    }
+
+    const myPaddle = this.side === "p1" ? this.player : this.aiPaddle;
+
+    // Paleta propia: input local inmediato (no espera al server).
+    this.movePlayer(myPaddle, this.input.moveDir, dt);
+
+    // Pelota + paleta rival: interpolacion de snapshots (suave, sin overshoot).
+    if (this.ballReady) this.renderFromSnaps();
+
+    // Manda la paleta propia (frecuente, ver BROADCAST_INTERVAL).
+    this.broadcastTimer += dt;
+    if (this.broadcastTimer >= BROADCAST_INTERVAL) {
+      this.broadcastTimer = 0;
+      this.socket?.sendPaddle(myPaddle.y);
+    }
+
+    this.hud.showScoreRoom(this.leftScore(), this.rightScore());
+  }
+
+  /**
+   * Ubica la pelota y la paleta rival interpolando el buffer en
+   * renderTime = ahora - BALL_INTERP_DELAY. Las dos en la MISMA linea de tiempo,
+   * asi el rebote se ve consistente (la pelota pega donde esta el rival dibujado).
+   */
+  private renderFromSnaps(): void {
+    const snaps = this.snaps;
+    if (snaps.length === 0) return;
+    const rt = performance.now() - BALL_INTERP_DELAY;
+
+    let a = snaps[0];
+    let b = snaps[snaps.length - 1];
+    if (rt <= a.t) {
+      b = a; // render-time anterior al buffer: clamp al mas viejo
+    } else if (rt >= b.t) {
+      a = b; // buffer agotado (falta red): clamp al mas nuevo
+    } else {
+      for (let i = snaps.length - 1; i > 0; i--) {
+        if (snaps[i - 1].t <= rt && rt <= snaps[i].t) {
+          a = snaps[i - 1];
+          b = snaps[i];
+          break;
+        }
+      }
+    }
+
+    const span = b.t - a.t;
+    const f = span > 0 ? (rt - a.t) / span : 0;
+    this.ball.x = a.bx + (b.bx - a.bx) * f;
+    this.ball.y = a.by + (b.by - a.by) * f;
+    const oppPaddle = this.side === "p1" ? this.aiPaddle : this.player;
+    oppPaddle.y = a.oppY + (b.oppY - a.oppY) * f;
+  }
+
+  /** Degrada la ronda a un partido local contra la IA (server inalcanzable): el
+   *  jugador sigue jugando y reporta su puntaje, la sala no queda trabada. */
+  private fallbackToLocalAi(): void {
+    this.serverFellBack = true;
+    this.socket?.dispose();
+    this.socket = null;
+    this.side = null;
+    this.score = 0;
+    this.opponentScore = 0;
+    this.player.reset();
+    this.aiPaddle.reset();
+    this.ball.reset();
+    this.ball.launch(true);
+    this.hud.setHintText("mouse / flechas / W S para mover (vs IA)");
+    this.hud.showScoreRoom(0, 0);
+  }
+
+  private leftScore(): number {
+    return this.side === "p1" ? this.score : this.opponentScore;
+  }
+
+  private rightScore(): number {
+    return this.side === "p1" ? this.opponentScore : this.score;
   }
 
   private checkCollisions(): void {
@@ -481,6 +620,6 @@ export class Game {
     window.removeEventListener("resize", this.resize);
     this.canvas.removeEventListener("pointermove", this.onPointerMove);
     this.input.dispose();
-    this.pongChan?.dispose();
+    this.socket?.dispose();
   }
 }

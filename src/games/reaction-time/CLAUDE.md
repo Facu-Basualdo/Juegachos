@@ -47,3 +47,14 @@ The game moves through the following states in `Game.ts`:
 ## Room mode (multiplayer)
 
 Wired to the shared party mode: the constructor calls `initRoomMode("reaction-time", { getScore: () => this.calculateCurrentAverage() ?? 0 })` (see root `CLAUDE.md`, "Salas (multiplayer rooms)"). With `?room=` in the URL, `endGame()` reports the average to the room instead of the global ranking and the game-over restart is blocked (one run per round). The timeout partial is the average of the rounds completed so far (0 if none); since this game is `direction: "lower"`, `points.ts` ranks partials behind every finished run, so a cut-short average can never beat a completed one.
+
+**F5 doesn't restart the run.** The completed rounds (`roundTimes`, `roundStatuses`) are persisted to `sessionStorage` through `src/shared/room/roomRun.ts`. Without it a reload wiped them, and since the score is the *average* and lower is better, restarting after a slow reflex **improved** the reported score. `beginCountdown()` returns early when `resumeSavedRun()` finds a snapshot: the round that was in flight is replayed (no time had been recorded for it) but the finished ones cannot be retried. The round to play is **derived** as `roundTimes.length + 1` rather than stored — a foul repeats a round without recording a time, so a separate counter would drift and let a scored round be replayed. If all `TOTAL_ROUNDS` were already recorded (the run finished during the reload), the resume goes straight to `endGame()`. `endGame()` clears the snapshot.
+
+## Arranque por toque (movil)
+
+El arranque/reintento entra por el `pointerdown` del container (antes `mousedown` + `touchstart` sobre `.reaction-card`).
+**No devolverlo al canvas**: la pantalla de inicio y la de game over son un overlay
+que lo tapa, asi que el toque moria ahi y en celular el juego no se podia empezar
+(no hay Enter). Es `pointerdown` y no `click` porque el `LeaderboardPanel` compartido
+corta la propagacion de los `pointerdown` de su propia UI. Ver el `CLAUDE.md` raiz,
+"El toque de arranque no puede colgar del canvas".
