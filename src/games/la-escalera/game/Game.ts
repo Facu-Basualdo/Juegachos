@@ -20,6 +20,7 @@ import {
   BEST_SCORE_KEY,
   START_T,
   MAX_HEIGHT,
+  CLIMB_SPAN,
   CLIMB_GAIN,
   COMBO_BOOST,
   COMBO_STEP,
@@ -237,6 +238,7 @@ export class Game {
     for (let i = 0; i < PROMPT_VISIBLE; i++) this.queue.push(this.rollDirection());
     this.rack.setQueue(this.queue);
     this.rack.reset();
+    this.rack.object.visible = true;
     this.climber.reset();
     this.rivals.reset();
     this.particles.reset();
@@ -274,6 +276,10 @@ export class Game {
     this.overlayPending = false;
     this.height = 0;
     this.climber.kill();
+    // El cartel se apaga al morir: la flecha ya no significa nada y, con la
+    // camara bajando a encuadrar el pozo, su borde de arriba quedaba cortado.
+    // El corte se hace justo con el flash rojo y el sacudon, asi que no se nota.
+    this.rack.object.visible = false;
     this.roomMode?.broadcastLive({ h: 0, d: 1 });
     SoundEffects.playDeath();
     this.hud.flashHit();
@@ -338,7 +344,7 @@ export class Game {
     this.climber.hop();
     this.rack.flashHit();
     SoundEffects.playStep(this.combo);
-    rampPoint(this.height, this.tmp, 0.1);
+    rampPoint(this.height * CLIMB_SPAN, this.tmp, 0.1);
     this.particles.burst(this.tmp, COLOR_IRON_EDGE, 4, 2.4);
 
     if (this.combo % COMBO_STEP === 0) {
@@ -371,7 +377,7 @@ export class Game {
     this.stumbleTimer = STUMBLE_TIME;
     this.climber.stumble();
     this.rack.flashMiss();
-    rampPoint(Math.max(this.height, 0), this.tmp, 0.1);
+    rampPoint(Math.max(this.height, 0) * CLIMB_SPAN, this.tmp, 0.1);
     this.particles.burst(this.tmp, COLOR_EMBER, 6, 2.8);
   }
 
@@ -432,7 +438,7 @@ export class Game {
   };
 
   private updateCountdown(dt: number): void {
-    this.climber.idle(this.height, this.elapsed);
+    this.climber.idle(this.height * CLIMB_SPAN, this.elapsed);
     this.scrollSpeed = STEP_SCROLL_BASE;
     this.escalator.update(dt, this.scrollSpeed);
     this.followClimber();
@@ -454,11 +460,11 @@ export class Game {
     this.escalator.update(dt, this.scrollSpeed);
     if (this.state === "gameover") {
       this.deadFor += dt;
-      this.climber.update(dt, this.height, 1);
+      this.climber.update(dt, this.height * CLIMB_SPAN, 1);
       if (this.climber.consumeImpale()) this.onImpale();
       if (this.overlayPending && this.deadFor >= GAMEOVER_DELAY) this.finishDeath();
     } else {
-      this.climber.idle(this.height, this.elapsed);
+      this.climber.idle(this.height * CLIMB_SPAN, this.elapsed);
     }
     this.followClimber();
   }
@@ -492,7 +498,7 @@ export class Game {
       return;
     }
 
-    this.climber.update(dt, this.height, Math.min(1, drift / DRIFT_MAX));
+    this.climber.update(dt, this.height * CLIMB_SPAN, Math.min(1, drift / DRIFT_MAX));
     this.followClimber();
   }
 

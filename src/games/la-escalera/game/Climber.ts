@@ -52,7 +52,7 @@ export class Climber {
 
   constructor(skin: ClimberSkin = {}) {
     this.build(skin);
-    this.torso.scale.setScalar(2.7);
+    this.torso.scale.setScalar(2.2);
     this.object.add(this.torso);
   }
 
@@ -223,7 +223,7 @@ export class Climber {
     this.object.rotation.set(0, 0, 0);
     this.torso.rotation.set(0, 0, 0);
     this.torso.position.set(0, 0, 0);
-    this.torso.scale.setScalar(2.7);
+    this.torso.scale.setScalar(2.2);
     this.object.visible = true;
   }
 

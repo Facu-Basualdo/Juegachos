@@ -10,6 +10,7 @@ import {
   SPIKE_RADIUS,
   PIT_FLOOR_Y,
   START_T,
+  CLIMB_SPAN,
   COLOR_STEEL,
   COLOR_IRON_DARK,
   COLOR_SAFETY,
@@ -353,11 +354,7 @@ export class Rivals {
       // El muñeco: se interpola hacia lo ultimo que llego, asi 8 paquetes por
       // segundo se ven como movimiento continuo y no como saltos.
       lane.height += (lane.target - lane.height) * Math.min(1, dt * 7);
-      if (lane.dead) {
-        lane.climber.update(dt, lane.height, 1);
-      } else {
-        lane.climber.update(dt, lane.height, 0.5);
-      }
+      lane.climber.update(dt, lane.height * CLIMB_SPAN, lane.dead ? 1 : 0.5);
 
       // El cartel sigue la cabeza; se apaga si el rival dejo de emitir.
       lane.tag.position.copy(lane.climber.object.position);

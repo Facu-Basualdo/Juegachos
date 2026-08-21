@@ -94,7 +94,7 @@ export class PromptRack {
     this.object.rotation.x = 0.16; // apenas inclinado hacia el jugador
 
     const frame = new THREE.Mesh(
-      new THREE.BoxGeometry(SCREEN_SIZE * 1.16, SCREEN_SIZE * 1.16, 0.22),
+      new THREE.BoxGeometry(SCREEN_SIZE * 1.08, SCREEN_SIZE * 1.08, 0.22),
       toonMat(COLOR_IRON_DARK),
     );
     frame.position.z = -0.08;
@@ -108,7 +108,7 @@ export class PromptRack {
     this.group.add(this.panel);
 
     this.glyph = new THREE.Mesh(
-      new THREE.PlaneGeometry(SCREEN_SIZE * 0.86, SCREEN_SIZE * 0.86),
+      new THREE.PlaneGeometry(SCREEN_SIZE * 0.95, SCREEN_SIZE * 0.95),
       new THREE.MeshBasicMaterial({
         map: getArrowTexture(),
         color: COLOR_EMBER,

@@ -19,10 +19,17 @@ orientan lo que se apoya encima. Los escalones usan el mismo parametro (se les
 resta velocidad y wrapean), asi que la cinta y el jugador viven en la misma
 escala: si el arrastre es 0.1, el muñeco pierde un 10% de la rampa por segundo.
 
-`MAX_HEIGHT` (0.8) es el tope real de subida: la boca de arriba es escenografia y
-el rack cuelga delante de ella, asi que dejar subir hasta 1 le tapaba la cabeza
-al muñeco justo cuando mejor venias jugando. El medidor del HUD se normaliza
-(`height / MAX_HEIGHT`) para que el tope se vea como barra llena.
+`MAX_HEIGHT` (0.8) es el tope de subida y **`CLIMB_SPAN` (0.5) es el tramo de la
+escalera donde eso se dibuja**: la altura sigue yendo de 0 a 0.8 (la economia y
+la curva de dificultad no cambian), pero el muñeco se posiciona en
+`rampPoint(height * CLIMB_SPAN)`, o sea la mitad de abajo de la escalera. Es lo
+que resuelve el solapamiento: con el muñeco al tamaño actual, arriba del todo su
+cabeza quedaba **detras** del cartel (que esta mas cerca de la camara y lo tapa).
+La mitad de arriba de la escalera queda de escenografia.
+
+Si se cambia el tamaño del muñeco o del cartel hay que rehacer esta cuenta: lo
+que no puede pasar es que la cabeza a `MAX_HEIGHT` quede, en pixeles, por encima
+del borde inferior del cartel.
 
 ## Module layout
 
@@ -174,6 +181,12 @@ reconstruye nada.
 **La cinta se ve mas rapida que el arrastre real.** `STEP_SCROLL_BASE +
 drift * STEP_SCROLL_PER_DRIFT`: la maquina tiene que leerse fuerte aunque el
 jugador este ganando terreno. Es feedback, no fisica.
+
+**El cartel se apaga al morir.** Con la camara bajando al encuadre de muerte
+(offset -1.3), el borde superior del cartel se salia del cuadro. Como al morir la
+flecha ya no significa nada, `die()` lo esconde (`rack.object.visible = false`) y
+`resetRun()` lo vuelve a prender; el corte cae justo con el flash rojo y el
+sacudon, asi que no se ve el salto.
 
 **Los rivales son cosmeticos y efimeros.** La posicion de los demas viaja por el
 broadcast `live` del canal Realtime, no por la DB: no hay escrituras, no hay

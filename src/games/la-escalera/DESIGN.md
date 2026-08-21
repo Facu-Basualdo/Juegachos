@@ -44,8 +44,10 @@ Si una decision hace que la escena se sienta amable, quieta o segura, esta mal.
 
 4. **Una sola flecha, y nada al lado.** El cartel de matriz de puntos cuelga
    sobre el hueco y se lleva el tercio superior del cuadro: **una** pantalla
-   ambar con lo que hay que apretar ahora. Ni barra de tiempo debajo ni medidor
-   al costado: el reloj lo cuenta la flecha misma (se corre al rubi y late) y la
+   ambar con lo que hay que apretar ahora, ocupando de verdad ese tercio (el
+   glifo llena casi toda la pantalla y el marco es apenas un borde). Nada se le
+   superpone: el muñeco tiene su propio tramo de escalera mas abajo y el cartel
+   se apaga al morir. Ni barra de tiempo debajo ni medidor al costado: el reloj lo cuenta la flecha misma (se corre al rubi y late) y la
    altura la cuenta el muñeco en la escalera. Cada barra que se saco es una cosa
    menos entre el jugador y la escena. Nada de fila de "las que vienen" —
    se probo y las flechas chicas de arriba se llevaban el ojo justo en el

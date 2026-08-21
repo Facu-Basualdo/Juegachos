@@ -21,6 +21,14 @@ export const START_T = 0.7; // arranca cerca de arriba, con margen para errar
 // cuelga delante de ella, asi que el muñeco no sube mas alla de aca (si no, la
 // cabeza queda tapada por el cartel justo cuando mejor estas jugando).
 export const MAX_HEIGHT = 0.8;
+/**
+ * Cuanto de la rampa ocupa **visualmente** el rango de juego. La altura sigue
+ * yendo de 0 a `MAX_HEIGHT` (toda la economia y la curva de dificultad quedan
+ * igual), pero se dibuja sobre la mitad de abajo de la escalera: con el muñeco
+ * grande, arriba del todo su cabeza se metia detras del cartel de flechas. La
+ * mitad de arriba queda de escenografia.
+ */
+export const CLIMB_SPAN = 0.5;
 export const CLIMB_GAIN = 0.055; // cuanto sube por acierto
 export const COMBO_BOOST = 0.06; // empujon extra al completar una racha
 export const COMBO_STEP = 10; // aciertos seguidos por racha
@@ -64,9 +72,9 @@ export const PIT_START_Z = RAMP_BOTTOM[2] + 1.0;
 // El rack cuelga SOBRE el hueco, no al fondo: pegado al fondo la flecha quedaba
 // del tamaño de una moneda y detras de las vigas. Es la unica informacion del
 // juego, asi que se le da el tercio superior del cuadro entero.
-export const SCREEN_SIZE = 2.1; // lado de la pantalla
-export const SCREEN_Y = 8.7;
-export const SCREEN_Z = 2.0;
+export const SCREEN_SIZE = 3.0; // lado de la pantalla
+export const SCREEN_Y = 8.85;
+export const SCREEN_Z = 1.0;
 
 // --- Camara -----------------------------------------------------------------
 export const CAM_FOV = 50;
