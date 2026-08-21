@@ -655,6 +655,14 @@ export interface PtPlayerView {
   cd: number;
   /** Conectado al server ahora mismo (para las luces del cliente). */
   on: boolean;
+  /**
+   * Numero del ultimo `pt:input` de ESTE jugador que el server tenia aplicado al
+   * tomar el snapshot. Es lo que le permite al cliente reconciliar sin inventar
+   * latencias: sabe exactamente hasta donde el server "lo escucho" y vuelve a
+   * aplicar por su cuenta lo que mando despues. Ver `reconcile` en Game.ts.
+   * Opcional solo por compatibilidad con un server todavia no redeployado.
+   */
+  n?: number;
 }
 
 export type PtPhase = "waiting" | "preroll" | "playing" | "over";
@@ -702,8 +710,9 @@ export interface PtState {
 export interface PtClientToServer {
   /** `round` scopea la partida: una ronda nueva descarta el tablero de la anterior. */
   "pt:join": (msg: { code: string; nickname: string; roster: string[]; round: number }) => void;
-  /** Direccion deseada (se normaliza en el server) y pedido de salpicon. */
-  "pt:input": (msg: { dx: number; dy: number; s?: boolean }) => void;
+  /** Direccion deseada (se normaliza en el server), pedido de salpicon y numero
+   *  de secuencia (`n`), que vuelve en el snapshot para reconciliar. */
+  "pt:input": (msg: { dx: number; dy: number; s?: boolean; n?: number }) => void;
 }
 
 /** Server -> Cliente. */
