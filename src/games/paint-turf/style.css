@@ -1,0 +1,381 @@
+/*
+ * Manchon. Ver DESIGN.md ("Tempera sobre papel"): la hoja es la unica superficie
+ * clara y todo lo demas es la mesa; el HUD esta escrito con tinta sobre la hoja,
+ * no montado en paneles de vidrio.
+ */
+
+:root {
+  color-scheme: dark;
+  --paper: #f4ead8;
+  --ink: #1a1714;
+  --table: #2a2420;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* La mesa sobre la que esta apoyada la hoja. */
+  background: var(--table);
+  font-family: "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  color: var(--ink);
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+.game-canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.back-link {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 40;
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: rgba(244, 234, 216, 0.55);
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: var(--paper);
+}
+
+.pt {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ---------- Marcador ---------- */
+
+.pt__top {
+  position: absolute;
+  /* Debajo de la barra de la sala (RoomOverlay), que va arriba de todo y tapaba
+     el reloj de la partida. El juego es solo de sala, asi que esa barra siempre
+     esta. */
+  top: 38px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(680px, 92vw);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px 12px;
+  background: rgba(26, 23, 20, 0.82);
+  border-radius: 14px;
+}
+
+.pt--playing .pt__top {
+  display: flex;
+}
+
+.pt__clock {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--paper);
+  font-variant-numeric: tabular-nums;
+}
+
+.pt__clock--urgent {
+  color: #ff8a6b;
+  animation: pt-pulse 1s steps(2, end) infinite;
+}
+
+@keyframes pt-pulse {
+  50% { opacity: 0.35; }
+}
+
+/* Reparto del tablero: una sola barra apilada, que es como se lee de un vistazo
+   quien va ganando sin tener que comparar ocho numeros. */
+.pt__bar {
+  display: flex;
+  width: 100%;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(244, 234, 216, 0.16);
+}
+
+.pt__bar-slice {
+  flex-basis: 0;
+  transition: flex-grow 0.25s linear;
+}
+
+.pt__legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+}
+
+.pt__chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: rgba(244, 234, 216, 0.75);
+}
+
+.pt__chip--mine {
+  color: var(--paper);
+  font-weight: 700;
+}
+
+.pt__chip-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.pt__chip-value {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+/* ---------- Boton de salpicon ---------- */
+
+.pt-controls {
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(22px, env(safe-area-inset-bottom));
+  display: none;
+  pointer-events: auto;
+}
+
+.pt--playing .pt-controls {
+  display: block;
+}
+
+.pt-controls__splat {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: 3px solid var(--paper);
+  /* Bien translucido a proposito: el boton vive en una esquina del tablero y ahi
+     abajo puede estar el pincel propio. Que se lea como un control sin tapar el
+     juego importa mas que el contraste del cartel. */
+  background: rgba(26, 23, 20, 0.3);
+  color: var(--paper);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* El cooldown se llena de abajo hacia arriba: el boton "se carga" de pintura. */
+.pt-controls__fill {
+  position: absolute;
+  inset: 0;
+  background: rgba(244, 234, 216, 0.28);
+  transform-origin: bottom;
+  transform: scaleY(0);
+}
+
+.pt-controls__splat.is-ready .pt-controls__fill {
+  background: rgba(244, 234, 216, 0.45);
+}
+
+.pt-controls__splat.is-ready {
+  border-color: #ffd9a0;
+}
+
+.pt-controls__label {
+  position: relative;
+}
+
+/* ---------- Countdown ---------- */
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 25;
+  font-size: 150px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  color: var(--ink);
+  opacity: 0;
+}
+
+.countdown.is-shown {
+  animation: countdown-pop 0.75s ease-out;
+}
+
+@keyframes countdown-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  20% { opacity: 1; transform: scale(1.12); }
+  40% { transform: scale(1); }
+  80% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+/* ---------- Carteles ---------- */
+
+.pt__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(26, 23, 20, 0.72);
+  pointer-events: auto;
+  z-index: 30;
+}
+
+.pt__overlay[hidden] {
+  display: none;
+}
+
+.pt__card {
+  width: min(420px, 92vw);
+  padding: 26px 24px;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  border-radius: 4px;
+  text-align: center;
+  /* Como una hoja apoyada sobre la mesa, no como un modal flotante. */
+  box-shadow: 8px 10px 0 rgba(0, 0, 0, 0.35);
+}
+
+.pt__card-title {
+  font-size: 27px;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+.pt__card-body {
+  font-size: 15px;
+  line-height: 1.5;
+  opacity: 0.8;
+}
+
+.pt__card-btn {
+  margin-top: 18px;
+  padding: 10px 22px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.pt__card-btn:hover {
+  background: transparent;
+  color: var(--ink);
+}
+
+/* ---------- Resultados ---------- */
+
+.pt__results {
+  list-style: none;
+  margin-top: 4px;
+  text-align: left;
+}
+
+.pt__result {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border-bottom: 1px solid rgba(26, 23, 20, 0.14);
+  font-size: 15px;
+}
+
+.pt__result:last-child {
+  border-bottom: none;
+}
+
+.pt__result--mine {
+  font-weight: 700;
+  background: rgba(26, 23, 20, 0.07);
+  border-radius: 4px;
+}
+
+.pt__result-pos {
+  width: 20px;
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+}
+
+.pt__result-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+}
+
+.pt__result-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pt__result-value {
+  font-variant-numeric: tabular-nums;
+}
+
+/* En la compu el salpicon se tira con ESPACIO: el boton queda solo como
+   indicador del enfriamiento, asi que ocupa menos tablero. */
+@media (hover: hover) and (pointer: fine) {
+  .pt-controls__splat {
+    width: 64px;
+    height: 64px;
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+}
+
+@media (max-width: 640px) {
+  .pt__clock {
+    font-size: 21px;
+  }
+
+  .pt__chip-name {
+    max-width: 68px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pt-controls__splat {
+    width: 82px;
+    height: 82px;
+    font-size: 11px;
+  }
+
+  .countdown {
+    font-size: 108px;
+  }
+}
