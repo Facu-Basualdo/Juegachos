@@ -17,7 +17,7 @@ import {
   touchRoom,
   updateDeadline,
 } from "./api";
-import { RoomChannel } from "./channel";
+import { RoomChannel, type LiveData } from "./channel";
 import { RoomOverlay, type StripLight, type WaitingEntry } from "./RoomOverlay";
 import { computeTotals, rankRound } from "./points";
 import { clearRoomRuns } from "./roomRun";
@@ -96,6 +96,15 @@ export interface RoomMode {
    * arrancar la partida el tiempo restante ronda el valor nominal del juego.
    */
   deadline(): Date | null;
+  /**
+   * Emite estado efimero propio al resto de la sala (posicion, animacion) por
+   * broadcast del canal Realtime: **no toca la DB ni el puntaje**, y un paquete
+   * perdido no se recupera. Es para lo cosmetico — ver a los rivales jugar en
+   * vivo — a unos pocos envios por segundo. Los espectadores no emiten.
+   */
+  broadcastLive(data: LiveData): void;
+  /** Estado efimero recibido de otro jugador (ver `broadcastLive`). */
+  onLive(cb: (player: string, data: LiveData) => void): void;
   /**
    * Fase actual de la sala segun el ultimo snapshot. Los juegos que manejan su
    * propio arranque en sala (car-race, con su votacion de circuito) lo usan para
@@ -210,6 +219,8 @@ export function initRoomMode(gameId: string, hooks: RoomModeHooks): RoomMode | n
       isHost: () => false,
       ping: () => {},
       onSync: () => {},
+      broadcastLive: () => {},
+      onLive: () => {},
       deadline: () => null,
       status: () => "lobby",
     };
@@ -272,6 +283,7 @@ class RoomModeController implements RoomMode {
   private readonly hooks: RoomModeHooks;
   /** Suscriptores del juego al broadcast "sync" (tableros compartidos). */
   private readonly gameSyncCbs: Array<() => void> = [];
+  private readonly gameLiveCbs: Array<(player: string, data: LiveData) => void> = [];
 
   constructor(gameId: string, code: string, me: string, hooks: RoomModeHooks) {
     this.gameId = gameId;
@@ -316,6 +328,9 @@ class RoomModeController implements RoomMode {
       void this.refresh();
       for (const cb of this.gameSyncCbs) cb();
     });
+    this.channel.onLive(({ player, data }) => {
+      for (const cb of this.gameLiveCbs) cb(player, data);
+    });
     this.channel.onPresence(() => this.applyState());
 
     this.applyState(state);
@@ -354,6 +369,15 @@ class RoomModeController implements RoomMode {
 
   ping(): void {
     this.channel?.ping();
+  }
+
+  broadcastLive(data: LiveData): void {
+    if (this.spectator) return;
+    this.channel?.broadcastLive(data);
+  }
+
+  onLive(cb: (player: string, data: LiveData) => void): void {
+    this.gameLiveCbs.push(cb);
   }
 
   onSync(cb: () => void): void {

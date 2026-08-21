@@ -44,18 +44,25 @@ Si una decision hace que la escena se sienta amable, quieta o segura, esta mal.
 
 4. **Una sola flecha, y nada al lado.** El cartel de matriz de puntos cuelga
    sobre el hueco y se lleva el tercio superior del cuadro: **una** pantalla
-   ambar con lo que hay que apretar ahora. Nada de fila de "las que vienen" —
+   ambar con lo que hay que apretar ahora. Ni barra de tiempo debajo ni medidor
+   al costado: el reloj lo cuenta la flecha misma (se corre al rubi y late) y la
+   altura la cuenta el muñeco en la escalera. Cada barra que se saco es una cosa
+   menos entre el jugador y la escena. Nada de fila de "las que vienen" —
    se probo y las flechas chicas de arriba se llevaban el ojo justo en el
    momento de reaccionar a la grande. Por lo mismo el puntaje del HUD vive en la
    esquina: el centro no se comparte. Y el **acierto no enciende nada**: el
    cambio de glifo ya es el aviso, mientras que un destello blanco por acierto
    lavaba la pantalla varias veces por segundo y arruinaba la penumbra.
 
-5. **Un solo cuerpo, leido por silueta.** El obrero es la unica figura del
-   cuadro: proporciones de dibujo (cabeza grande, torso rechoncho, botas
-   pesadas), mameluco casi negro contra el hierro y **el casco amarillo como
-   unica nota saturada del muñeco**. Se lee por silueta y por casco, nunca por
-   detalle facial: a la velocidad del juego no hay tiempo de mirarle la cara.
+5. **Un cuerpo humano, leido por silueta.** El obrero se lee por silueta y por
+   casco, nunca por detalle facial — a la velocidad del juego no hay tiempo de
+   mirarle la cara. Pero la silueta es **anatomica, no de juguete**: cabeza chica
+   (~1/8 del alto), hombros mas anchos que la cadera, torso que se afina en la
+   cintura y miembros de capsulas, no de cajas apiladas. El mundo es de
+   historieta; el cuerpo, no. Mameluco casi negro contra el hierro y **el casco
+   amarillo como unica nota saturada**. En sala cada rival lleva el mismo cuerpo
+   en otro color de mameluco: se distinguen por color y por el nombre flotando,
+   nunca por forma.
 
 6. **El rojo no decora: avisa.** El rubi aparece siempre por lo mismo — el
    resplandor del pozo, el destello del error y la barra de tiempo cuando se te

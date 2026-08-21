@@ -53,25 +53,38 @@ al muñeco justo cuando mejor venias jugando. El medidor del HUD se normaliza
   el lugar mas tranquilo): la escalera baja, asi que correr es su estado normal.
   Encima del ciclo se montan el envion del acierto y el manotazo del error.
   `kill()` arranca el tumbo y `consumeImpale()` avisa **una sola vez** el frame
-  en que el cuerpo llega a las puas (es lo que dispara la sangre).
-- `game/PromptRack.ts` — el cartel: **una sola** pantalla con la flecha actual,
-  su barra de tiempo y luz propia. El acierto solo da un golpe de escala (sin
-  destello); el error tiñe pantalla y luz de rubi. El glifo se genera una vez como
+  en que el cuerpo llega a las puas (es lo que dispara la sangre). El constructor
+  toma un `ClimberSkin` opcional: es lo que le da a cada rival su color de
+  mameluco.
+- `game/PromptRack.ts` — el cartel: **una sola** pantalla con la flecha actual y
+  luz propia. No hay barra de tiempo: el reloj lo cuenta la flecha misma, que se
+  corre al rubi y late sobre el final (`setProgress` -> `urgency`). El acierto
+  solo da un golpe de escala (sin destello); el error tiñe de rubi. El glifo se
+  genera una vez como
   **matriz de puntos** (una flecha vectorial rasterizada a una grilla de 17x17 y
   redibujada como circulos) y se rota por direccion: una sola textura para las
   cuatro flechas.
 - `game/Environment.ts` — escenografia del hueco: muros de reja, vigas (solo por
   **detras** del rack), cadenas, lamparas ambar parpadeantes y polvo que cae.
 - `game/Particles.ts` — pool de chispas fire-and-forget (acierto, error, muerte).
-- `game/Blood.ts` — la sangre. Estallido de gotas con gravedad que al tocar el
-  fondo se convierten en calcos, chorro que sigue ~2 s, hilos escurriendo por los
-  hierros y un charco que crece hasta quedarse. Tope de `MAX_DECALS` calcos
-  (los viejos se descartan). Cosmetico puro: no toca estado ni colision.
+- `game/Blood.ts` — la sangre, toda **en movimiento**: el estallido lanza gotas
+  con gravedad que se **estiran** segun su velocidad (una gota rapida es un hilo,
+  no una bolita) y al tocar el fondo se convierten en calcos; los hilos de los
+  hierros **crecen hacia abajo** con su propio retardo en vez de aparecer
+  pintados; el cuerpo sigue **goteando** 14 s (`oozeTime`) y el charco crece y se
+  queda. Tope de `MAX_DECALS` calcos (los viejos se descartan). Cosmetico puro:
+  no toca estado ni colision.
+- `game/Rivals.ts` — **solo en sala**: un carril por rival al lado del tuyo, con
+  su escalera, su pozo, su muñeco (mameluco de otro color) y su nombre en un
+  sprite. La altura de cada uno llega por `RoomMode.broadcastLive` (~8/s) y se
+  interpola, asi los paquetes espaciados se ven como movimiento continuo. Los
+  escalones de cada carril van en `InstancedMesh` (3 draw calls por carril en vez
+  de 66): con 7 rivales, escalones sueltos serian ~700 llamadas de dibujo.
 - `game/InputController.ts` — cuatro flechas (teclado o WASD) + accion
   (Enter / Espacio) y la **cruceta tactil** que se monta sobre el canvas y el CSS
   muestra solo en punteros gruesos.
 - `game/Hud.ts` — overlay DOM: puntaje (arriba a la **derecha**, el centro es del
-  cartel), racha, medidor de altura, countdown, flash, la **salpicadura de sangre
+  cartel), racha, countdown, flash, la **salpicadura de sangre
   sobre el lente** (`showBlood` / `clearBlood`, dibujada a canvas una sola vez y
   sesgada a los bordes para no tapar el pozo) y start / game-over con
   `LeaderboardPanel`.
@@ -90,12 +103,34 @@ al muñeco justo cuando mejor venias jugando. El medidor del HUD se normaliza
 | Arrastre | `-drift * dt` por segundo | `x STUMBLE_DRIFT_MULT` mientras dura el tropiezo |
 
 `drift = min(DRIFT_MAX, DRIFT_BASE + score * DRIFT_PER_POINT)` y la ventana de
-cada flecha es `beat = max(BEAT_MIN, BEAT_START - score * BEAT_PER_POINT)`. Las
-dos rampas juntas son lo que **garantiza que la partida termine**: al principio
-un jugador perfecto gana terreno (0.055 por acierto contra ~0.042 de arrastre por
-ventana), pero pasados ~100 puntos el arrastre por ventana supera lo que da un
-acierto y hasta el juego perfecto empieza a ceder. Bajar `DRIFT_PER_POINT` alarga
-las partidas; subirlo las corta.
+cada flecha es `beat = max(BEAT_MIN, BEAT_START - score * BEAT_PER_POINT)`.
+
+**Como sube la dificultad, y donde esta el techo.** Son dos rampas distintas:
+
+1. **La ventana se achica** de 1.5 s a 0.52 s, y toca el piso en el **escalon 82**
+   (`(1.5-0.52)/0.012`). De ahi en mas ya no se achica mas: 0.52 s es
+   deliberadamente jugable — un tiempo de reaccion de 4 opciones ronda los
+   0.4-0.5 s, asi que la ventana aprieta pero no es el muro.
+2. **El arrastre crece** sin techo practico (satura recien en el escalon 247).
+   Como la flecha siguiente sale **apenas acertas** (no espera a que venza la
+   ventana), lo que importa es tu tiempo de reaccion `R`: cada acierto te da
+   0.055 y te cuesta `drift * R`. El equilibrio esta donde `0.055 / R = drift`:
+
+| Reaccion | Equilibrio | Escalones (0% error) | Con 5% error | Con 15% error |
+| --- | --- | --- | --- | --- |
+| 0.25 s | ~175 | 277 | 188 | 94 |
+| 0.35 s | ~117 | 197 | 144 | 75 |
+| 0.45 s | ~86 | 155 | 113 | 60 |
+| 0.55 s | ~65 | 80 | 79 | 55 |
+
+(Simulacion con estas mismas constantes, 400 partidas por perfil.) **Ninguna
+combinacion sobrevive**: pasado su equilibrio, cada acierto rinde menos de lo que
+cuesta y la caida es cuestion de tiempo. Las partidas duran **30-70 s**, que es
+el formato corto que pide el repo. El techo real ronda los **80-150 escalones**
+para alguien bueno y ~280 para un limite teorico de 0.25 s sin errores.
+
+Para mover el techo, la perilla es `DRIFT_PER_POINT` (bajarlo alarga todo);
+`BEAT_PER_POINT` y `BEAT_MIN` solo mueven cuando la ventana deja de apretar.
 
 Apretar todo a lo loco **no** funciona: cada tecla equivocada cuesta casi el
 doble que lo que da un acierto, asi que tres errores seguidos desde el arranque
@@ -140,6 +175,15 @@ reconstruye nada.
 drift * STEP_SCROLL_PER_DRIFT`: la maquina tiene que leerse fuerte aunque el
 jugador este ganando terreno. Es feedback, no fisica.
 
+**Los rivales son cosmeticos y efimeros.** La posicion de los demas viaja por el
+broadcast `live` del canal Realtime, no por la DB: no hay escrituras, no hay
+reintentos y un paquete perdido se pierde. El puntaje sigue yendo por
+`reportScore` como en cualquier otro juego de sala. `syncRivals()` compara una
+firma de `players()` (que arranca vacio y puede cambiar en el lobby) y solo
+rearma los carriles cuando cambia; `Environment.expand` corre los muros del hueco
+y `fitCamera` calcula con el fov **horizontal** cuanto alejarse para que entren
+todos los carriles (hasta 3-4 jugadores no hace falta alejarse nada).
+
 **La muerte se mira: el game over llega tarde a proposito.** `die()` **no**
 muestra el cartel; marca `overlayPending` y recien `GAMEOVER_DELAY` (1.6 s)
 despues `finishDeath()` saca el overlay, el ranking y el reporte a la sala. En
@@ -158,7 +202,9 @@ Patron compartido obligatorio (ver `CLAUDE.md` raiz).
 Cableado estandar: el constructor llama `initRoomMode("la-escalera", { getScore:
 () => this.score, onStart: () => this.beginCountdown() })`. Con `?room=` en la URL
 el game-over reporta a la sala en vez del ranking global y el restart queda
-bloqueado (una corrida por ronda). `meta.ts` declara `roomTimeLimitSec: 120`
+bloqueado (una corrida por ronda). **Ademas se ve a los demas**: cada jugador
+corre en su propia escalera al lado de la tuya, con su nombre encima (ver
+`Rivals.ts` y el broadcast `live` en `src/shared/room/channel.ts`). `meta.ts` declara `roomTimeLimitSec: 120`
 porque un jugador muy bueno puede estirar la corrida varios minutos antes de que
 la rampa de dificultad lo alcance; al vencer el tope, cada uno reporta su parcial
 (`getScore` = aciertos hasta ese momento).

@@ -12,7 +12,10 @@ export const meta: GameEntry = {
   category: "Reflejos",
   order: 420,
   added: "2026-08-20",
-  mobile: true,
+  // El usuario lo probo en un telefono real y no se puede jugar: la cruceta
+  // sigue montada (sirve en pantallas tactiles grandes) pero el juego no entra
+  // en el roster movil.
+  mobile: false,
 
   roomTimeLimitSec: 120,
 };

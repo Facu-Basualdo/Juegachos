@@ -54,7 +54,12 @@ export class Environment {
   readonly object = new THREE.Group();
   readonly lights = new THREE.Group();
 
-  private readonly lamps: { mesh: THREE.Mesh; light: THREE.PointLight; seed: number }[] = [];
+  private readonly lamps: { mesh: THREE.Mesh; light: THREE.PointLight; cage: THREE.Mesh; housing: THREE.Mesh; seed: number }[] = [];
+  private readonly walls: THREE.Mesh[] = [];
+  private readonly beams: THREE.Mesh[] = [];
+  private readonly posts: THREE.Mesh[] = [];
+  private backWall!: THREE.Mesh;
+  private halfWidth = 6.2;
   private motes!: THREE.Points;
   private readonly moteSpeed: number[] = [];
 
@@ -74,16 +79,17 @@ export class Environment {
     const mid = rampPoint(0.5);
     for (const side of [-1, 1]) {
       const wall = new THREE.Mesh(new THREE.BoxGeometry(0.6, 13, RAMP_LENGTH + 8), mat);
-      wall.position.set(side * 6.2, mid.y + 2.2, mid.z - 1.5);
+      wall.position.set(side * this.halfWidth, mid.y + 2.2, mid.z - 1.5);
       wall.rotation.x = SLOPE_ANGLE * 0.35; // acompaña la subida sin ser paralelo
       wall.receiveShadow = true;
       this.object.add(wall);
+      this.walls.push(wall);
     }
 
     // Fondo: pared del final del hueco, para que arriba no sea vacio absoluto.
-    const back = new THREE.Mesh(new THREE.BoxGeometry(14, 16, 0.6), mat);
-    back.position.set(0, 6.5, -14.5);
-    this.object.add(back);
+    this.backWall = new THREE.Mesh(new THREE.BoxGeometry(14, 16, 0.6), mat);
+    this.backWall.position.set(0, 6.5, -14.5);
+    this.object.add(this.backWall);
   }
 
   private buildGirders(): void {
@@ -97,11 +103,13 @@ export class Environment {
       const beam = new THREE.Mesh(new THREE.BoxGeometry(13, 0.5, 0.55), mat);
       beam.position.set(0, y, z);
       this.object.add(beam);
+      this.beams.push(beam);
 
       for (const side of [-1, 1]) {
         const post = new THREE.Mesh(new THREE.BoxGeometry(0.34, 3.2, 0.4), mat);
-        post.position.set(side * 5.6, y - 1.6, z);
+        post.position.set(side * (this.halfWidth - 0.6), y - 1.6, z);
         this.object.add(post);
+        this.posts.push(post);
       }
     }
   }
@@ -160,7 +168,7 @@ export class Environment {
       light.position.copy(bulb.position);
       this.lights.add(light);
 
-      this.lamps.push({ mesh: bulb, light, seed: Math.random() * 10 });
+      this.lamps.push({ mesh: bulb, light, cage, housing, seed: Math.random() * 10 });
     }
   }
 
@@ -185,6 +193,29 @@ export class Environment {
     });
     this.motes = new THREE.Points(geo, mat);
     this.object.add(this.motes);
+  }
+
+  /**
+   * Ensancha el hueco (modo sala): con carriles rivales al costado, los muros a
+   * ±6.2 quedaban **adentro** de las escaleras vecinas. Mueve muros, vigas,
+   * columnas y lamparas; no reconstruye nada.
+   */
+  expand(halfWidth: number): void {
+    const w = Math.max(6.2, halfWidth + 1.6);
+    if (Math.abs(w - this.halfWidth) < 0.01) return;
+    this.halfWidth = w;
+
+    for (const wall of this.walls) wall.position.x = Math.sign(wall.position.x) * w;
+    this.backWall.scale.x = (w * 2) / 14;
+    for (const beam of this.beams) beam.scale.x = (w * 2 + 1) / 13;
+    for (const post of this.posts) post.position.x = Math.sign(post.position.x) * (w - 0.6);
+    for (const lamp of this.lamps) {
+      const side = Math.sign(lamp.housing.position.x);
+      lamp.housing.position.x = side * (w - 1.7);
+      lamp.mesh.position.x = lamp.housing.position.x - side * 0.26;
+      lamp.cage.position.x = lamp.mesh.position.x;
+      lamp.light.position.x = lamp.mesh.position.x;
+    }
   }
 
   update(dt: number, elapsed: number): void {

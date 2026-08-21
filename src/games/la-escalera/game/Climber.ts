@@ -13,11 +13,22 @@ import {
   COLOR_RUBBER,
 } from "./constants";
 
+export interface ClimberSkin {
+  /** Color del mameluco (los rivales van en otros colores). */
+  suit?: number;
+  suitDark?: number;
+  helmet?: number;
+}
+
 /**
- * El muñeco: un obrero rechoncho de dibujo animado (cabeza grande, casco
- * amarillo, mameluco azul apagado) **corriendo** escalera arriba. Nunca camina
- * ni se queda quieto: la escalera baja, asi que aunque este perdiendo terreno
+ * El muñeco: un obrero con mameluco corriendo escalera arriba. Nunca camina ni
+ * se queda quieto: la escalera baja, asi que aunque este perdiendo terreno
  * siempre esta corriendo hacia arriba — es lo que vende el chiste del juego.
+ *
+ * **Proporciones humanas, no de juguete**: cabeza chica (~1/8 del alto),
+ * hombros mas anchos que la cadera, torso que se afina en la cintura y miembros
+ * de **capsulas** (no cajas), asi la silueta es redondeada y no de bloques
+ * apilados. Sigue siendo low-poly y cel-shaded — lo que cambio es la anatomia.
  *
  * Toda la animacion es procedural (sin skinning): brazos y piernas tienen codo
  * y rodilla (grupos anidados) porque un ciclo de carrera con miembros rigidos
@@ -39,67 +50,108 @@ export class Climber {
   private impaleEvent = false;
   private readonly tumble = new THREE.Vector3();
 
-  constructor() {
-    this.build();
-    this.torso.scale.setScalar(1.2);
+  constructor(skin: ClimberSkin = {}) {
+    this.build(skin);
+    this.torso.scale.setScalar(1.35);
     this.object.add(this.torso);
   }
 
-  private build(): void {
-    const suit = toonMat(COLOR_SUIT);
-    const suitDark = toonMat(COLOR_SUIT_DARK);
-    const skin = toonMat(COLOR_SKIN);
+  private build(skin: ClimberSkin): void {
+    const suit = toonMat(skin.suit ?? COLOR_SUIT);
+    const suitDark = toonMat(skin.suitDark ?? COLOR_SUIT_DARK);
+    const flesh = toonMat(COLOR_SKIN);
+    const rubber = toonMat(COLOR_RUBBER);
+    const helmetMat = toonMat(skin.helmet ?? COLOR_HELMET, {
+      emissive: skin.helmet ?? COLOR_HELMET,
+      emissiveIntensity: 0.04,
+    });
+    const tape = toonMat(COLOR_BONE, { emissive: COLOR_BONE, emissiveIntensity: 0.1 });
 
-    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.38), suit);
-    chest.position.y = 0.95;
+    // Torso: pecho ancho que se afina hacia la cintura (cilindros aplastados en
+    // Z), no una caja. Es lo que mas saca el aire de "muñeco de bloques".
+    const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.22, 0.34, 10), suit);
+    chest.position.y = 1.24;
+    chest.scale.z = 0.62;
     this.torso.add(chest);
 
-    const hips = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.28, 0.34), suitDark);
-    hips.position.y = 0.62;
-    this.torso.add(hips);
+    const waist = new THREE.Mesh(new THREE.CylinderGeometry(0.175, 0.16, 0.2, 10), suit);
+    waist.position.y = 1.0;
+    waist.scale.z = 0.66;
+    this.torso.add(waist);
 
-    // Banda reflectiva: la unica linea clara del mameluco, para leer la espalda.
-    const stripe = new THREE.Mesh(
-      new THREE.BoxGeometry(0.64, 0.09, 0.4),
-      toonMat(COLOR_BONE, { emissive: COLOR_BONE, emissiveIntensity: 0.1 }),
-    );
-    stripe.position.y = 0.86;
-    this.torso.add(stripe);
+    const pelvis = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.185, 0.18, 10), suitDark);
+    pelvis.position.y = 0.86;
+    pelvis.scale.z = 0.7;
+    this.torso.add(pelvis);
 
-    // Cabeza + casco.
-    const skull = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.4, 0.4), skin);
+    // Hombros: una capsula cruzada le da la linea de los hombros de una.
+    const shoulders = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 0.28, 3, 8), suit);
+    shoulders.rotation.z = Math.PI / 2;
+    shoulders.position.y = 1.4;
+    shoulders.scale.z = 0.8;
+    this.torso.add(shoulders);
+
+    // Bandas reflectivas: la unica linea clara del mameluco.
+    const bandGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.045, 10, 1, true);
+    for (const y of [1.16, 1.3]) {
+      const band = new THREE.Mesh(bandGeo, tape);
+      band.position.y = y;
+      band.scale.set(1.02, 1, 0.64);
+      this.torso.add(band);
+    }
+
+    // Numero al dorso del mameluco, como el uniforme de la referencia.
+    const number = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.12), this.numberMaterial());
+    number.position.set(0, 1.25, -0.145);
+    number.rotation.y = Math.PI;
+    this.torso.add(number);
+
+    // Cuello + cabeza chica (proporcion humana) + casco.
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.1, 8), flesh);
+    neck.position.y = 1.5;
+    this.torso.add(neck);
+
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.115, 12, 10), flesh);
+    skull.scale.set(1, 1.12, 1.05);
     this.head.add(skull);
+    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.09, 0.13), flesh);
+    jaw.position.set(0, -0.08, 0.02);
+    this.head.add(jaw);
+
     const helmet = new THREE.Mesh(
-      new THREE.SphereGeometry(0.3, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
-      toonMat(COLOR_HELMET, { emissive: COLOR_HELMET, emissiveIntensity: 0.04 }),
+      new THREE.SphereGeometry(0.135, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+      helmetMat,
     );
-    helmet.position.y = 0.14;
-    helmet.scale.set(1, 0.9, 1.05);
+    helmet.position.y = 0.02;
+    helmet.scale.set(1.05, 0.95, 1.1);
     this.head.add(helmet);
-    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.06, 0.16), toonMat(COLOR_HELMET));
-    brim.position.set(0, 0.16, -0.26);
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.02, 12, 1, false, Math.PI * 0.15, Math.PI * 0.7), helmetMat);
+    brim.position.set(0, 0.02, 0);
+    brim.rotation.y = Math.PI;
+    brim.scale.z = 1.3;
     this.head.add(brim);
-    this.head.position.y = 1.46;
+    this.head.position.y = 1.62;
     this.torso.add(this.head);
 
-    // Brazos: hombro -> brazo -> codo -> antebrazo + mano.
+    // Brazos: hombro -> brazo -> codo -> antebrazo + mano. Capsulas.
     for (const side of [-1, 1]) {
       const shoulder = new THREE.Group();
-      const upper = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.32, 0.17), suit);
-      upper.position.y = -0.16;
+      const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.058, 0.24, 3, 8), suit);
+      upper.position.y = -0.15;
       shoulder.add(upper);
 
       const elbow = new THREE.Group();
-      elbow.position.y = -0.32;
-      const fore = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.16), suitDark);
-      fore.position.y = -0.15;
+      elbow.position.y = -0.3;
+      const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.2, 3, 8), suit);
+      fore.position.y = -0.13;
       elbow.add(fore);
-      const hand = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.15, 0.19), skin);
-      hand.position.y = -0.34;
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), flesh);
+      hand.position.y = -0.27;
+      hand.scale.set(1, 1.2, 0.8);
       elbow.add(hand);
       shoulder.add(elbow);
 
-      shoulder.position.set(side * 0.38, 1.16, 0);
+      shoulder.position.set(side * 0.2, 1.38, 0);
       this.torso.add(shoulder);
       this.arms.push({ shoulder, elbow });
     }
@@ -107,27 +159,31 @@ export class Climber {
     // Piernas: cadera -> muslo -> rodilla -> pantorrilla + bota.
     for (const side of [-1, 1]) {
       const hip = new THREE.Group();
-      const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.32, 0.22), suitDark);
-      thigh.position.y = -0.16;
+      const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.3, 3, 8), suit);
+      thigh.position.y = -0.19;
       hip.add(thigh);
 
       const knee = new THREE.Group();
-      knee.position.y = -0.32;
-      const shin = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.3, 0.2), suitDark);
-      shin.position.y = -0.15;
+      knee.position.y = -0.38;
+      const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.062, 0.28, 3, 8), suitDark);
+      shin.position.y = -0.17;
       knee.add(shin);
-      const boot = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.15, 0.32), toonMat(COLOR_RUBBER));
-      boot.position.set(0, -0.34, -0.05);
+      const boot = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.1, 0.24), rubber);
+      boot.position.set(0, -0.34, -0.04);
       knee.add(boot);
+      const toe = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 6), rubber);
+      toe.position.set(0, -0.34, -0.14);
+      toe.scale.set(1, 0.8, 1.1);
+      knee.add(toe);
       hip.add(knee);
 
-      hip.position.set(side * 0.16, 0.6, 0);
+      hip.position.set(side * 0.1, 0.84, 0);
       this.torso.add(hip);
       this.legs.push({ hip, knee });
     }
 
     // Sombra de contacto barata: mancha oscura bajo los pies.
-    const blob = new THREE.Mesh(new THREE.CircleGeometry(0.42, 16), glowMat(0x000000, 0.35));
+    const blob = new THREE.Mesh(new THREE.CircleGeometry(0.34, 16), glowMat(0x000000, 0.35));
     blob.rotation.x = -Math.PI / 2;
     blob.position.y = 0.02;
     this.torso.add(blob);
@@ -136,6 +192,24 @@ export class Climber {
       const m = o as THREE.Mesh;
       if (m.isMesh) m.castShadow = true;
     });
+  }
+
+  /** Chapa con el numero del uniforme (mismo dibujo para todos, va al dorso). */
+  private numberMaterial(): THREE.MeshBasicMaterial {
+    const canvas = document.createElement("canvas");
+    canvas.width = 128;
+    canvas.height = 72;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#0d1120";
+    ctx.fillRect(0, 0, 128, 72);
+    ctx.fillStyle = "#d8d2c2";
+    ctx.font = "bold 52px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("001", 64, 38);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.75 });
   }
 
   reset(): void {
@@ -149,7 +223,7 @@ export class Climber {
     this.object.rotation.set(0, 0, 0);
     this.torso.rotation.set(0, 0, 0);
     this.torso.position.set(0, 0, 0);
-    this.torso.scale.setScalar(1.2);
+    this.torso.scale.setScalar(1.35);
     this.object.visible = true;
   }
 

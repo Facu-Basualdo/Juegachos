@@ -5,6 +5,16 @@ interface Drop {
   mesh: THREE.Mesh;
   vel: THREE.Vector3;
   life: number;
+  size: number;
+}
+
+/** Un hilo escurriendo por el hierro: crece hacia abajo, no aparece entero. */
+interface Drip {
+  mesh: THREE.Mesh;
+  topY: number;
+  len: number;
+  delay: number;
+  grown: number;
 }
 
 let splatTexture: THREE.CanvasTexture | null = null;
@@ -63,7 +73,10 @@ export class Blood {
 
   private readonly drops: Drop[] = [];
   private readonly decals: THREE.Mesh[] = [];
-  private readonly drips: THREE.Mesh[] = [];
+  private readonly drips: Drip[] = [];
+  /** Segundos que el cuerpo sigue goteando despues del estallido. */
+  private oozeTime = 0;
+  private oozeTick = 0;
   private pool: THREE.Mesh | null = null;
   private poolScale = 0;
   private gushTime = 0;
@@ -94,6 +107,8 @@ export class Blood {
   burst(at: THREE.Vector3): void {
     this.gushAt.copy(at);
     this.gushTime = 2.2;
+    this.oozeTime = 14;
+    this.oozeTick = 0;
 
     for (let i = 0; i < 110; i++) this.spawnDrop(at, 7.5);
 
@@ -104,18 +119,20 @@ export class Blood {
       this.addDecal(at.x + Math.cos(a) * d, at.z + Math.sin(a) * d, 0.35 + Math.random() * 0.8);
     }
 
-    // Hilos escurriendo por los hierros, justo debajo del cuerpo.
-    for (let i = 0; i < 9; i++) {
-      const drip = new THREE.Mesh(Blood.DECAL_GEO, this.decalMat);
-      const len = 0.5 + Math.random() * 1.1;
-      drip.scale.set(0.1 + Math.random() * 0.13, len, 1);
-      drip.position.set(
-        at.x + (Math.random() - 0.5) * 1.5,
-        at.y - len / 2 + 0.15,
-        at.z + 0.35 + Math.random() * 0.5,
+    // Hilos escurriendo por los hierros. Arrancan en cero y **bajan**: la
+    // sangre tiene que verse correr, no aparecer pintada.
+    for (let i = 0; i < 12; i++) {
+      const mesh = new THREE.Mesh(Blood.DECAL_GEO, this.decalMat);
+      const len = 0.5 + Math.random() * 1.3;
+      const topY = at.y + 0.15;
+      mesh.scale.set(0.08 + Math.random() * 0.12, 0.001, 1);
+      mesh.position.set(
+        at.x + (Math.random() - 0.5) * 1.6,
+        topY,
+        at.z + 0.3 + Math.random() * 0.6,
       );
-      this.object.add(drip);
-      this.drips.push(drip);
+      this.object.add(mesh);
+      this.drips.push({ mesh, topY, len, delay: Math.random() * 1.4, grown: 0 });
     }
 
     // Charco que crece debajo de todo.
@@ -127,20 +144,38 @@ export class Blood {
     this.object.add(this.pool);
   }
 
-  private spawnDrop(at: THREE.Vector3, speed: number): void {
+  private spawnDrop(at: THREE.Vector3, speed: number, spread = 0.5): void {
     const mesh = new THREE.Mesh(Blood.DROP_GEO, this.dropMat);
     mesh.position.copy(at);
-    mesh.position.x += (Math.random() - 0.5) * 0.5;
-    mesh.position.z += (Math.random() - 0.5) * 0.5;
+    mesh.position.x += (Math.random() - 0.5) * spread;
+    mesh.position.z += (Math.random() - 0.5) * spread;
     const dir = new THREE.Vector3(
       (Math.random() - 0.5) * 2,
       Math.random() * 1.5 + 0.2,
       (Math.random() - 0.5) * 2,
     ).normalize();
     const s = speed * (0.25 + Math.random());
-    mesh.scale.setScalar(0.6 + Math.random() * 1.5);
+    const size = 0.6 + Math.random() * 1.5;
+    mesh.scale.setScalar(size);
     this.object.add(mesh);
-    this.drops.push({ mesh, vel: dir.multiplyScalar(s), life: 3 });
+    this.drops.push({ mesh, vel: dir.multiplyScalar(s), life: 4, size });
+  }
+
+  /** Goteo lento desde el cuerpo: cae recto, sin fuerza. */
+  private spawnOoze(): void {
+    const mesh = new THREE.Mesh(Blood.DROP_GEO, this.dropMat);
+    mesh.position.copy(this.gushAt);
+    mesh.position.x += (Math.random() - 0.5) * 1.3;
+    mesh.position.z += (Math.random() - 0.5) * 0.9;
+    const size = 0.7 + Math.random() * 0.9;
+    mesh.scale.setScalar(size);
+    this.object.add(mesh);
+    this.drops.push({
+      mesh,
+      vel: new THREE.Vector3((Math.random() - 0.5) * 0.2, 0, 0),
+      life: 4,
+      size,
+    });
   }
 
   private addDecal(x: number, z: number, scale: number): void {
@@ -163,8 +198,9 @@ export class Blood {
     this.drops.length = 0;
     for (const d of this.decals) this.object.remove(d);
     this.decals.length = 0;
-    for (const d of this.drips) this.object.remove(d);
+    for (const d of this.drips) this.object.remove(d.mesh);
     this.drips.length = 0;
+    this.oozeTime = 0;
     if (this.pool) {
       this.object.remove(this.pool);
       this.pool = null;
@@ -182,11 +218,24 @@ export class Blood {
       for (let i = 0; i < n; i++) this.spawnDrop(this.gushAt, 3.2);
     }
 
+    // Goteo: el cuerpo sigue soltando sangre mucho despues del golpe.
+    if (this.oozeTime > 0) {
+      this.oozeTime -= dt;
+      this.oozeTick -= dt;
+      if (this.oozeTick <= 0) {
+        this.oozeTick = 0.1 + Math.random() * 0.16;
+        this.spawnOoze();
+      }
+    }
+
     for (let i = this.drops.length - 1; i >= 0; i--) {
       const d = this.drops[i];
       d.life -= dt;
       d.vel.y -= 20 * dt;
       d.mesh.position.addScaledVector(d.vel, dt);
+      // Se estira con la caida: una gota rapida es un hilo, no una bolita.
+      const stretch = 1 + Math.min(2.6, Math.abs(d.vel.y) * 0.14);
+      d.mesh.scale.set(d.size / Math.sqrt(stretch), d.size * stretch, d.size / Math.sqrt(stretch));
       // Al tocar el fondo del pozo la gota se convierte en mancha.
       if (d.mesh.position.y <= PIT_FLOOR_Y + 0.02 || d.life <= 0) {
         this.object.remove(d.mesh);
@@ -195,6 +244,20 @@ export class Blood {
           this.addDecal(d.mesh.position.x, d.mesh.position.z, 0.18 + Math.random() * 0.45);
         }
       }
+    }
+
+    // Hilos corriendo por el hierro: cada uno arranca con su retardo y baja.
+    for (const drip of this.drips) {
+      if (drip.delay > 0) {
+        drip.delay -= dt;
+        continue;
+      }
+      if (drip.grown >= 1) continue;
+      drip.grown = Math.min(1, drip.grown + dt * (0.5 + drip.len * 0.35));
+      const eased = 1 - Math.pow(1 - drip.grown, 2.2);
+      const len = Math.max(0.001, drip.len * eased);
+      drip.mesh.scale.y = len;
+      drip.mesh.position.y = drip.topY - len / 2;
     }
 
     // El charco crece y se queda: la partida termino, la mancha no.

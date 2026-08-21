@@ -9,11 +9,12 @@ import { PromptRack } from "./PromptRack";
 import { Climber } from "./Climber";
 import { Particles } from "./Particles";
 import { Blood } from "./Blood";
+import { Rivals } from "./Rivals";
 import { InputController } from "./InputController";
 import { Hud } from "./Hud";
 import { SoundEffects } from "./SoundEffects";
 import { DIRECTIONS, type Direction } from "./directions";
-import { rampPoint } from "./ramp";
+import { rampPoint, BOTTOM } from "./ramp";
 import { initRoomMode, type RoomMode } from "../../../shared/room/roomMode";
 import {
   BEST_SCORE_KEY,
@@ -56,6 +57,10 @@ const COUNTDOWN_STEP = 0.75;
 const MAX_DT = 0.05;
 /** Segundos entre la caida y el cartel de game over (ver `die`). */
 const GAMEOVER_DELAY = 1.6;
+/** Cada cuanto se emite la altura propia a los rivales de la sala. */
+const LIVE_SEND_INTERVAL = 0.12;
+/** Cada cuanto se revisa si cambio la lista de jugadores de la sala. */
+const RIVAL_POLL = 1.0;
 
 /**
  * La Escalera. Un obrero sube una escalera mecanica que baja: cada flecha que
@@ -81,6 +86,7 @@ export class Game {
   private readonly climber = new Climber();
   private readonly particles = new Particles();
   private readonly blood = new Blood();
+  private readonly rivals = new Rivals();
   private readonly hud: Hud;
   private readonly roomMode: RoomMode | null;
 
@@ -100,6 +106,12 @@ export class Game {
   private sameDirRun = 0;
   private promptTime = 0;
   private beat = BEAT_START;
+
+  /** Firma de la lista de rivales ya montada (para no rearmar en cada sync). */
+  private rivalSignature = "";
+  private liveTimer = 0;
+  private rivalPoll = 0;
+  private scrollSpeed = STEP_SCROLL_BASE;
 
   private countdownTime = 0;
   private lastCountdownIndex = -1;
@@ -171,6 +183,7 @@ export class Game {
       this.climber.object,
       this.particles.object,
       this.blood.object,
+      this.rivals.object,
     );
 
     this.hud = new Hud(this.container, () => this.handleAction());
@@ -187,6 +200,12 @@ export class Game {
       getScore: () => this.score,
       onStart: () => this.beginCountdown(),
     });
+    // En sala, cada rival tiene su propia escalera al lado: su altura llega por
+    // el broadcast efimero del canal (nada de esto toca la DB ni el puntaje).
+    this.roomMode?.onLive((player, data) => {
+      this.rivals.apply(player, Number(data.h) || 0, data.d === 1);
+    });
+    this.roomMode?.onSync(() => this.syncRivals());
 
     this.fitCamera();
     window.addEventListener("resize", this.onResize);
@@ -219,11 +238,11 @@ export class Game {
     this.rack.setQueue(this.queue);
     this.rack.reset();
     this.climber.reset();
+    this.rivals.reset();
     this.particles.reset();
     this.blood.reset();
     this.hud.clearBlood();
     this.hud.setCombo(0);
-    this.hud.setDanger(this.height / MAX_HEIGHT);
   }
 
   private handleAction(): void {
@@ -254,8 +273,8 @@ export class Game {
     this.deadFor = 0;
     this.overlayPending = false;
     this.height = 0;
-    this.hud.setDanger(0);
     this.climber.kill();
+    this.roomMode?.broadcastLive({ h: 0, d: 1 });
     SoundEffects.playDeath();
     this.hud.flashHit();
     this.screenShake = 0.45;
@@ -358,6 +377,28 @@ export class Game {
 
   // --- loop -----------------------------------------------------------------
 
+  /**
+   * Arma (o rearma) los carriles rivales cuando cambia la lista de la sala.
+   * `players()` viene vacio hasta que carga el primer snapshot, y en el lobby
+   * puede sumarse gente, asi que se compara una firma en vez de montar una vez.
+   */
+  private syncRivals(): void {
+    const room = this.roomMode;
+    if (!room) return;
+    const players = room.players();
+    if (players.length === 0) return;
+    const signature = players.join("|");
+    if (signature === this.rivalSignature) return;
+    this.rivalSignature = signature;
+
+    const others = players.filter((p) => p !== room.me);
+    this.rivals.build(others);
+    if (others.length > 0) {
+      this.environment.expand(this.rivals.halfWidth);
+      this.fitCamera();
+    }
+  }
+
   private readonly tick = (): void => {
     const now = performance.now();
     const dt = Math.min((now - this.lastTime) / 1000, MAX_DT);
@@ -368,8 +409,19 @@ export class Game {
     else if (this.state === "countdown") this.updateCountdown(dt);
     else this.updateIdle(dt);
 
+    // La lista de la sala tarda en cargar y puede cambiar en el lobby, asi que
+    // ademas del ping se la revisa cada tanto (comparar la firma es barato).
+    if (this.roomMode) {
+      this.rivalPoll -= dt;
+      if (this.rivalPoll <= 0) {
+        this.rivalPoll = RIVAL_POLL;
+        this.syncRivals();
+      }
+    }
+
     this.particles.update(dt);
     this.blood.update(dt);
+    this.rivals.update(dt, this.scrollSpeed);
     this.environment.update(dt, this.elapsed);
     this.rack.update(dt, this.elapsed);
     this.escalator.pulsePit(this.elapsed, 1 - Math.min(1, this.height / 0.45));
@@ -381,7 +433,8 @@ export class Game {
 
   private updateCountdown(dt: number): void {
     this.climber.idle(this.height, this.elapsed);
-    this.escalator.update(dt, STEP_SCROLL_BASE);
+    this.scrollSpeed = STEP_SCROLL_BASE;
+    this.escalator.update(dt, this.scrollSpeed);
     this.followClimber();
 
     this.countdownTime += dt;
@@ -397,7 +450,8 @@ export class Game {
 
   private updateIdle(dt: number): void {
     // La maquina nunca se detiene, ni en el menu ni sobre el cadaver.
-    this.escalator.update(dt, STEP_SCROLL_BASE);
+    this.scrollSpeed = STEP_SCROLL_BASE;
+    this.escalator.update(dt, this.scrollSpeed);
     if (this.state === "gameover") {
       this.deadFor += dt;
       this.climber.update(dt, this.height, 1);
@@ -423,8 +477,15 @@ export class Game {
     const applied = drift * (this.stumbleTimer > 0 ? STUMBLE_DRIFT_MULT : 1);
     this.height -= applied * dt;
 
-    this.escalator.update(dt, STEP_SCROLL_BASE + drift * STEP_SCROLL_PER_DRIFT);
-    this.hud.setDanger(this.height / MAX_HEIGHT);
+    this.scrollSpeed = STEP_SCROLL_BASE + drift * STEP_SCROLL_PER_DRIFT;
+    this.escalator.update(dt, this.scrollSpeed);
+
+    // Altura propia a los rivales, ~8 veces por segundo.
+    this.liveTimer -= dt;
+    if (this.liveTimer <= 0 && this.roomMode) {
+      this.liveTimer = LIVE_SEND_INTERVAL;
+      this.roomMode.broadcastLive({ h: Math.round(this.height * 1000) / 1000, d: 0 });
+    }
 
     if (this.height <= 0) {
       this.die();
@@ -486,11 +547,24 @@ export class Game {
     this.camera.lookAt(CAM_TARGET[0], this.camTarget.y, CAM_TARGET[2]);
   }
 
-  /** En vertical la camara se aleja para que el rack y el pozo entren juntos. */
+  /**
+   * En vertical la camara se aleja para que el cartel y el pozo entren juntos;
+   * en sala tambien se aleja lo necesario para que entren todos los carriles
+   * (se calcula con el fov horizontal real contra el borde mas cercano de la
+   * escena, el pie de las escaleras).
+   */
   private fitCamera(): void {
     const aspect = window.innerWidth / window.innerHeight;
     this.camera.aspect = aspect;
-    this.camPush = aspect < 1 ? CAM_PORTRAIT_PUSH * Math.min(1, 1 - aspect + 0.35) : 0;
+
+    const portrait = aspect < 1 ? CAM_PORTRAIT_PUSH * Math.min(1, 1 - aspect + 0.35) : 0;
+    let lanes = 0;
+    if (this.rivals.halfWidth > 0) {
+      const vHalf = THREE.MathUtils.degToRad(CAM_FOV) / 2;
+      const hHalf = Math.atan(Math.tan(vHalf) * aspect);
+      lanes = this.rivals.halfWidth / Math.tan(hHalf) - (CAM_POS[2] - BOTTOM.z);
+    }
+    this.camPush = Math.max(0, portrait, lanes);
     this.camera.updateProjectionMatrix();
   }
 

@@ -6,11 +6,8 @@ import {
   SCREEN_Y,
   SCREEN_Z,
   COLOR_IRON_DARK,
-  COLOR_IRON,
-  COLOR_BONE,
   COLOR_EMBER,
   COLOR_RUBY,
-  COLOR_GOLD_DEEP,
 } from "./constants";
 
 const MATRIX_GRID = 17;
@@ -85,7 +82,7 @@ export class PromptRack {
   private readonly group = new THREE.Group();
   private readonly glyph: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   private readonly panel: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
-  private readonly timerBar: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  private urgency = 0; // 0 = recien salio la flecha, 1 = se vence
   private missFlash = 0;
   private pop = 0;
   private readonly baseColor = new THREE.Color(COLOR_EMBER);
@@ -124,21 +121,6 @@ export class PromptRack {
     this.group.add(this.glyph);
     this.object.add(this.group);
 
-    // Barra de tiempo bajo la pantalla: cuanto queda para esta flecha.
-    const barBack = new THREE.Mesh(
-      new THREE.PlaneGeometry(SCREEN_SIZE, 0.11),
-      glowMat(COLOR_IRON, 0.6),
-    );
-    barBack.position.set(0, -SCREEN_SIZE * 0.62, 0.06);
-    this.object.add(barBack);
-
-    this.timerBar = new THREE.Mesh(
-      new THREE.PlaneGeometry(SCREEN_SIZE, 0.11),
-      glowMat(COLOR_BONE, 1),
-    );
-    this.timerBar.position.set(0, -SCREEN_SIZE * 0.62, 0.07);
-    this.object.add(this.timerBar);
-
     // Viga y tensores de los que cuelga el cartel.
     const beam = new THREE.Mesh(
       new THREE.BoxGeometry(SCREEN_SIZE * 2.9, 0.32, 0.5),
@@ -154,13 +136,6 @@ export class PromptRack {
       this.object.add(rod);
     }
 
-    const plate = new THREE.Mesh(
-      new THREE.BoxGeometry(SCREEN_SIZE * 1.6, 0.16, 0.12),
-      toonMat(COLOR_GOLD_DEEP),
-    );
-    plate.position.set(0, -SCREEN_SIZE * 0.78, 0.02);
-    this.object.add(plate);
-
     this.light = new THREE.PointLight(COLOR_EMBER, 16, 12, 2);
     this.light.position.set(0, 0, 1.6);
     this.object.add(this.light);
@@ -171,12 +146,15 @@ export class PromptRack {
     if (queue.length > 0) this.glyph.rotation.z = DIR_ROTATION[queue[0]];
   }
 
-  /** `p` en [0, 1]: cuanto tiempo le queda a la flecha actual. */
+  /**
+   * `p` en [0, 1]: cuanto tiempo le queda a la flecha actual. Ya no hay barra:
+   * el reloj lo cuenta **la flecha misma**, que se va apagando hacia el rubi y
+   * empieza a latir sobre el final. Una barra debajo era un objeto mas en el
+   * cuadro para decir algo que la propia flecha puede decir sola.
+   */
   setProgress(p: number): void {
     const clamped = Math.max(0, Math.min(1, p));
-    this.timerBar.scale.x = clamped;
-    // Se pone rubi cuando esta por vencerse: el aviso llega antes que el castigo.
-    this.timerBar.material.color.set(clamped < 0.28 ? COLOR_RUBY : COLOR_BONE);
+    this.urgency = Math.pow(1 - clamped, 1.8);
   }
 
   /** Acierto: golpe de escala, sin destello (ver comentario de la clase). */
@@ -191,14 +169,18 @@ export class PromptRack {
   reset(): void {
     this.missFlash = 0;
     this.pop = 0;
-    this.setProgress(1);
+    this.urgency = 0;
   }
 
   update(dt: number, elapsed: number): void {
     this.missFlash = Math.max(0, this.missFlash - dt * 3.4);
     this.pop = Math.max(0, this.pop - dt * 5);
 
-    this.color.copy(this.baseColor).lerp(this.missColor, this.missFlash);
+    // El ambar se corre al rubi a medida que se vence el tiempo; el error lo
+    // lleva al rubi de una.
+    this.color
+      .copy(this.baseColor)
+      .lerp(this.missColor, Math.max(this.urgency * 0.85, this.missFlash));
     this.glyph.material.color.copy(this.color);
     this.panel.material.color.copy(this.color);
     this.panel.material.opacity = 0.12 + this.missFlash * 0.3;
@@ -206,7 +188,9 @@ export class PromptRack {
     this.light.intensity = 16 + this.missFlash * 30 + Math.sin(elapsed * 6) * 1.5;
 
     // Respiracion + golpe de escala del acierto: nunca esta del todo quieta.
-    const breathe = 1 + Math.sin(elapsed * 4.2) * 0.015 + this.pop * 0.06;
+    // Sobre el final la respiracion se vuelve un latido: el apuro se ve.
+    const urgentBeat = this.urgency > 0.55 ? Math.sin(elapsed * 22) * 0.035 * this.urgency : 0;
+    const breathe = 1 + Math.sin(elapsed * 4.2) * 0.015 + this.pop * 0.06 + urgentBeat;
     this.group.scale.setScalar(breathe);
   }
 }

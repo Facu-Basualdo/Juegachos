@@ -56,8 +56,6 @@ export class Hud {
   private readonly scoreEl: HTMLDivElement;
   private readonly bestEl: HTMLDivElement;
   private readonly comboEl: HTMLDivElement;
-  private readonly gaugeEl: HTMLDivElement;
-  private readonly gaugeFillEl: HTMLDivElement;
   private readonly overlayEl: HTMLDivElement;
   private readonly titleEl: HTMLDivElement;
   private readonly subtitleEl: HTMLDivElement;
@@ -83,16 +81,6 @@ export class Hud {
     this.comboEl.className = "hud__combo";
 
     hud.append(this.scoreEl, this.bestEl, this.comboEl);
-
-    // Medidor de peligro: la altura que te queda antes de las puas.
-    this.gaugeEl = document.createElement("div");
-    this.gaugeEl.className = "gauge";
-    this.gaugeFillEl = document.createElement("div");
-    this.gaugeFillEl.className = "gauge__fill";
-    const gaugeLabel = document.createElement("div");
-    gaugeLabel.className = "gauge__label";
-    gaugeLabel.textContent = "ALTURA";
-    this.gaugeEl.append(this.gaugeFillEl, gaugeLabel);
 
     this.flashEl = document.createElement("div");
     this.flashEl.className = "flash";
@@ -126,7 +114,7 @@ export class Hud {
     this.countdownEl = document.createElement("div");
     this.countdownEl.className = "countdown";
 
-    container.append(hud, this.gaugeEl, this.flashEl, this.bloodEl, this.overlayEl, this.countdownEl);
+    container.append(hud, this.flashEl, this.bloodEl, this.overlayEl, this.countdownEl);
 
     const activate = (e: Event): void => {
       e.preventDefault();
@@ -151,27 +139,36 @@ export class Hud {
     this.comboEl.textContent = combo >= 3 ? `RACHA x${combo}` : "";
   }
 
-  /** `height` en [0, 1]: 1 = arriba del todo, 0 = las puas. */
-  setDanger(height: number): void {
-    const h = Math.max(0, Math.min(1, height));
-    this.gaugeFillEl.style.height = `${h * 100}%`;
-    this.gaugeFillEl.classList.toggle("is-critical", h < 0.28);
-  }
-
   setHudVisible(visible: boolean): void {
     this.scoreEl.style.opacity = visible ? "1" : "0";
     this.bestEl.style.opacity = visible ? "0.85" : "0";
     this.comboEl.style.opacity = visible ? "1" : "0";
-    this.gaugeEl.style.opacity = visible ? "1" : "0";
   }
 
-  /** Sangre en el objetivo, al empalarse. Queda hasta la proxima partida. */
+  /**
+   * Sangre en el objetivo, al empalarse: la salpicadura aparece de golpe y
+   * despues **chorrea hacia abajo** (los hilos se generan aca y bajan por CSS).
+   * Queda hasta la proxima partida.
+   */
   showBlood(): void {
+    this.bloodEl.replaceChildren();
+    for (let i = 0; i < 14; i++) {
+      const drip = document.createElement("div");
+      drip.className = "blood__drip";
+      drip.style.left = `${Math.random() * 100}%`;
+      drip.style.top = `${Math.random() * 55}%`;
+      drip.style.width = `${6 + Math.random() * 16}px`;
+      drip.style.setProperty("--run", `${18 + Math.random() * 46}vh`);
+      drip.style.animationDelay = `${Math.random() * 1.4}s`;
+      drip.style.animationDuration = `${2.2 + Math.random() * 3.4}s`;
+      this.bloodEl.append(drip);
+    }
     this.bloodEl.classList.add("is-shown");
   }
 
   clearBlood(): void {
     this.bloodEl.classList.remove("is-shown");
+    this.bloodEl.replaceChildren();
   }
 
   flashHit(): void {
