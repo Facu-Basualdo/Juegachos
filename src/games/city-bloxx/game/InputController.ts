@@ -1,18 +1,23 @@
-/** Turns keyboard / mouse / touch into a single "drop" callback. */
+/**
+ * Turns keyboard / mouse / touch into a single "drop" callback.
+ *
+ * Pointer input is bound on `window` (not the canvas) so a tap to start / drop
+ * works even while the full-screen start / game-over overlay is on top — but
+ * taps that land on interactive UI (the leaderboard name form, the back link)
+ * are ignored so those stay usable.
+ */
 export class InputController {
-  private readonly target: HTMLElement;
   private readonly onDrop: () => void;
 
-  constructor(target: HTMLElement, onDrop: () => void) {
-    this.target = target;
+  constructor(_target: HTMLElement, onDrop: () => void) {
     this.onDrop = onDrop;
     window.addEventListener("keydown", this.onKeyDown);
-    target.addEventListener("pointerdown", this.onPointerDown);
+    window.addEventListener("pointerdown", this.onPointerDown);
   }
 
   dispose(): void {
     window.removeEventListener("keydown", this.onKeyDown);
-    this.target.removeEventListener("pointerdown", this.onPointerDown);
+    window.removeEventListener("pointerdown", this.onPointerDown);
   }
 
   private onKeyDown = (e: KeyboardEvent): void => {
@@ -23,7 +28,9 @@ export class InputController {
   };
 
   private onPointerDown = (e: PointerEvent): void => {
-    e.preventDefault();
+    const el = e.target as HTMLElement | null;
+    // Let clicks on interactive chrome through (leaderboard form, links, buttons).
+    if (el && el.closest("input, button, a, .leaderboard")) return;
     this.onDrop();
   };
 }

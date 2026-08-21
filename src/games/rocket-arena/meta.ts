@@ -10,6 +10,9 @@ export const meta: GameEntry = {
   accent: "#3ba7ff",
   category: "Carreras",
   order: 170,
+  added: "2026-07-03",
+  mobile: true,
+
   // Oculto temporalmente por errores: no aparece en la landing ni en las salas.
   hidden: true,
 };

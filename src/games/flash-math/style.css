@@ -179,6 +179,46 @@ body {
   color: var(--muted);
 }
 
+/* Reloj de la respuesta: una regla de tinta que se consume, con los segundos al lado. */
+.fm-timer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(280px, 70vw);
+}
+
+.fm-timer__track {
+  flex: 1;
+  height: 6px;
+  border: 1px solid var(--line);
+  background: rgba(17, 17, 17, 0.05);
+  overflow: hidden;
+}
+
+/* El ancho lo fija el juego cada frame: sin transition, o la barra iria atrasada. */
+.fm-timer__fill {
+  height: 100%;
+  width: 100%;
+  background: var(--ink);
+}
+
+.fm-timer__text {
+  min-width: 34px;
+  text-align: right;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.fm-timer.is-urgent .fm-timer__fill {
+  background: var(--accent);
+}
+
+.fm-timer.is-urgent .fm-timer__text {
+  color: var(--accent);
+}
+
 .fm-input__answer {
   min-width: 200px;
   min-height: 72px;

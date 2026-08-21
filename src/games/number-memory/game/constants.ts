@@ -23,6 +23,18 @@ export const VANISH_MS = 450;
 // Tras un acierto, cuanto se ve el "¡Bien!" antes de subir de nivel.
 export const CORRECT_HOLD_MS = 750;
 
+/**
+ * Tope para escribir el numero (fase "input"). Al vencer cuenta como error y
+ * termina la partida: fallar es la unica forma de perder que tiene el juego, y un
+ * reloj sin consecuencia no seria un limite. Corre contra `performance.now()`, no
+ * acumulando ticks, asi irse a otra pestana no lo congela.
+ */
+export const ANSWER_TIME_MS = 10_000;
+/** Restante (ms) desde el cual el reloj de respuesta se muestra urgente. */
+export const ANSWER_URGENT_MS = 3_000;
+/** Cada cuanto se refresca el reloj de respuesta. */
+export const ANSWER_TICK_MS = 100;
+
 export const COUNTDOWN_LABELS = ["3", "2", "1", "YA"];
 export const COUNTDOWN_STEP_MS = 750;
 

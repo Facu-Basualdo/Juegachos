@@ -51,9 +51,7 @@ const fail = async (msg) => {
 // ---- Host crea la sala (playlist vacia -> primer juego al azar) ----
 await host.goto(`${args.base}/rooms/`, { waitUntil: "networkidle" });
 await host.locator("input.input").first().fill("hostqa");
-await host.locator('button:has-text("Crear sala")').click(); // home -> pantalla crear
-await host.locator(".rooms__create-actions").waitFor({ timeout: 10000 });
-await host.locator('.rooms__create-actions button:has-text("Crear sala")').click();
+await host.locator('button:has-text("Crear sala")').click(); // home -> lobby directo
 await host.locator(".lobby__code").waitFor({ timeout: 15000 });
 const codeText = await host.locator(".lobby__code").textContent();
 const code = codeText?.trim().match(/[A-Z0-9]{6}/)?.[0];

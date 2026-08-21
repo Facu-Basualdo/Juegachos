@@ -7,6 +7,7 @@ import { isLeaderboardEnabled } from "./shared/supabase";
 import { recordPlay, fetchPlayCounts, cachedPlayCounts } from "./shared/plays";
 import { fetchGameLeaders } from "./shared/leaders";
 import { getNickname, setNickname, NICKNAME_MAX } from "./shared/nickname";
+import { checkGameServer, isGameServerConfigured } from "./shared/server-status";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const roomsOn = isLeaderboardEnabled();
@@ -18,6 +19,7 @@ nav.className = "topbar";
 nav.innerHTML = `
   <a class="topbar__logo" href="/"><img src="/juegachos.png" alt="JUEGACHOS" /></a>
   <div class="topbar__right">
+    ${isGameServerConfigured() ? `<div class="topbar__server is-checking" title="Estado del servidor de los juegos online"><span class="topbar__server-dot"></span><span class="topbar__server-text">Servidor</span><span class="topbar__server-ping" hidden></span></div>` : ""}
     <label class="topbar__name">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4">
         <circle cx="12" cy="8" r="4"></circle>
@@ -88,8 +90,23 @@ nameInput.addEventListener("keydown", (e) => {
 
 // ---------- Filtros por categoria ----------
 
+// La categoria elegida se recuerda entre visitas (igual que el orden). Se valida
+// contra las categorias que existen hoy: si la guardada ya no esta (el juego que
+// la traia se saco del roster), cae a "Todos".
 const categories = ["Todos", ...new Set(games.map((g) => g.category))];
-let activeCategory = "Todos";
+const CATEGORY_KEY = "mg:category";
+
+function readCategory(): string {
+  try {
+    const v = localStorage.getItem(CATEGORY_KEY);
+    if (v && categories.includes(v)) return v;
+  } catch {
+    // ignore
+  }
+  return "Todos";
+}
+
+let activeCategory = readCategory();
 
 const filters = document.createElement("div");
 filters.className = "filters";
@@ -100,6 +117,11 @@ for (const cat of categories) {
   btn.textContent = cat;
   btn.addEventListener("click", () => {
     activeCategory = cat;
+    try {
+      localStorage.setItem(CATEGORY_KEY, cat);
+    } catch {
+      // ignore
+    }
     filters.querySelectorAll(".filters__pill").forEach((b) => b.classList.remove("is-active"));
     btn.classList.add("is-active");
     applyFilters();
@@ -107,17 +129,61 @@ for (const cat of categories) {
   filters.append(btn);
 }
 
+// ---------- Favoritos ----------
+
+// Se marcan con el corazon de cada card y viven solo en este navegador
+// (localStorage `mg:favorites`), igual que el nombre, la categoria y el orden:
+// no hay cuenta ni sincronizacion, asi que no siguen al jugador de un
+// dispositivo a otro. El array esta ordenado del mas reciente al mas viejo, que
+// es como se muestran: marcar un juego lo pone primero de todo, arriba de los
+// favoritos anteriores. No hay tope de cantidad.
+const FAVORITES_KEY = "mg:favorites";
+let favorites: string[] = readFavorites();
+
+function readFavorites(): string[] {
+  try {
+    const raw = localStorage.getItem(FAVORITES_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    // Se validan contra el roster de hoy: el favorito de un juego que se saco
+    // (o que quedo `hidden`) se descarta en vez de arrastrarse para siempre.
+    const ids = new Set(games.map((g) => g.id));
+    return parsed.filter((id): id is string => typeof id === "string" && ids.has(id));
+  } catch {
+    return [];
+  }
+}
+
+function isFavorite(id: string): boolean {
+  return favorites.includes(id);
+}
+
+/** Marca / desmarca y devuelve el estado nuevo (true = quedo como favorito). */
+function toggleFavorite(id: string): boolean {
+  const rest = favorites.filter((f) => f !== id);
+  const nowFav = rest.length === favorites.length;
+  favorites = nowFav ? [id, ...rest] : rest;
+  try {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+  } catch {
+    // ignore
+  }
+  return nowFav;
+}
+
 // ---------- Control de orden ----------
 
 // Orden de las cards, elegible desde el control de la barra de filtros:
-//   - "popular"  (default): mas jugados primero (conteo de partidas).
-//   - "featured": el orden manual por `order` de cada meta.ts.
-//   - "alpha":    alfabetico por titulo.
+//   - "recent" (default): ultimos agregados primero, por la fecha `added` de cada meta.ts.
+//   - "popular": mas jugados primero (conteo de partidas).
+//   - "alpha":   alfabetico por titulo.
 // El modo "popular" arranca con el conteo cacheado (sin parpadeo) y se refresca
 // desde Supabase al terminar de montar. El sort es estable, asi que los empates
-// conservan el orden base de games.ts (por `order`).
+// conservan el orden base de games.ts (por `order`): los juegos que entraron el
+// mismo dia quedan en el orden curado.
 const cardById = new Map<string, HTMLElement>();
-type SortMode = "popular" | "featured" | "alpha";
+type SortMode = "recent" | "popular" | "alpha";
 const SORT_KEY = "mg:sort";
 let sortMode: SortMode = readSortMode();
 let playCounts = cachedPlayCounts();
@@ -132,11 +198,11 @@ sortLabel.textContent = "Ordenar";
 // Dropdown propio (no un <select> nativo, cuya lista la dibuja el SO y no se
 // puede tematizar): un boton disparador + un menu con el estilo del sitio.
 const SORT_LABELS: Record<SortMode, string> = {
+  recent: "Nuevos",
   popular: "Populares",
-  featured: "Destacados",
   alpha: "A-Z",
 };
-const SORT_ORDER: SortMode[] = ["popular", "featured", "alpha"];
+const SORT_ORDER: SortMode[] = ["recent", "popular", "alpha"];
 
 const sortDropdown = document.createElement("div");
 sortDropdown.className = "sort__dropdown";
@@ -231,22 +297,75 @@ grid.className = "grid";
 
 function readSortMode(): SortMode {
   try {
+    // El modo "featured" (orden manual) fue reemplazado por "recent"; un valor
+    // guardado de una version anterior cae al default.
     const v = localStorage.getItem(SORT_KEY);
-    if (v === "popular" || v === "featured" || v === "alpha") return v;
+    if (v === "recent" || v === "popular" || v === "alpha") return v;
   } catch {
     // ignore
   }
-  return "popular";
+  return "recent";
 }
 
+/**
+ * El orden final de la grilla: los favoritos fijos arriba (en el orden en que
+ * se marcaron, el ultimo primero) y abajo el resto segun el modo elegido. El
+ * pin gana sobre los tres modos a proposito — un cuarto modo "Favoritos" en el
+ * dropdown no lo encontraria nadie.
+ */
 function orderedGames(): GameEntry[] {
+  const sorted = sortedGames();
+  if (favorites.length === 0) return sorted;
+  const byId = new Map(sorted.map((g) => [g.id, g]));
+  const pinned = favorites
+    .map((id) => byId.get(id))
+    .filter((g): g is GameEntry => g !== undefined);
+  const pinnedIds = new Set(pinned.map((g) => g.id));
+  return [...pinned, ...sorted.filter((g) => !pinnedIds.has(g.id))];
+}
+
+function sortedGames(): GameEntry[] {
   if (sortMode === "alpha") {
     return [...games].sort((a, b) => a.title.localeCompare(b.title));
   }
-  if (sortMode === "featured") {
-    return [...games]; // games.ts ya viene ordenado por `order`
+  if (sortMode === "popular") {
+    return [...games].sort((a, b) => (playCounts[b.id] ?? 0) - (playCounts[a.id] ?? 0));
   }
-  return [...games].sort((a, b) => (playCounts[b.id] ?? 0) - (playCounts[a.id] ?? 0));
+  // games.ts ya viene ordenado por `order`, y el sort es estable: los juegos
+  // agregados el mismo dia conservan ese orden curado.
+  return [...games].sort((a, b) => b.added.localeCompare(a.added));
+}
+
+/**
+ * Chips de plataforma: en que se puede jugar cada juego. Son iconos y no las
+ * palabras "PC" / "Móvil" porque al lado del chip de categoria, dos chips de
+ * texto se leian como dos categorias. Los SVG van inline — no hay assets
+ * sueltos que cargar — y toman el color con `currentColor`, asi que el acento
+ * se cambia desde el CSS y en un solo lugar. El `aria-label` va en el span
+ * porque el `<svg>` es `aria-hidden`: sin el, el chip seria invisible para un
+ * lector de pantalla.
+ *
+ * El de PC va en **todas** las cards (todo el roster se juega en compu); el del
+ * telefono solo en los que declaran `mobile: true` en su `meta.ts`. Por eso el
+ * de PC queda en el color base del chip y el del telefono en el cian de acento:
+ * el que aporta informacion es el segundo, y el par se lee "ademas en el celu".
+ */
+const PC_BADGE = `<span class="game-card__tag game-card__tag--icon" role="img" aria-label="Se puede jugar en la computadora" title="Se puede jugar en la computadora"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M12 17v3" /><path d="M8.5 20h7" /></svg></span>`;
+
+const MOBILE_BADGE = `<span class="game-card__tag game-card__tag--icon game-card__tag--mobile" role="img" aria-label="Se puede jugar en el celular" title="Se puede jugar en el celular"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="7" y="2" width="10" height="20" rx="2.5" /><path d="M10.5 18.5h3" /></svg></span>`;
+
+const HEART_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>`;
+
+/**
+ * Estado del corazon. Es un <button> con `aria-pressed` (no un icono decorativo)
+ * para que un lector de pantalla lo lea como lo que es: un interruptor.
+ */
+function setFavState(btn: HTMLButtonElement, fav: boolean): void {
+  btn.classList.toggle("is-active", fav);
+  btn.setAttribute("aria-pressed", String(fav));
+  const label = fav ? "Quitar de favoritos" : "Agregar a favoritos";
+  btn.setAttribute("aria-label", label);
+  btn.title = label;
 }
 
 orderedGames().forEach((game, i) => {
@@ -270,7 +389,10 @@ orderedGames().forEach((game, i) => {
   card.innerHTML = `
     <div class="game-card__cover">
       <div class="game-card__fallback"></div>
-      <span class="game-card__tag">${game.category}</span>
+      <div class="game-card__tags">
+        <span class="game-card__tag">${game.category}</span>
+        ${PC_BADGE}${game.mobile ? MOBILE_BADGE : ""}
+      </div>
     </div>
     <div class="game-card__head">
       <h2 class="game-card__name">${game.title}</h2>
@@ -286,6 +408,23 @@ orderedGames().forEach((game, i) => {
   img.loading = "lazy";
   img.addEventListener("error", () => img.remove());
   card.querySelector(".game-card__cover")!.append(img);
+
+  // Corazon de favorito: arriba a la izquierda de la portada (el lugar que
+  // antes ocupaban los chips, que bajaron al pie). La card es un <a>, asi que
+  // el clic tiene que cortarse aca — si navegara, marcar un favorito abriria el
+  // juego y ademas le sumaria una partida al contador de populares.
+  const favBtn = document.createElement("button");
+  favBtn.className = "game-card__fav";
+  favBtn.type = "button";
+  favBtn.innerHTML = HEART_ICON;
+  setFavState(favBtn, isFavorite(game.id));
+  favBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFavState(favBtn, toggleFavorite(game.id));
+    applyOrder();
+  });
+  card.querySelector(".game-card__cover")!.append(favBtn);
 
   if (roomsOn) {
     const rankBtn = document.createElement("button");
@@ -339,7 +478,7 @@ if (roomsOn) {
       <h2 class="rooms-banner__title">&iexcl;Jug&aacute; con amigos!</h2>
       <p class="rooms-banner__subtitle">Cre&aacute; una sala, compart&iacute; el c&oacute;digo y compitan ronda a ronda por el mejor puntaje.</p>
     </div>
-    <span class="rooms-banner__cta">Crear sala <span class="rooms-banner__arrow">&rarr;</span></span>
+    <span class="rooms-banner__cta">Salas <span class="rooms-banner__arrow">&rarr;</span></span>
   `;
 
   // Fondo ilustrado del banner; si el archivo no existe queda el glow solo.
@@ -379,6 +518,10 @@ function applyFilters(): void {
 }
 
 searchInput.addEventListener("input", applyFilters);
+
+// Las cards se montan todas visibles; si la categoria viene guardada de una
+// visita anterior hay que ocultar las que no entran.
+applyFilters();
 
 // ---------- Footer ----------
 
@@ -459,6 +602,39 @@ main.append(grid, empty);
 
 app.append(nav, main, footer);
 
+// ---------- Estado del game server ----------
+
+// Indicador en la barra de navegacion: dice si el server de los juegos online
+// (Bomba Palabra, Cadena de Palabras, Basta, Impostor, PONG en sala) esta vivo.
+// Se pinta solo cuando hay VITE_GAME_SERVER_URL y se re-chequea cada minuto, asi
+// el que ve "no disponible" adentro de un juego sabe desde la landing si es el
+// server.
+const SERVER_PING_MS = 60_000;
+const serverChip = nav.querySelector<HTMLElement>(".topbar__server");
+if (serverChip) {
+  const textEl = serverChip.querySelector<HTMLElement>(".topbar__server-text")!;
+  const pingEl = serverChip.querySelector<HTMLElement>(".topbar__server-ping")!;
+  const refreshServerChip = async (): Promise<void> => {
+    const { status, url, pingMs, fallback } = await checkGameServer();
+    const online = status === "online";
+    serverChip.classList.remove("is-checking");
+    serverChip.classList.toggle("is-online", online);
+    serverChip.classList.toggle("is-offline", !online);
+    serverChip.classList.toggle("is-fallback", online && fallback);
+    textEl.textContent = online ? (fallback ? "Servidor de respaldo" : "Servidor") : "Servidor caído";
+    // El ping es el round-trip del /health con la conexion ya caliente (el modulo
+    // descarta la primera medicion), asi que se parece a lo que paga el socket del
+    // juego y no al costo de abrir la conexion.
+    pingEl.textContent = online ? `${pingMs} ms` : "";
+    pingEl.hidden = !online;
+    serverChip.title = online
+      ? `${fallback ? "Respondiendo el servidor de respaldo (el principal está caído)" : "El servidor de los juegos online está funcionando"}\n${url}\nPing: ${pingMs} ms`
+      : "El servidor de los juegos online no responde: Bomba Palabra, Cadena de Palabras, Basta e Impostor no se pueden jugar";
+  };
+  void refreshServerChip();
+  setInterval(() => void refreshServerChip(), SERVER_PING_MS);
+}
+
 // ---------- Banner del salon de la fama: preview del podio ----------
 
 // Rellena el mini-podio del banner con los 3 lideres top (el mismo podio de
@@ -508,6 +684,13 @@ if (roomsOn) {
 // Reordena las cards segun el modo actual: mueve los nodos existentes al nuevo
 // orden (no los recrea) y refresca el stagger `--i`.
 function applyOrder(): void {
+  // Reordenar es re-insertar los nodos, y eso vuelve a disparar la animacion de
+  // entrada de cada card (con su retraso escalonado, o sea varios segundos de
+  // grilla desvaneciendose). El "rise" es para la carga de la pagina y nada mas,
+  // asi que en el primer reordenamiento la grilla queda "asentada" y de ahi en
+  // mas los cambios de orden son instantaneos — que importa sobre todo con los
+  // favoritos, donde se reordena a cada clic.
+  grid.classList.add("is-settled");
   orderedGames().forEach((game, i) => {
     const card = cardById.get(game.id);
     if (!card) return;

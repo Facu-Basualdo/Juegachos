@@ -12,6 +12,10 @@ export const meta: GameEntry = {
   accent: "#5fc248",
   category: "Precisión",
   order: 350,
+  added: "2026-07-07",
+  mobile: true,
+
+  roomTimeLimitSec: 300,
 };
 
 // El puntaje es el total de golpes de los 3 hoyos: menos es mejor.

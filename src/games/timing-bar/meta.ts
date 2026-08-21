@@ -10,6 +10,10 @@ export const meta: GameEntry = {
   accent: "#00f0ff",
   category: "Reflejos",
   order: 65,
+  added: "2026-07-07",
+  mobile: true,
+
+  roomTimeLimitSec: 90,
 };
 
 export const scoring: GameScoring = {

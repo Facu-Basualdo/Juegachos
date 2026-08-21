@@ -35,6 +35,10 @@ export type WbRejectReason =
   | "already-used"
   | "not-your-turn";
 
+/** Reaccion (cara del personaje). Espeja `WbEmoteId` de `server/src/protocol.ts` y
+ *  el allowlist de `constants.ts`; NO viaja en `wb:state` (es efimera). */
+export type WbEmoteId = "risa" | "sorpresa" | "enojo" | "burla" | "llanto";
+
 export interface WbGameover {
   ranking: { nickname: string; place: number }[];
 }
@@ -43,8 +47,10 @@ export interface WordBombTransport {
   onState(cb: (state: WbState) => void): void;
   onInvalid(cb: (reason: WbRejectReason) => void): void;
   onTyping(cb: (player: string, text: string) => void): void;
+  onEmote(cb: (player: string, emote: WbEmoteId) => void): void;
   onGameover(cb: (result: WbGameover) => void): void;
   submit(word: string): void;
   sendTyping(text: string): void;
+  sendEmote(emote: WbEmoteId): void;
   dispose(): void;
 }

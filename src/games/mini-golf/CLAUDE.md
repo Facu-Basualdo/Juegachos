@@ -168,6 +168,19 @@ With `?room=` in the URL the finished round reports total strokes to the room
 instead of the global ranking, and the restart input is blocked (one round per
 match). Without the param nothing changes.
 
+**F5 doesn't restart the round.** `completed` (the closed holes) and the strokes
+already taken on the hole in progress are persisted to `sessionStorage` via
+`src/shared/room/roomRun.ts`; `beginCountdown()` returns early when
+`resumeSavedRun()` finds a snapshot. The ball goes back to the **tee** of the
+current hole — as it does after a fall into the void — but **the strokes it cost
+are kept**: otherwise a reload would be a free mulligan, and `direction` is
+`"lower"`. `holeIndex` and `totalStrokes` are **derived** from `completed`, never
+stored. `holeComplete` saves with an explicit `strokes = 0` (the strokes already
+travelled inside `completed`) rather than zeroing the field, which is still being
+compared against `MAX_STROKES` in the same frame. The fall penalty saves too.
+`finishRound()` clears the snapshot; if all 3 holes were already in the snapshot
+(the round ended during the reload) the resume goes straight to `finishRound()`.
+
 ## Scoring
 
 Total strokes across the 3 holes, `direction: "lower"`, formatted as

@@ -19,11 +19,12 @@ export interface RankedPlayer {
 }
 
 /**
- * Nivel de comparacion: los que terminaron van primero, despues los parciales
- * por timeout, y al final los que no reportaron nada (0 puntos).
+ * Nivel de comparacion. Primero los puntajes comparables entre si, despues los
+ * parciales que no se pueden comparar (ver abajo), y al final los que no
+ * reportaron nada (0 puntos).
  */
-const TIER_FINISHED = 0;
-const TIER_PARTIAL = 1;
+const TIER_SCORED = 0;
+const TIER_UNCOMPARABLE = 1;
 const TIER_ABSENT = 2;
 
 interface Entry {
@@ -43,8 +44,14 @@ interface Entry {
  * Regla para juegos con direction "lower" (reaction-time, sliding-puzzle): un
  * parcial por timeout NO es comparable (menos movimientos sin resolver
  * "ganaria"), asi que todos los parciales empatan entre si detras de los que
- * terminaron. En juegos "higher" el parcial vale como puntaje normal dentro de
- * su tier.
+ * terminaron.
+ *
+ * En juegos "higher" el parcial SI es comparable: son los puntos que el jugador
+ * llevaba cuando se corto la ronda, tan validos como los de quien murio antes de
+ * que venciera el reloj. Por eso van en el MISMO tier que los terminados. Antes
+ * iban en un tier propio detras de ellos, lo que premiaba morir temprano: en
+ * Asteroides, morir a los 30 s con 500 puntos le ganaba a seguir vivo al minuto
+ * 3 con 3000.
  */
 export function rankRound(
   gameId: string,
@@ -62,16 +69,10 @@ export function rankRound(
     }
     if (!row.finished && direction === "lower") {
       // Parcial no comparable: empatan todos entre si.
-      return { player, score: row.score, finished: false, tier: TIER_PARTIAL, key: 0 };
+      return { player, score: row.score, finished: false, tier: TIER_UNCOMPARABLE, key: 0 };
     }
     const key = direction === "lower" ? -row.score : row.score;
-    return {
-      player,
-      score: row.score,
-      finished: row.finished,
-      tier: row.finished ? TIER_FINISHED : TIER_PARTIAL,
-      key,
-    };
+    return { player, score: row.score, finished: row.finished, tier: TIER_SCORED, key };
   });
 
   entries.sort((a, b) => {

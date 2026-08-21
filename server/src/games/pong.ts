@@ -37,7 +37,17 @@ const AI_MARGIN = 30;
  *  (`src/games/pong/game/Game.ts`). */
 const SCORE_LIMIT = 3;
 const TICK_MS = 16; // ~60 fps: fisica + broadcast (mas suave y menos lag de input)
-const MAX_STEP_DT = 0.034; // corte de dt si el intervalo se atrasa
+/** dt FIJO de cada paso de simulacion (s). La fisica NO se integra con el tiempo
+ *  real medido entre despertares del `setInterval`: el timer de Node no es preciso
+ *  (en Windows la resolucion es de ~15.6 ms, asi que un `setInterval(16)` cae a
+ *  15.6 / 31.2 ms de forma despareja) y ese jitter entraba directo en la velocidad
+ *  de la pelota. Con paso fijo + acumulador la simulacion es determinista y el
+ *  reloj que se le manda al cliente (`simTime`) avanza en escalones exactos. */
+const STEP_DT = TICK_MS / 1000;
+/** Tope de tiempo real absorbido por despertar (ms). Si el proceso se cuelga o el
+ *  event loop se atrasa, se descarta el excedente en vez de simular 200 pasos de
+ *  golpe (la "espiral de la muerte"). */
+const MAX_CATCHUP_MS = 100;
 /** Maximo avance de la pelota por sub-paso de colision (px). La fisica se integra
  *  en sub-pasos de a lo sumo este tamano para que una pelota rapida NUNCA salte
  *  por encima de la paleta sin rebotar (tunneling). Menor que la ventana de
@@ -85,7 +95,11 @@ class PongSim implements RoomSim {
   private readonly seat = new Map<string, { match: Match; side: Side }>();
   private loop: ReturnType<typeof setInterval> | null = null;
   private startTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Ultimo despertar del timer (ms reales) y tiempo real pendiente de simular. */
   private lastTick = 0;
+  private acc = 0;
+  /** Reloj de la simulacion (ms): avanza de a TICK_MS exactos, viaja en `pg:state.t`. */
+  private simTime = 0;
 
   constructor(private readonly room: GameRoom) {}
 
@@ -154,16 +168,35 @@ class PongSim implements RoomSim {
 
     this.phase = "playing";
     this.lastTick = now;
+    this.acc = 0;
+    // El reloj de la simulacion arranca en la hora real: `launchAt` (preroll) esta
+    // en la misma escala, y el cliente estima el offset contra su propio reloj.
+    this.simTime = now;
     this.loop = setInterval(() => this.step(), TICK_MS);
   }
 
+  /**
+   * Acumulador de paso fijo: se absorbe el tiempo real transcurrido y se corren
+   * los pasos de STEP_DT que entren (0, 1 o varios segun cuando despierte el
+   * timer). `simTime` es el reloj de la simulacion, avanza en escalones exactos y
+   * es lo que viaja en `pg:state.t` para que el cliente interpole sobre una linea
+   * de tiempo regular en vez de la hora de llegada del paquete.
+   */
   private step(): void {
     const now = Date.now();
-    const dt = Math.min((now - this.lastTick) / 1000, MAX_STEP_DT);
+    this.acc += Math.min(now - this.lastTick, MAX_CATCHUP_MS);
     this.lastTick = now;
 
-    for (const match of this.matches) this.stepMatch(match, dt, now);
-    this.broadcastAll();
+    let stepped = false;
+    while (this.acc >= TICK_MS) {
+      this.acc -= TICK_MS;
+      this.simTime += TICK_MS;
+      for (const match of this.matches) this.stepMatch(match, STEP_DT, this.simTime);
+      stepped = true;
+    }
+
+    // Sin paso nuevo no hay estado nuevo que mandar (el cliente ya lo tiene).
+    if (stepped) this.broadcastAll();
 
     // Todos los matches terminados: detener el loop (las reconexiones reciben el
     // estado final por emitStateTo al hacer join).
@@ -272,6 +305,7 @@ class PongSim implements RoomSim {
       side === "p1" ? this.humanControls(match.p2) : this.humanControls(match.p1);
     return {
       side,
+      t: this.simTime,
       phase: match.over ? "over" : match.launched ? "playing" : "countdown",
       ball: { ...match.ball },
       p1Y: match.p1Y,

@@ -9,6 +9,17 @@ export const GAP_MS = 280; // pausa en blanco entre numero y numero
 export const FIRST_DELAY_MS = 700; // pausa (con el cartel "Ronda N") antes del 1er numero
 export const FEEDBACK_MS = 750; // duracion del cartel "correcto" entre rondas
 
+// --- Fase "input": tope para escribir la respuesta ---
+/**
+ * Al vencer se envia lo que haya tipeado. No se descarta: el puntaje es por
+ * cercania al resultado, asi que una respuesta a medias todavia vale algo (y
+ * vacia ya valia 0). El reloj corre contra `performance.now()`, no acumulando
+ * `dt`, para que irse a otra pestana no lo congele.
+ */
+export const ANSWER_TIME_MS = 10_000;
+/** Restante (ms) desde el cual el reloj de respuesta se muestra urgente. */
+export const ANSWER_URGENT_MS = 3_000;
+
 // --- Modo sala: una sola ronda, config fija y deterministica por semilla ---
 export const ROOM_COUNT = 5;
 export const ROOM_SHOW_MS = 850;

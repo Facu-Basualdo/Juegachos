@@ -1,7 +1,7 @@
 import "../style.css";
 import { games } from "../games";
 import { isLeaderboardEnabled } from "../shared/supabase";
-import { fetchGameLeaders, type LeaderRow } from "../shared/leaders";
+import { fetchGameLeaders, cachedGameLeaders, type LeaderRow } from "../shared/leaders";
 
 /**
  * Pagina dedicada del Salon de la fama (/fame/): ranking de quienes lideran el
@@ -170,8 +170,12 @@ function renderLeaders(ranking: LeaderRow[], totalGames: number): void {
   `;
 }
 
-// Estado inicial mientras carga.
-renderEmpty();
+// Estado inicial: el ultimo podio conocido (cache de localStorage, TTL corto) para
+// que navegar landing -> /fame/ no parpadee en el estado vacio. Sin cache, o sin
+// credenciales, arranca vacio como antes y se rellena cuando responde Supabase.
+const cached = roomsOn ? cachedGameLeaders() : { ranking: [], totalGames: 0 };
+if (cached.ranking.length > 0) renderLeaders(cached.ranking, cached.totalGames);
+else renderEmpty();
 
 if (roomsOn) {
   void fetchGameLeaders().then(({ ranking, totalGames }) => renderLeaders(ranking, totalGames));

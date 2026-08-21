@@ -36,6 +36,18 @@ numero-visible / hueco-en-blanco contando `phaseMs` contra `config.showMs` y
 `GAP_MS`. El primer hueco usa `FIRST_DELAY_MS` (mas largo, muestra el cartel
 "Ronda N") y despues del ultimo numero se salta directo a `input` sin hueco.
 
+**Tope de 10s para responder** (`ANSWER_TIME_MS`, fase `input`). Al vencer se
+**envía lo que haya tipeado** (`submitAnswer()`), no se descarta: el puntaje de
+sala es por cercanía, así que una respuesta a medias todavía vale, y una vacía ya
+valía 0. En solitario una respuesta incompleta es un error y termina la partida,
+igual que si la hubiera mandado el jugador. El reloj es un `answerDeadline`
+absoluto contra `performance.now()`, evaluado en `updateInput()` desde el loop —
+**no** un acumulador de `dt`: acumulando, irse a otra pestaña lo congelaría (el
+loop `rAF` se pausa) y regalaría tiempo infinito para pensar, que en salas es
+trampa. Con un deadline, volver a la pestaña envía en el acto. La UI es `fm-timer`
+(regla de tinta que se consume + segundos), dentro de `fm-input`, así que se
+oculta sola con el panel; pasa a `--accent` cuando quedan `ANSWER_URGENT_MS` (3s).
+
 **Un solo countdown por partida, no por ronda.** El 3/2/1/YA (patron obligatorio
 del repo) corre una vez al arrancar; las rondas siguientes del solitario entran
 directo a "showing" con un cartel breve "Ronda N". Repetir el countdown en cada

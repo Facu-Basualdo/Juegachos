@@ -12,23 +12,30 @@ export const CEILING_Y = 9;
 export const WALL_X = ROOM_HALF_WIDTH;
 
 // --- The player (a plated 2D-in-3D dodger; y is the feet / bottom). ---
-export const PLAYER_HALF_WIDTH = 0.42;
+export const PLAYER_HALF_WIDTH = 0.42; // visual half-width (wall / room collision)
+/** Hurtbox half-width for steam collision — deliberately much narrower than the
+ *  sprite so clipping the visible edge of a cloud doesn't kill you (the fair
+ *  "looks dangerous, is forgiving" contract). Smaller than VENT_KILL_HALF, so
+ *  the lethal band sits *inside* the visible steam. */
+export const HURTBOX_HALF_WIDTH = 0.24;
 export const PLAYER_HEIGHT = 1.3;
+/** Purely a render offset added on top of the logical `y` (never to `y` itself):
+ *  the vents' grille top sits ~0.14-0.17 above FLOOR_Y (see `vent.py`'s H=0.16
+ *  and the fallback grille box), and since the grilles tile the *entire* floor
+ *  edge to edge (no gaps), this is a constant lift everywhere — not per-tile
+ *  terrain, so it needs no walk animation. Physics/collision keep using `y`. */
+export const PLAYER_GRILLE_LIFT = 0.15;
 export const PLAYER_SPEED = 9.5; // horizontal run speed (units/s)
 export const PLAYER_ACCEL = 90; // how fast we reach run speed on the ground
-export const PLAYER_AIR_ACCEL = 42; // weaker air control
+export const PLAYER_AIR_ACCEL = 78; // air steering — strong enough to redirect to a safe landing
 export const PLAYER_FRICTION = 70; // ground deceleration when no input
-export const GRAVITY = 34;
+export const GRAVITY = 34; // rise gravity
+export const FALL_GRAVITY_MULT = 1.45; // heavier on the way down: snappy arc, less air-time commitment
 export const JUMP_VELOCITY = 13.5; // v^2/2g ~= 2.7 units — a hop, never clears steam
 export const JUMP_CUT = 0.42; // releasing jump mid-rise cuts velocity to this fraction
 export const MAX_FALL_SPEED = 26;
-
-// --- Wall cling / wall jump (survive a floor inferno by hanging on the walls). ---
-export const WALL_SLIDE_SPEED = 3.2; // capped fall speed while clinging
-export const WALL_JUMP_VY = 12.5;
-export const WALL_JUMP_VX = 10.5;
-export const WALL_JUMP_LOCK = 0.16; // s of input lock after a wall jump (so it arcs off)
-export const WALL_STICK_MARGIN = 0.12; // how close to the wall counts as touching
+export const COYOTE_TIME = 0.1; // s after leaving a ledge you can still jump
+export const JUMP_BUFFER_TIME = 0.12; // s a jump press is remembered before landing
 
 // --- Dash (short i-frame burst to slip through a last-moment jet). ---
 export const DASH_SPEED = 22;
@@ -55,19 +62,22 @@ export const WARN_TIME_MIN = 0.42;
 export const WARN_TIME_STEP = 0.11; // shaved per difficulty level
 export const ACTIVE_TIME = 1.05; // s the jet is live and lethal
 export const DISSIPATE_TIME = 0.9; // s the jet fades (blocks vision, no damage)
+/** Lead at the very start of the active phase: the jet blasts up and is clearly
+ *  visible but NOT yet lethal, so you never die to a jet that hasn't appeared. */
+export const ERUPT_LEAD = 0.13;
 
 // --- Difficulty ramp (every DIFF_STEP seconds a level is gained). ---
-export const DIFF_STEP = 15;
+export const DIFF_STEP = 13;
 /** Gap between boss-pattern launches, shrinking with level. */
 export const PATTERN_GAP_START = 1.7;
-export const PATTERN_GAP_MIN = 0.55;
-export const PATTERN_GAP_STEP = 0.14;
+export const PATTERN_GAP_MIN = 0.48;
+export const PATTERN_GAP_STEP = 0.16;
 
 // --- Overload phase (emergency: red flicker + everything twice as fast). ---
-export const OVERLOAD_PERIOD = 32; // s between overloads
+export const OVERLOAD_PERIOD = 22; // s between overloads (cool-down after one ends)
 export const OVERLOAD_DURATION = 10;
 export const OVERLOAD_TIME_SCALE = 2;
-export const OVERLOAD_FIRST_AT = 22; // first overload can't hit before this
+export const OVERLOAD_FIRST_AT = 18; // first overload can't hit before this
 
 // --- Environment palette. ---
 export const BACKGROUND_COLOR = 0x1a1210;

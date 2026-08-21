@@ -11,6 +11,7 @@ import { SoundEffects } from "./SoundEffects";
 import { makeToonGradient, toonify } from "./toon";
 import { HOLE_DEFS } from "./holes";
 import { initRoomMode, type RoomMode } from "../../../shared/room/roomMode";
+import { clearRoomRun, loadRoomRun, saveRoomRun } from "../../../shared/room/roomRun";
 import {
   BALL_R,
   BEST_SCORE_KEY,
@@ -39,6 +40,18 @@ import {
 } from "./constants";
 
 type GameState = "loading" | "ready" | "countdown" | "playing" | "sinking" | "transition" | "gameover";
+
+/**
+ * Vuelta en curso persistida en sala, para sobrevivir un F5 (ver roomRun.ts).
+ * No se guarda la posicion de la pelota: al retomar se la pone en el tee del hoyo
+ * en curso, pero **conservando los golpes ya dados en ese hoyo** — si no,
+ * recargar seria un mulligan gratis, y el ranking es `direction: "lower"`.
+ * `holeIndex` y `totalStrokes` no se guardan: se derivan de `completed`.
+ */
+interface SavedRun {
+  completed: HoleResult[];
+  strokes: number;
+}
 
 const TRANSITION_TIME = 1.6;
 const BOUNCE_SOUND_MIN = 1.1;
@@ -435,12 +448,57 @@ export class Game {
       this.pendingStart = true;
       return;
     }
+    // En sala, un F5 vuelve a pasar por aca (la ronda sigue en "playing" y
+    // RoomMode redispara onStart): si hay vuelta guardada se retoma.
+    if (this.room && this.resumeSavedRun()) return;
+
     if (this.state !== "ready" && this.state !== "gameover") return;
     if (this.state === "gameover") this.resetRound();
     this.state = "countdown";
     this.countdownTime = 0;
     this.lastCountdownIndex = -1;
     this.hud.hide();
+  }
+
+  /**
+   * Retoma la vuelta guardada tras un reload, sin countdown: los hoyos ya cerrados
+   * no se rejuegan y los golpes del hoyo en curso se mantienen (la pelota vuelve
+   * al tee, como tras una caida al vacio, pero el golpe ya esta cobrado).
+   */
+  private resumeSavedRun(): boolean {
+    const s = loadRoomRun<SavedRun>(this.room!, "mini-golf");
+    if (!s || !Array.isArray(s.completed) || !Number.isFinite(s.strokes)) return false;
+    if (s.completed.length > HOLES_PER_ROUND || s.strokes < 0) return false;
+    if (s.completed.some((r) => !r || !Number.isFinite(r.strokes))) return false;
+    // Nada que retomar: que arranque normal, con countdown.
+    if (s.completed.length === 0 && s.strokes === 0) return false;
+
+    this.completed = s.completed.map((r) => ({ ...r }));
+    this.totalStrokes = this.completed.reduce((acc, r) => acc + r.strokes, 0);
+
+    // Los 3 hoyos ya estaban: la vuelta termino durante el reload.
+    if (this.completed.length >= HOLES_PER_ROUND) {
+      this.finishRound();
+      return true;
+    }
+
+    this.loadHole(this.completed.length); // pone strokes en 0: se pisa abajo
+    this.strokes = s.strokes;
+    this.hud.setStrokes(this.strokes, this.totalStrokes);
+    this.hud.hide();
+    this.state = "playing";
+    return true;
+  }
+
+  /**
+   * Snapshot de la vuelta. No hace nada fuera de sala. `strokes` se pasa explicito
+   * al cerrar un hoyo (0: los golpes ya viajaron dentro de `completed`), sin tocar
+   * el campo, que todavia se compara contra MAX_STROKES en el mismo frame.
+   */
+  private saveRun(strokes = this.strokes): void {
+    if (!this.room) return;
+    const data: SavedRun = { completed: this.completed, strokes };
+    saveRoomRun(this.room, "mini-golf", data);
   }
 
   private canAim(): boolean {
@@ -454,6 +512,7 @@ export class Game {
     this.stopTimer = 0;
     this.hud.setStrokes(this.strokes, this.totalStrokes);
     this.sounds.playHit(velocity.length() / MAX_SHOT_SPEED);
+    this.saveRun();
   }
 
   /** Live score for the room-mode timeout partial: unfinished holes count as the cap. */
@@ -567,6 +626,7 @@ export class Game {
       this.hud.flashBanner("AL VACIO · +1 GOLPE");
       this.ball.place(this.shotOrigin.x, this.shotOrigin.y, this.shotOrigin.z);
       this.stopTimer = 0;
+      this.saveRun(); // el golpe de penalizacion tambien tiene que sobrevivir un F5
       if (this.strokes >= MAX_STROKES) {
         this.holeComplete(false);
         return;
@@ -616,6 +676,9 @@ export class Game {
     this.hud.flashBanner(holed ? holeBanner(this.strokes, def.par) : "LIMITE DE GOLPES");
     this.state = "transition";
     this.transitionTimer = 0;
+    // El hoyo quedo cerrado y `completed` crecio: el snapshot ya apunta al hoyo
+    // siguiente, con 0 golpes. Un reload durante el cartel no lo rejuega.
+    this.saveRun(0);
   }
 
   private advanceHole(): void {
@@ -638,8 +701,13 @@ export class Game {
     }
     this.sounds.playFinish();
     this.hud.showGameOver(this.completed, total, this.best, isRecord);
-    if (this.room) this.room.reportScore(total);
-    else this.hud.showRanking("mini-golf", total);
+    if (this.room) {
+      // La vuelta de la ronda termino: un reload ya no debe retomarla.
+      clearRoomRun(this.room, "mini-golf");
+      this.room.reportScore(total);
+    } else {
+      this.hud.showRanking("mini-golf", total);
+    }
   }
 
   private updateBlobShadow(): void {

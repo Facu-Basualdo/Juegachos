@@ -42,3 +42,18 @@ __pycache__/
 
 # Salidas de los scripts de QA (capturas, reportes)
 artifacts/
+games/word-chain/index.html
+games/word-bomb/index.html
+games/visual-memory/index.html
+games/timing-bar/index.html
+games/sword-balance/index.html
+games/stroop/index.html
+games/pong/index.html
+games/pizza-express/index.html
+games/number-memory/index.html
+games/mini-golf/index.html
+games/flash-math/index.html
+games/color-switch/index.html
+games/cannon-dodge/index.html
+games/pizza-express/index.html
+games/pizza-express/index.html

@@ -1,5 +1,5 @@
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
-import { MODES, type Mode } from "./constants";
+import { ANSWER_URGENT_MS, MODES, type Mode } from "./constants";
 
 export interface Handlers {
   onDigit: (d: string) => void;
@@ -23,6 +23,9 @@ export class Hud {
   private readonly numberEl: HTMLDivElement;
   private readonly entryEl: HTMLDivElement;
   private readonly feedbackEl: HTMLDivElement;
+  private readonly timerEl: HTMLDivElement;
+  private readonly timerFillEl: HTMLDivElement;
+  private readonly timerTextEl: HTMLDivElement;
 
   private readonly keypad: HTMLDivElement;
 
@@ -54,7 +57,16 @@ export class Hud {
     this.numberEl = el("div", "nm-number");
     this.entryEl = el("div", "nm-entry");
     this.feedbackEl = el("div", "nm-feedback");
-    this.stage.append(this.numberEl, this.entryEl, this.feedbackEl);
+
+    // Reloj de la respuesta: mecha que se consume + segundos restantes.
+    this.timerEl = el("div", "nm-timer");
+    this.timerFillEl = el("div", "nm-timer__fill");
+    this.timerTextEl = el("div", "nm-timer__text");
+    const timerTrack = el("div", "nm-timer__track");
+    timerTrack.append(this.timerFillEl);
+    this.timerEl.append(timerTrack, this.timerTextEl);
+
+    this.stage.append(this.numberEl, this.entryEl, this.timerEl, this.feedbackEl);
 
     // Teclado en pantalla (layout calculadora)
     this.keypad = el("div", "nm-keypad hidden");
@@ -147,6 +159,7 @@ export class Hud {
     this.hudBar.classList.add("hidden");
     this.stage.classList.add("hidden");
     this.keypad.classList.add("hidden");
+    this.timerEl.classList.remove("is-shown");
 
     this.titleEl.textContent = "NÚMERO FUGAZ";
     this.subtitleEl.textContent = "Memorizá el número, y cuando se esfume, escribilo. Elegí un modo:";
@@ -161,6 +174,7 @@ export class Hud {
     this.hudBar.classList.add("hidden");
     this.stage.classList.add("hidden");
     this.keypad.classList.add("hidden");
+    this.timerEl.classList.remove("is-shown");
 
     const label = MODES.find((m) => m.id === mode)?.label ?? "";
     this.titleEl.textContent = isNewBest ? "¡NUEVO RÉCORD!" : "SE ESFUMÓ";
@@ -203,6 +217,7 @@ export class Hud {
     this.feedbackEl.textContent = "";
     this.feedbackEl.className = "nm-feedback";
     this.keypad.classList.add("hidden");
+    this.timerEl.classList.remove("is-shown");
   }
 
   setLevel(digits: number): void {
@@ -219,6 +234,7 @@ export class Hud {
     this.entryEl.innerHTML = "";
     this.entryEl.classList.remove("is-shown");
     this.keypad.classList.add("hidden");
+    this.timerEl.classList.remove("is-shown");
 
     this.numberEl.textContent = numStr;
     this.numberEl.className = "nm-number";
@@ -239,6 +255,15 @@ export class Hud {
     this.renderEntry("", digits);
     this.entryEl.classList.add("is-shown");
     this.keypad.classList.remove("hidden");
+    this.timerEl.classList.add("is-shown");
+  }
+
+  /** Reloj de la respuesta: `msLeft` de `totalMs`. Solo se ve en la fase de ingreso. */
+  setAnswerTime(msLeft: number, totalMs: number): void {
+    const frac = totalMs > 0 ? Math.max(0, Math.min(1, msLeft / totalMs)) : 0;
+    this.timerFillEl.style.width = `${frac * 100}%`;
+    this.timerTextEl.textContent = `${Math.ceil(msLeft / 1000)}s`;
+    this.timerEl.classList.toggle("is-urgent", msLeft <= ANSWER_URGENT_MS);
   }
 
   renderEntry(typed: string, digits: number): void {
@@ -257,6 +282,7 @@ export class Hud {
 
   showCorrect(numStr: string): void {
     this.keypad.classList.add("hidden");
+    this.timerEl.classList.remove("is-shown");
     this.entryEl.classList.remove("is-shown");
     this.entryEl.innerHTML = "";
     this.numberEl.textContent = numStr;
@@ -268,6 +294,7 @@ export class Hud {
 
   showWrong(target: string, typed: string): void {
     this.keypad.classList.add("hidden");
+    this.timerEl.classList.remove("is-shown");
     this.entryEl.classList.remove("is-shown");
     this.entryEl.innerHTML = "";
     this.numberEl.textContent = target;

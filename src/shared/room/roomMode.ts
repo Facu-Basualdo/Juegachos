@@ -1,5 +1,5 @@
 import { games, roomGames, coverUrl } from "../../games";
-import { formatScore } from "../scoring";
+import { formatScore, getDirection } from "../scoring";
 import { getNickname } from "../nickname";
 import { getSupabase } from "../supabase";
 import {
@@ -7,24 +7,24 @@ import {
   closeRound,
   fetchRoomState,
   finishRoom,
-  finishTimeVote,
   openVote,
   reportScore,
   resetRoom,
   sanitizeCode,
   startBriefing,
   startRound,
-  startTimeVote,
   takeOverHost,
+  touchRoom,
   updateDeadline,
 } from "./api";
-import { RoomChannel } from "./channel";
+import { RoomChannel, type LiveData } from "./channel";
 import { RoomOverlay, type StripLight, type WaitingEntry } from "./RoomOverlay";
 import { computeTotals, rankRound } from "./points";
+import { clearRoomRuns } from "./roomRun";
 import {
   formatRoundTimeLimit,
+  HEARTBEAT_MS,
   NO_TIME_LIMIT,
-  TIME_VOTE_OPTIONS,
   type RoomState,
   type RoomStatus,
 } from "./types";
@@ -78,18 +78,33 @@ export interface RoomMode {
   round(): number;
   /** Jugadores registrados en la sala (orden por joined_at, deterministico). */
   players(): string[];
+  /**
+   * Los jugadores registrados que estan conectados ahora mismo (presence), en el
+   * mismo orden que `players()`. Lo usan los juegos por turnos para no regalarle
+   * el turno a alguien que se fue: un desconectado no va a mover nunca, asi que
+   * se lo saltea enseguida en vez de esperarle la ventana AFK entera.
+   */
+  presentPlayers(): string[];
   isHost(): boolean;
   /** Avisa al resto que hay cambios en la DB (broadcast "sync"). */
   ping(): void;
   /** Se dispara cuando otro cliente hizo ping (releer la DB). */
   onSync(cb: () => void): void;
   /**
-   * Fin de la ronda en curso segun lo que fijo el host (ajuste fijo o votacion
-   * de tiempo), o null si la ronda no tiene tope ("Sin límite"). Incluye el
-   * margen de navegacion/countdown, asi que al arrancar la partida el tiempo
-   * restante ronda el valor nominal elegido por el anfitrion.
+   * Fin de la ronda en curso segun el `roomTimeLimitSec` del juego, o null si el
+   * juego no declara tope. Incluye el margen de navegacion/countdown, asi que al
+   * arrancar la partida el tiempo restante ronda el valor nominal del juego.
    */
   deadline(): Date | null;
+  /**
+   * Emite estado efimero propio al resto de la sala (posicion, animacion) por
+   * broadcast del canal Realtime: **no toca la DB ni el puntaje**, y un paquete
+   * perdido no se recupera. Es para lo cosmetico — ver a los rivales jugar en
+   * vivo — a unos pocos envios por segundo. Los espectadores no emiten.
+   */
+  broadcastLive(data: LiveData): void;
+  /** Estado efimero recibido de otro jugador (ver `broadcastLive`). */
+  onLive(cb: (player: string, data: LiveData) => void): void;
   /**
    * Fase actual de la sala segun el ultimo snapshot. Los juegos que manejan su
    * propio arranque en sala (car-race, con su votacion de circuito) lo usan para
@@ -102,6 +117,7 @@ export interface RoomMode {
 export const ROOM_VARIANTS: Record<string, string> = {
   "sliding-puzzle": "3",
   "lights-out": "5",
+  "click-the-number": "5",
 };
 
 /** Chequeo barato (sin red) de si la pagina corre en modo sala. */
@@ -125,9 +141,14 @@ export function randomGameId(): string {
   return roomGames[Math.floor(Math.random() * roomGames.length)].id;
 }
 
-/** Candidatos de la votacion de tiempo, como strings de segundos (para vote_options). */
-export function timeVoteOptionIds(): string[] {
-  return TIME_VOTE_OPTIONS.map(String);
+/**
+ * Tope de tiempo de la ronda de un juego, en segundos. Ya no es un ajuste de la
+ * sala: cada juego declara el suyo en su `meta.ts` (`roomTimeLimitSec`) y los que
+ * no lo declaran (la mayoria) se juegan sin reloj, cerrando la ronda cuando todos
+ * terminan su partida.
+ */
+export function roomTimeLimitFor(gameId: string): number {
+  return games.find((g) => g.id === gameId)?.roomTimeLimitSec ?? NO_TIME_LIMIT;
 }
 
 /**
@@ -136,7 +157,7 @@ export function timeVoteOptionIds(): string[] {
  */
 const NAV_GRACE_SEC = 10;
 
-/** Deadline de una ronda que arranca ahora, o null si no hay tope de tiempo. */
+/** Deadline de una ronda que arranca ahora, o null si el juego no tiene tope. */
 export function computeRoundDeadline(roundTimeLimitSec: number): Date | null {
   if (roundTimeLimitSec === NO_TIME_LIMIT) return null;
   return new Date(Date.now() + (roundTimeLimitSec + NAV_GRACE_SEC) * 1000);
@@ -144,7 +165,7 @@ export function computeRoundDeadline(roundTimeLimitSec: number): Date | null {
 
 const TICK_MS = 500;
 const POLL_MS = 5000;
-/** Duracion de las votaciones (proximo juego y tope de tiempo). */
+/** Duracion de la votacion del proximo juego. */
 export const VOTE_SECONDS = 20;
 /**
  * Tope de lectura del briefing previo a cada ronda (de que va el juego + los
@@ -164,8 +185,17 @@ const VOTE_GRACE_MS = 3000;
 const CLOSE_LAG_MS = 2500;
 /** Cierre anticipado: todos los presentes reportaron y hay ausentes. */
 const CLOSE_EARLY_GRACE_MS = 15000;
-/** Ausencia continua del host antes de ofrecer "tomar el control". */
+/** Ausencia continua del host antes de que otro jugador tome el control. */
 const HOST_ABSENT_MS = 20000;
+/**
+ * Escalonado entre candidatos al control: el primero de la fila intenta a los
+ * HOST_ABSENT_MS, el segundo unos segundos despues, etc. Evita que dos escriban
+ * a la vez y cubre el caso del candidato cuya pestana esta en segundo plano (el
+ * navegador le estrangula los timers y puede tardar en reaccionar).
+ */
+const TAKEOVER_STAGGER_MS = 5000;
+/** Espera antes de reintentar un takeover que no se reflejo en la DB. */
+const TAKEOVER_RETRY_MS = 10000;
 /** Pausa en resultados antes de que el host abra la votacion. */
 const RESULTS_TO_VOTE_MS = 5000;
 
@@ -185,9 +215,12 @@ export function initRoomMode(gameId: string, hooks: RoomModeHooks): RoomMode | n
       me: "",
       round: () => 0,
       players: () => [],
+      presentPlayers: () => [],
       isHost: () => false,
       ping: () => {},
       onSync: () => {},
+      broadcastLive: () => {},
+      onLive: () => {},
       deadline: () => null,
       status: () => "lobby",
     };
@@ -229,6 +262,8 @@ class RoomModeController implements RoomMode {
   private actionInFlight = false;
   private voteScheduledForRound = 0;
   private hostAbsentSince: number | null = null;
+  /** Ultimo intento de tomar el control (para no reescribir en cada tick). */
+  private takeoverAt = 0;
   /** Cuando esta pagina vio por primera vez la ronda vigente en "playing"
    * (fallback de inicio de ronda para la gracia sin tope de tiempo). */
   private playingSinceRound = 0;
@@ -248,6 +283,7 @@ class RoomModeController implements RoomMode {
   private readonly hooks: RoomModeHooks;
   /** Suscriptores del juego al broadcast "sync" (tableros compartidos). */
   private readonly gameSyncCbs: Array<() => void> = [];
+  private readonly gameLiveCbs: Array<(player: string, data: LiveData) => void> = [];
 
   constructor(gameId: string, code: string, me: string, hooks: RoomModeHooks) {
     this.gameId = gameId;
@@ -257,6 +293,15 @@ class RoomModeController implements RoomMode {
   }
 
   async boot(): Promise<void> {
+    // Tapar la pantalla ANTES del primer await. Entre que carga la pagina del
+    // juego y que llega el estado de la sala hay unos cientos de ms en los que
+    // el juego ya muestra su "presiona ENTER para jugar" y lo escucha: un Enter
+    // o un toque ahi arrancaban la partida durante el briefing, corriendo detras
+    // del cartel de "listos" (y reportando un puntaje de una ronda que para el
+    // resto todavia no habia empezado). El overlay se traga ese input hasta que
+    // la ronda pasa a "playing".
+    this.overlay.showConnecting();
+
     const state = await fetchRoomState(this.code);
     if (!state) {
       this.overlay.showError("La sala no existe o no se pudo cargar.");
@@ -283,12 +328,22 @@ class RoomModeController implements RoomMode {
       void this.refresh();
       for (const cb of this.gameSyncCbs) cb();
     });
+    this.channel.onLive(({ player, data }) => {
+      for (const cb of this.gameLiveCbs) cb(player, data);
+    });
     this.channel.onPresence(() => this.applyState());
 
     this.applyState(state);
 
     window.setInterval(() => this.tick(), TICK_MS);
     window.setInterval(() => void this.refresh(), POLL_MS);
+    // Heartbeat: mantiene viva la sala mientras se juega (los espectadores no
+    // cuentan como gente, asi que no la sostienen). Sin esto la purga borraria
+    // una sala en plena partida, ya que nadie esta mirando el lobby.
+    if (!this.spectator) {
+      void touchRoom(this.code);
+      window.setInterval(() => void touchRoom(this.code), HEARTBEAT_MS);
+    }
   }
 
   reportScore(finalScore: number): void {
@@ -305,8 +360,24 @@ class RoomModeController implements RoomMode {
     return this.state?.players ?? [];
   }
 
+  presentPlayers(): string[] {
+    const present = this.channel?.presentPlayers() ?? [];
+    // Se filtra contra los registrados (y en su orden) para que la lista sea la
+    // misma en todos los clientes: presence tambien lista espectadores.
+    return (this.state?.players ?? []).filter((p) => present.includes(p));
+  }
+
   ping(): void {
     this.channel?.ping();
+  }
+
+  broadcastLive(data: LiveData): void {
+    if (this.spectator) return;
+    this.channel?.broadcastLive(data);
+  }
+
+  onLive(cb: (player: string, data: LiveData) => void): void {
+    this.gameLiveCbs.push(cb);
   }
 
   onSync(cb: () => void): void {
@@ -345,6 +416,11 @@ class RoomModeController implements RoomMode {
     if (state) this.state = state;
     if (!this.state || this.navigating) return;
     const room = this.state.room;
+
+    // Ninguna ronda en curso: los snapshots de partida (roomRun) ya no valen. Hay
+    // que tirarlos aca porque la revancha vuelve a numerar desde la ronda 1 y
+    // reusaria la misma clave (ver clearRoomRuns).
+    if (room.status === "lobby" || room.status === "finished") clearRoomRuns(this.code);
 
     if (this.spectator) {
       this.applySpectator(room);
@@ -387,7 +463,7 @@ class RoomModeController implements RoomMode {
           waitingText: null,
         });
       }
-      this.updateTakeover();
+      this.maybeTakeOverHost();
       return;
     }
 
@@ -434,14 +510,8 @@ class RoomModeController implements RoomMode {
         this.overlay.setStrip(null);
         this.renderVoting();
         break;
-      case "time_voting":
-        // Antes de jugar: se vota el tope de tiempo de esta ronda. Todavia no
-        // se jugo, asi que no se reporta ningun parcial.
-        this.overlay.setStrip(null);
-        this.renderTimeVoting();
-        break;
     }
-    this.updateTakeover();
+    this.maybeTakeOverHost();
   }
 
   /**
@@ -513,6 +583,16 @@ class RoomModeController implements RoomMode {
   private async submitScore(score: number, finished: boolean): Promise<void> {
     // Un espectador no puntua nunca (no esta registrado en la sala).
     if (this.spectator) return;
+    // Red de seguridad contra la partida largada antes de tiempo: si MI ronda
+    // todavia no arranco (la sala esta en su briefing, o ni siquiera se leyo el
+    // estado), el puntaje no vale y se descarta. Sin latchear `reported`, asi
+    // cuando la ronda pase a "playing" el jugador la juega de verdad (onStart
+    // reinicia la partida) en vez de quedarse esperando con un cero puesto. Se
+    // compara contra la ronda propia a proposito: un briefing de la ronda
+    // SIGUIENTE no invalida el parcial de la que esta cerrando.
+    const room = this.state?.room;
+    if (this.myRound <= 0 || !room) return;
+    if (room.current_round === this.myRound && room.status === "briefing") return;
     // No re-reportar si ya se confirmo, ni lanzar una segunda escritura mientras
     // hay una en vuelo (varios caminos llaman aca: muerte, timeout del tick, parcial
     // al cambiar de fase, navegacion).
@@ -591,20 +671,17 @@ class RoomModeController implements RoomMode {
       }
       // El host cierra el briefing al vencer el tope o cuando todos estan listos.
       if (this.isHost()) void this.maybeFinishBriefing(deadline !== null && now >= deadline);
-    } else if (room.status === "voting" || room.status === "time_voting") {
+    } else if (room.status === "voting") {
       if (this.isHost()) this.maybeCompressVote();
       if (deadline !== null) {
         this.overlay.setTimeText(formatClock(deadline - now));
         // Sin CLOSE_LAG en las votaciones: no hay parciales que esperar, asi
         // cierra apenas vence (incluido el deadline comprimido a pocos segundos).
-        if (this.isHost() && now >= deadline) {
-          if (room.status === "voting") void this.closeVoting();
-          else void this.closeTimeVote();
-        }
+        if (this.isHost() && now >= deadline) void this.closeVoting();
       }
     }
 
-    this.updateTakeover();
+    this.maybeTakeOverHost();
   }
 
   private updateStrip(): void {
@@ -676,13 +753,23 @@ class RoomModeController implements RoomMode {
     const room = state.room;
     const ranked = rankRound(this.gameId, state.players, this.roundScores());
 
+    // En juegos "lower" el parcial de quien no llego a terminar no significa nada
+    // (rankRound ya los empata a todos detras de los que terminaron): mostrarlo
+    // formateado daba numeros de fantasia como "9999 ms" o "3 mov" para alguien
+    // que ni resolvio el tablero. Se muestra "sin terminar" en su lugar.
+    const partialIsReal = getDirection(this.gameId) === "higher";
+
     const rows = ranked.map((r) => ({
       rank: r.rank,
       player: r.player,
       scoreText:
         r.score === null
           ? "sin jugar"
-          : formatScore(this.gameId, r.score) + (r.finished ? "" : " (parcial)"),
+          : r.finished
+            ? formatScore(this.gameId, r.score)
+            : partialIsReal
+              ? `${formatScore(this.gameId, r.score)} (parcial)`
+              : "sin terminar",
       points: r.points,
     }));
 
@@ -753,42 +840,6 @@ class RoomModeController implements RoomMode {
     if (this.isHost()) this.maybeCompressVote();
   }
 
-  /** Votacion del tope de tiempo de esta ronda (antes de jugar). */
-  private renderTimeVoting(): void {
-    const state = this.state!;
-    const room = state.room;
-    const optionIds = room.vote_options ?? [];
-    // El voto de tiempo se guarda en room_votes con round_no = la ronda a jugar
-    // (el string de segundos va en game_id). El filtro por vote_options descarta
-    // votos viejos (p.ej. del voto de juego previo, que se sobrescriben al votar).
-    const round = room.current_round;
-
-    const votes = state.votes.filter(
-      (v) => v.round_no === round && optionIds.includes(v.game_id),
-    );
-    const counts: Record<string, number> = {};
-    for (const v of votes) counts[v.game_id] = (counts[v.game_id] ?? 0) + 1;
-    const myVote = votes.find((v) => v.player === this.me)?.game_id ?? null;
-
-    this.overlay.showVoting({
-      round,
-      kicker: `Ronda ${room.current_round}/${this.totalRounds()} - ${this.gameTitle(this.gameId)}`,
-      title: "Elegi el tiempo",
-      hint: "Gana la mayoria; empate se define al azar",
-      options: optionIds.map((id) => ({ id, title: formatRoundTimeLimit(Number(id)) })),
-      counts,
-      myVote,
-      onVote: (id) => {
-        void castVote(this.code, round, this.me, id).then((ok) => {
-          if (ok) this.channel?.ping();
-          void this.refresh();
-        });
-      },
-    });
-
-    if (this.isHost()) this.maybeCompressVote();
-  }
-
   /** Briefing previo a la ronda: de que va el juego + controles + boton "Listo". */
   private renderBriefing(): void {
     const state = this.state!;
@@ -803,6 +854,8 @@ class RoomModeController implements RoomMode {
     );
     const readyCount = state.players.filter((p) => ready.has(p)).length;
 
+    const limit = roomTimeLimitFor(this.gameId);
+
     this.overlay.showBriefing({
       round,
       roundNo: room.current_round,
@@ -810,6 +863,8 @@ class RoomModeController implements RoomMode {
       gameTitle: this.gameTitle(this.gameId),
       description: game?.description ?? "",
       controls: game?.controls ?? "",
+      // Solo los juegos con tope declarado avisan el reloj; el resto no lo tiene.
+      timeLimit: limit === NO_TIME_LIMIT ? "" : formatRoundTimeLimit(limit),
       readyCount,
       totalPlayers: state.players.length,
       iAmReady: ready.has(this.me),
@@ -877,7 +932,7 @@ class RoomModeController implements RoomMode {
         if (!fresh || fresh.room.status !== "results" || fresh.room.host !== this.me) return;
         if (fresh.room.current_round !== round) return;
         this.state = fresh;
-        const options = pickVoteOptions(fresh);
+        const options = pickVoteOptions();
         const deadline = new Date(Date.now() + VOTE_SECONDS * 1000);
         await this.hostAction(() => openVote(this.code, options, deadline));
       })();
@@ -895,13 +950,12 @@ class RoomModeController implements RoomMode {
     const state = this.state;
     if (!state || !this.isHost()) return;
     const room = state.room;
-    if (room.status !== "voting" && room.status !== "time_voting") return;
+    if (room.status !== "voting") return;
 
     const options = room.vote_options ?? [];
     if (options.length === 0) return;
-    // El voto del proximo juego se guarda en la ronda siguiente; el de tiempo, en
-    // la ronda a jugar (la vigente).
-    const voteRound = room.status === "voting" ? room.current_round + 1 : room.current_round;
+    // El voto del proximo juego se guarda en la ronda siguiente.
+    const voteRound = room.current_round + 1;
     const voters = new Set(
       state.votes
         .filter((v) => v.round_no === voteRound && options.includes(v.game_id))
@@ -947,8 +1001,7 @@ class RoomModeController implements RoomMode {
   /**
    * Arranca la siguiente ronda por su briefing: se fija el juego y se pasa a
    * 'briefing' para que todos lean de que va antes de jugar. Al cerrarlo (todos
-   * listos o vencido el tope) recien se abre la votacion de tiempo (si esta
-   * activa) o se arranca a jugar (finishBriefing).
+   * listos o vencido el tope) recien arranca la partida (finishBriefing).
    */
   private async startNextRound(gameId: string): Promise<void> {
     const state = this.state;
@@ -982,45 +1035,17 @@ class RoomModeController implements RoomMode {
   }
 
   /**
-   * Sale del briefing hacia la partida: si la sala vota el tope de tiempo, abre
-   * esa votacion; si no, arranca a jugar con el tope fijo. El reloj de la ronda
-   * recien arranca aca, asi que el briefing no le come tiempo a la partida.
+   * Sale del briefing hacia la partida, con el tope de tiempo que declare el juego
+   * (o sin reloj, que es lo normal). El reloj de la ronda recien arranca aca, asi
+   * que el briefing no le come tiempo a la partida.
    */
   private async finishBriefing(): Promise<void> {
     const state = this.state;
     if (!state || state.room.status !== "briefing" || this.actionInFlight) return;
     const round = state.room.current_round;
     const gameId = state.room.current_game ?? this.gameId;
-    if (state.room.settings.timeVote) {
-      const deadline = new Date(Date.now() + VOTE_SECONDS * 1000);
-      await this.hostAction(() =>
-        startTimeVote(this.code, round, gameId, timeVoteOptionIds(), deadline),
-      );
-    } else {
-      const deadline = computeRoundDeadline(state.room.settings.roundTimeLimitSec);
-      await this.hostAction(() => startRound(this.code, round, gameId, deadline));
-    }
-  }
-
-  /** Cierra la votacion de tiempo y arranca a jugar con el tope ganador. */
-  private async closeTimeVote(): Promise<void> {
-    const state = this.state;
-    if (!state || state.room.status !== "time_voting" || this.actionInFlight) return;
-    const options = state.room.vote_options ?? [];
-    if (options.length === 0) return;
-
-    const round = state.room.current_round;
-    const counts = new Map<string, number>();
-    for (const v of state.votes) {
-      if (v.round_no === round && options.includes(v.game_id)) {
-        counts.set(v.game_id, (counts.get(v.game_id) ?? 0) + 1);
-      }
-    }
-    const max = Math.max(0, ...counts.values());
-    const top = max > 0 ? options.filter((id) => counts.get(id) === max) : options;
-    const winner = top[Math.floor(Math.random() * top.length)];
-    const deadline = computeRoundDeadline(Number(winner));
-    await this.hostAction(() => finishTimeVote(this.code, deadline));
+    const deadline = computeRoundDeadline(roomTimeLimitFor(gameId));
+    await this.hostAction(() => startRound(this.code, round, gameId, deadline));
   }
 
   private async finish(): Promise<void> {
@@ -1039,46 +1064,70 @@ class RoomModeController implements RoomMode {
 
   // ---------- Migracion de host ----------
 
-  private updateTakeover(): void {
+  /**
+   * Si el host se fue, otro jugador toma el control **solo**, sin que nadie
+   * apriete nada. Es lo que impide que la sala quede injugable: como todas las
+   * transiciones de fase (cerrar la ronda, cerrar el briefing, cerrar la
+   * votacion) y los destrabes de los juegos de tablero compartido los escribe
+   * unicamente el host, si el host desaparece nadie avanza y la sala se congela.
+   *
+   * Antes esto era un boton manual ("tomar el control") y no alcanzaba: solo se
+   * ofrecia en fases "estables" — durante `playing` hacia falta haber reportado —
+   * y el overlay esta oculto mientras se juega, asi que en el caso mas comun (el
+   * host se va en plena ronda) el boton no llegaba a dibujarse nunca.
+   *
+   * El candidato se elige deterministicamente: el primero de `presentPlayers()`
+   * (orden joined_at) que no sea el host ausente. El escalonado por posicion
+   * evita escrituras simultaneas y cubre al candidato dormido.
+   */
+  private maybeTakeOverHost(): void {
     const state = this.state;
     // Un espectador no puede tomar el control (no es jugador de la sala).
-    if (!state || this.spectator || this.isHost()) {
+    if (!state || this.spectator || this.isHost() || state.room.status === "lobby") {
       this.hostAbsentSince = null;
       return;
     }
-    // Solo en fases estables: la presencia parpadea durante la navegacion.
-    const stable =
-      state.room.status === "briefing" ||
-      state.room.status === "results" ||
-      state.room.status === "voting" ||
-      state.room.status === "time_voting" ||
-      state.room.status === "finished" ||
-      (state.room.status === "playing" && this.reported);
-    const present = this.channel?.presentPlayers() ?? [];
-    if (!stable || present.includes(state.room.host)) {
-      this.hostAbsentSince = null;
-      return;
-    }
-    if (this.hostAbsentSince === null) this.hostAbsentSince = Date.now();
-    if (Date.now() - this.hostAbsentSince < HOST_ABSENT_MS) return;
 
-    this.overlay.offerTakeover(() => {
-      void takeOverHost(this.code, this.me).then((ok) => {
-        if (ok) this.channel?.ping();
-        void this.refresh();
-      });
+    const present = this.presentPlayers();
+    if (present.includes(state.room.host)) {
+      this.hostAbsentSince = null;
+      return;
+    }
+    // Sin presencia propia (canal recien suscripto, o caido) no se decide nada:
+    // si la lista esta vacia para todos, nadie se autoproclama host.
+    if (!present.includes(this.me)) return;
+
+    if (this.hostAbsentSince === null) {
+      this.hostAbsentSince = Date.now();
+      return;
+    }
+    const rank = present.filter((p) => p !== state.room.host).indexOf(this.me);
+    if (rank < 0) return;
+    if (Date.now() - this.hostAbsentSince < HOST_ABSENT_MS + rank * TAKEOVER_STAGGER_MS) return;
+    if (Date.now() - this.takeoverAt < TAKEOVER_RETRY_MS) return;
+
+    this.takeoverAt = Date.now();
+    void takeOverHost(this.code, this.me).then((ok) => {
+      if (ok) this.channel?.ping();
+      void this.refresh();
     });
   }
 }
 
-/** 3 juegos al azar que todavia no salieron (o los que queden; nunca vacio). */
-export function pickVoteOptions(state: RoomState): string[] {
-  const played = new Set(state.rounds.map((r) => r.game_id));
-  let pool = roomGames.map((g) => g.id).filter((id) => !played.has(id));
-  if (pool.length === 0) pool = roomGames.map((g) => g.id);
+/** Cuantos candidatos se ofrecen en cada votacion de juego. */
+export const VOTE_OPTION_COUNT = 5;
+
+/**
+ * Candidatos al azar para la votacion del proximo juego. Los ya jugados entran
+ * al sorteo igual que el resto: una sala puede repetir un juego (incluso el de
+ * la ronda recien terminada) si lo votan. Los candidatos de una misma votacion
+ * si son distintos entre si.
+ */
+export function pickVoteOptions(): string[] {
+  const pool = roomGames.map((g) => g.id);
 
   const picked: string[] = [];
-  while (picked.length < 3 && pool.length > 0) {
+  while (picked.length < VOTE_OPTION_COUNT && pool.length > 0) {
     const i = Math.floor(Math.random() * pool.length);
     picked.push(pool[i]);
     pool.splice(i, 1);

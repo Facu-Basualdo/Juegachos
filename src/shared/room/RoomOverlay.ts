@@ -120,13 +120,6 @@ const CSS = `
   display: inline-block; margin-bottom: 18px; padding: 9px 20px; border-radius: 999px;
   background: #111; color: #efeee6; font-size: 15px; font-weight: 800; letter-spacing: 0.3px;
 }
-.mg-room__takeover {
-  display: block; margin: 14px auto 0; padding: 10px 18px; border-radius: 999px;
-  border: 2px solid #c81d4a; background: transparent; color: #c81d4a;
-  font: inherit; font-size: 12px; font-weight: 800; letter-spacing: 0.5px;
-  text-transform: uppercase; cursor: pointer;
-}
-.mg-room__takeover:hover { background: #c81d4a; color: #efeee6; }
 `;
 
 function ensureStyles(): void {
@@ -186,7 +179,6 @@ export class RoomOverlay {
   private readonly stripTextEl: HTMLSpanElement;
   private readonly stripLightsEl: HTMLSpanElement;
   private timeEl: HTMLDivElement | null = null;
-  private takeoverEl: HTMLButtonElement | null = null;
 
   // ── Votacion: estado para actualizar in-place (sin reconstruir el DOM en
   // cada sync, que hace titilar el modal y borra el countdown) ─────────────
@@ -221,24 +213,30 @@ export class RoomOverlay {
     for (const type of ["pointerdown", "mousedown", "click", "touchstart"]) {
       this.root.addEventListener(type, (e) => e.stopPropagation());
     }
-    // Los juegos escuchan Enter/Espacio en `window` para su propio "toca para
+    // Los juegos escuchan el teclado en `window` para su propio "toca para
     // empezar" (ver CLAUDE.md, "Enter-to-start countdown"). Ese listener no
     // sabe nada del overlay: sin esto, tocar Enter mientras se lee el briefing
     // (o cualquier otra vista del overlay) arranca la partida local antes de
     // que la ronda pase a "playing", el juego termina solo y reporta un
     // puntaje para una ronda que todavia no empezo para los demas. Se
     // intercepta en fase de captura (antes que el listener del juego, que esta
-    // en fase de bubble) mientras el overlay esta visible, salvo que el foco
-    // este en un control propio del overlay (p.ej. el boton "Listo" via teclado).
+    // en fase de bubble) mientras el overlay esta visible.
+    //
+    // Se corta TODA tecla, no solo Enter/Espacio: cada juego elige con que
+    // arranca (Enter, espacio, una letra, una flecha) y el overlay no puede
+    // saberlo. Y se corta tambien cuando el foco esta en un control propio del
+    // overlay: un boton que quedo enfocado tras el clic (las opciones de
+    // votacion, la accion del host) dejaba pasar el Enter siguiente hasta el
+    // juego. Cortar la propagacion no cancela la accion por defecto, asi que
+    // el boton enfocado se sigue activando con teclado; el preventDefault (que
+    // si la cancelaria) queda solo para el scroll del espacio fuera del overlay.
     window.addEventListener(
       "keydown",
       (e) => {
         if (this.root.style.display === "none") return;
+        e.stopPropagation();
         if (e.target instanceof Node && this.root.contains(e.target)) return;
-        if (e.code === "Space" || e.code === "Enter") {
-          e.stopPropagation();
-          e.preventDefault();
-        }
+        if (e.code === "Space" || e.code === "Enter") e.preventDefault();
       },
       { capture: true },
     );
@@ -292,7 +290,6 @@ export class RoomOverlay {
     this.root.style.display = "";
     this.boxEl.innerHTML = "";
     this.timeEl = null;
-    this.takeoverEl = null;
     this.resetVoteState();
   }
 
@@ -302,22 +299,6 @@ export class RoomOverlay {
     this.voteOptimisticMine = null;
     this.briefSig = null;
     this.briefEls = null;
-  }
-
-  /**
-   * Agrega (una sola vez por vista) el boton para tomar el control cuando el
-   * host se desconecto. Idempotente: si ya esta en la vista actual, no hace nada.
-   */
-  offerTakeover(onClick: () => void): void {
-    if (this.root.style.display === "none") return;
-    if (this.takeoverEl && this.boxEl.contains(this.takeoverEl)) return;
-    const btn = document.createElement("button");
-    btn.className = "mg-room__takeover";
-    btn.type = "button";
-    btn.textContent = "El anfitrion se desconecto - tomar el control";
-    btn.addEventListener("click", onClick);
-    this.takeoverEl = btn;
-    this.boxEl.append(btn);
   }
 
   private addKicker(text: string): void {
@@ -496,6 +477,8 @@ export class RoomOverlay {
     gameTitle: string;
     description: string;
     controls: string;
+    /** Tope de tiempo de la ronda ya formateado, o "" si el juego no tiene. */
+    timeLimit: string;
     readyCount: number;
     totalPlayers: number;
     iAmReady: boolean;
@@ -522,6 +505,19 @@ export class RoomOverlay {
       const text = document.createElement("div");
       text.className = "mg-room__controls-text";
       text.textContent = opts.controls;
+      box.append(label, text);
+      this.boxEl.append(box);
+    }
+
+    if (opts.timeLimit) {
+      const box = document.createElement("div");
+      box.className = "mg-room__controls";
+      const label = document.createElement("div");
+      label.className = "mg-room__controls-label";
+      label.textContent = "Tiempo de la ronda";
+      const text = document.createElement("div");
+      text.className = "mg-room__controls-text";
+      text.textContent = `${opts.timeLimit} - al vencer se toma tu puntaje del momento`;
       box.append(label, text);
       this.boxEl.append(box);
     }
@@ -557,7 +553,7 @@ export class RoomOverlay {
     this.briefEls.count.textContent = `${readyCount}/${totalPlayers} listos`;
   }
 
-  /** Votacion (proximo juego o tope de tiempo). */
+  /** Votacion del proximo juego. */
   showVoting(opts: {
     options: VoteOption[];
     /** Cantidad de votos por opcion. */
@@ -569,7 +565,6 @@ export class RoomOverlay {
     /** Textos de la vista (por defecto, la votacion del proximo juego). */
     kicker?: string;
     title?: string;
-    hint?: string;
   }): void {
     const sig = JSON.stringify({
       r: opts.round ?? 0,
@@ -638,7 +633,7 @@ export class RoomOverlay {
       els.set(opt.id, { btn, count });
     }
     this.boxEl.append(wrap);
-    this.addHint(opts.hint ?? "Gana la mayoria; empate se define al azar");
+    this.addHint("Gana la mayoria; empate se define al azar");
 
     this.voteEls = els;
     this.voteOptimisticMine = null;
@@ -720,6 +715,21 @@ export class RoomOverlay {
     this.addSubtitle(
       "La partida ya empezo, asi que la miras desde afuera. Vas a poder jugar cuando termine y el anfitrion abra una nueva.",
     );
+  }
+
+  /**
+   * Primera vista, montada apenas carga la pagina del juego (antes de leer el
+   * estado de la sala). No es decorativa: mientras no hay overlay, la pantalla
+   * de inicio del juego ("presiona ENTER para jugar") esta viva y un Enter o un
+   * toque largan la partida antes de que la ronda arranque — la carrera contra
+   * el fetch inicial. Con el overlay puesto desde el arranque, todo el input
+   * queda tapado hasta que el modo sala decide que se juega.
+   */
+  showConnecting(): void {
+    this.show();
+    this.addKicker("Sala");
+    this.addTitle("Conectando...");
+    this.addSubtitle("Buscando la sala, esperando el arranque de la ronda.");
   }
 
   /** Error terminal (sala inexistente, etc.). */

@@ -26,6 +26,14 @@ export class Game {
   private best: number | null = null;
   private improvedThisRun = false;
   private lives = LIVES;
+  /**
+   * True solo cuando el overlay de inicio / fin esta realmente en pantalla. El
+   * estado pasa a "gameOver" al perder, pero el overlay aparece 1100ms despues
+   * (revelado de celdas): sin este guard un tap en esa ventana reinicia la
+   * partida y cancela `endGame()`, asi que nunca se muestra el puntaje ni el
+   * ranking.
+   */
+  private menuVisible = true;
 
   private gridN = 3;
   private lit: number[] = [];
@@ -60,13 +68,13 @@ export class Game {
   // ---------- Input ----------
 
   private handleKeyDown = (e: KeyboardEvent): void => {
-    if (e.key === "Enter" && (this.state === "ready" || this.state === "gameOver")) {
+    if (e.key === "Enter" && this.menuVisible) {
       this.startFromMenu();
     }
   };
 
   private handlePointerDown = (e: PointerEvent): void => {
-    if (this.state !== "ready" && this.state !== "gameOver") return;
+    if (!this.menuVisible) return;
     const target = e.target as HTMLElement | null;
     if (target && target.closest(".mg-lb")) return;
     this.startFromMenu();
@@ -101,6 +109,7 @@ export class Game {
 
   private beginCountdown(): void {
     this.clearTimers();
+    this.menuVisible = false;
     this.state = "countdown";
     this.level = START_LEVEL;
     this.score = 0;
@@ -176,6 +185,7 @@ export class Game {
   private endGame(): void {
     SoundEffects.playFinish();
     this.hud.showGameOver(this.score, this.best ?? 0, this.improvedThisRun);
+    this.menuVisible = true;
     if (this.room) this.room.reportScore(this.score);
     else this.hud.showRanking("visual-memory", this.score);
   }

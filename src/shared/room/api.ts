@@ -1,11 +1,14 @@
 import { getSupabase } from "../supabase";
-import type {
-  RoomRow,
-  RoomSettings,
-  RoomState,
-  RoundRow,
-  RoundScoreRow,
-  VoteRow,
+import {
+  ROOM_STALE_MS,
+  type PublicRoom,
+  type RoomRow,
+  type RoomSettings,
+  type RoomState,
+  type RoomVisibility,
+  type RoundRow,
+  type RoundScoreRow,
+  type VoteRow,
 } from "./types";
 
 /**
@@ -41,29 +44,207 @@ function warn(action: string, message: string): void {
   console.warn(`[rooms] ${action}: ${message}`);
 }
 
+/** 42703 = undefined_column: la DB todavia no corrio supabase/rooms.sql. */
+const UNDEFINED_COLUMN = "42703";
+
+/**
+ * True cuando la DB no tiene las columnas visibility / last_active. Lo detecta
+ * la primera query que las toca; a partir de ahi las features de salas publicas
+ * se apagan solas en vez de errorear en cada llamada.
+ */
+let legacySchema = false;
+
+/** Enciende el modo legacy avisando una sola vez que falta correr la migracion. */
+function markLegacySchema(): void {
+  if (legacySchema) return;
+  legacySchema = true;
+  warn(
+    "schema",
+    "faltan las columnas visibility/last_active en public.rooms: corre supabase/rooms.sql " +
+      "en el SQL Editor. Las salas funcionan igual, pero sin listado de salas publicas, " +
+      "sin purga automatica y sin poder expulsar jugadores.",
+  );
+}
+
 /**
  * Crea la sala y registra al host como jugador. Reintenta ante colision de
  * codigo (PK). Devuelve el codigo, o null si fallo / no hay Supabase.
+ *
+ * Si la DB no tiene todavia las columnas de salas publicas (no se corrio
+ * supabase/rooms.sql), la sala se crea igual sin ellas: sin listado publico ni
+ * purga, pero jugable. Crear una sala nunca deberia depender de una migracion
+ * pendiente, igual que el resto de los juegos no depende del leaderboard.
  */
-export async function createRoom(host: string, settings: RoomSettings): Promise<string | null> {
+export async function createRoom(
+  host: string,
+  settings: RoomSettings,
+  visibility: RoomVisibility = "public",
+): Promise<string | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
 
   for (let attempt = 0; attempt < 3; attempt++) {
     const code = randomCode();
-    const { error } = await supabase.from("rooms").insert({ code, host, settings });
+    const row: Record<string, unknown> = { code, host, settings };
+    if (!legacySchema) {
+      row.visibility = visibility;
+      row.last_active = new Date().toISOString();
+    }
+    const { error } = await supabase.from("rooms").insert(row);
     if (!error) {
       await supabase.from("room_players").upsert({ code, player: host });
       return code;
     }
     // 23505 = unique_violation (codigo ya usado): probar con otro.
-    if (error.code !== "23505") {
-      warn("createRoom", error.message);
-      return null;
+    if (error.code === "23505") continue;
+    if (error.code === UNDEFINED_COLUMN && !legacySchema) {
+      markLegacySchema();
+      attempt--; // el reintento sin columnas no gasta un intento de codigo
+      continue;
     }
+    warn("createRoom", error.message);
+    return null;
   }
   warn("createRoom", "no se pudo generar un codigo libre");
   return null;
+}
+
+// ---------- Salas publicas: listado, heartbeat y limpieza ----------
+
+/**
+ * Salas publicas a las que se puede entrar ahora mismo: visibles, en el lobby,
+ * con al menos un jugador y con heartbeat reciente (las frias son fantasmas de
+ * pestanas cerradas; purgeStaleRooms las borra). Las llenas se devuelven igual
+ * para poder mostrarlas como tales; el caller decide.
+ */
+export async function fetchPublicRooms(): Promise<PublicRoom[]> {
+  const supabase = getSupabase();
+  if (!supabase || legacySchema) return [];
+
+  const cutoff = new Date(Date.now() - ROOM_STALE_MS).toISOString();
+  const { data, error } = await supabase
+    .from("rooms")
+    .select("code, host, settings")
+    .eq("visibility", "public")
+    .eq("status", "lobby")
+    .gt("last_active", cutoff)
+    .order("last_active", { ascending: false })
+    .limit(30);
+  if (error) {
+    if (error.code === UNDEFINED_COLUMN) markLegacySchema();
+    else warn("fetchPublicRooms", error.message);
+    return [];
+  }
+  const rooms = (data ?? []) as { code: string; host: string; settings: RoomSettings }[];
+  if (rooms.length === 0) return [];
+
+  // Conteo de jugadores en una sola query (no hay group by en PostgREST: se
+  // traen las filas de esas salas y se cuentan aca; son <= 8 por sala).
+  const { data: playerRows, error: playersError } = await supabase
+    .from("room_players")
+    .select("code")
+    .in(
+      "code",
+      rooms.map((r) => r.code),
+    );
+  if (playersError) {
+    warn("fetchPublicRooms", playersError.message);
+    return [];
+  }
+  const counts = new Map<string, number>();
+  for (const row of (playerRows ?? []) as { code: string }[]) {
+    counts.set(row.code, (counts.get(row.code) ?? 0) + 1);
+  }
+
+  return rooms
+    .map((r) => ({ code: r.code, host: r.host, settings: r.settings, players: counts.get(r.code) ?? 0 }))
+    .filter((r) => r.players > 0);
+}
+
+/** Marca la sala como viva. La llaman los clientes adentro, cada HEARTBEAT_MS. */
+export async function touchRoom(code: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase || legacySchema) return;
+  const { error } = await supabase
+    .from("rooms")
+    .update({ last_active: new Date().toISOString() })
+    .eq("code", code);
+  if (!error) return;
+  // Sin la columna no hay heartbeat: se apaga en vez de latir contra la pared.
+  if (error.code === UNDEFINED_COLUMN) markLegacySchema();
+  else warn("touchRoom", error.message);
+}
+
+/** Cambia la visibilidad de la sala (solo el host, por convencion). */
+export async function setVisibility(code: string, visibility: RoomVisibility): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase || legacySchema) return false;
+  const { error } = await supabase.from("rooms").update({ visibility }).eq("code", code);
+  if (error) {
+    if (error.code === UNDEFINED_COLUMN) markLegacySchema();
+    else warn("setVisibility", error.message);
+    return false;
+  }
+  return true;
+}
+
+/** Borra la sala entera (cascade a jugadores/rondas/puntajes/votos/tableros). */
+export async function deleteRoom(code: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  const { error } = await supabase.from("rooms").delete().eq("code", code);
+  if (error) {
+    warn("deleteRoom", error.message);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Borra las salas sin heartbeat reciente (todos sus clientes se fueron sin
+ * avisar: pestana cerrada, browser muerto). Se corre al abrir /rooms/: es
+ * barato, no necesita cron y mantiene limpio el listado publico.
+ */
+export async function purgeStaleRooms(): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase || legacySchema) return;
+  const cutoff = new Date(Date.now() - ROOM_STALE_MS).toISOString();
+  const { error } = await supabase.from("rooms").delete().lt("last_active", cutoff);
+  if (!error) return;
+  if (error.code === UNDEFINED_COLUMN) markLegacySchema();
+  else warn("purgeStaleRooms", error.message);
+}
+
+/**
+ * El jugador se va de la sala: borra su fila de room_players (y lo suyo de la
+ * partida). Si era el ultimo, la sala se borra; si era el host y quedan otros,
+ * el host pasa al que sigue (por joined_at) para no dejarla sin autoridad.
+ */
+export async function leaveRoom(code: string, player: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) return;
+
+  await removePlayerRows(supabase, code, player);
+
+  const { data, error } = await supabase
+    .from("room_players")
+    .select("player")
+    .eq("code", code)
+    .order("joined_at");
+  if (error) {
+    warn("leaveRoom", error.message);
+    return;
+  }
+  const rest = ((data ?? []) as { player: string }[]).map((r) => r.player);
+  if (rest.length === 0) {
+    await deleteRoom(code);
+    return;
+  }
+  // Si se fue el host, el mas antiguo de los que quedan toma la sala.
+  const { data: room } = await supabase.from("rooms").select("host").eq("code", code).maybeSingle();
+  if (room && (room as { host: string }).host === player) {
+    await takeOverHost(code, rest[0]);
+  }
 }
 
 export type JoinResult = "ok" | "not-found" | "finished" | "spectator" | "error";
@@ -274,65 +455,6 @@ export async function startRound(
 }
 
 /**
- * Abre la votacion de tiempo antes de una ronda: fija el juego de la ronda y
- * pasa a 'time_voting' con las opciones de tiempo (en segundos, como strings)
- * de candidatos. Al cerrarse, finishTimeVote arranca a jugar con el ganador.
- */
-export async function startTimeVote(
-  code: string,
-  roundNo: number,
-  gameId: string,
-  options: string[],
-  deadline: Date,
-): Promise<boolean> {
-  const supabase = getSupabase();
-  if (!supabase) return false;
-
-  const { error: roundError } = await supabase
-    .from("room_rounds")
-    .upsert({ code, round_no: roundNo, game_id: gameId });
-  if (roundError) {
-    warn("startTimeVote", roundError.message);
-    return false;
-  }
-
-  const { error } = await supabase
-    .from("rooms")
-    .update({
-      status: "time_voting",
-      current_round: roundNo,
-      current_game: gameId,
-      vote_options: options,
-      deadline: deadline.toISOString(),
-    })
-    .eq("code", code);
-  if (error) {
-    warn("startTimeVote", error.message);
-    return false;
-  }
-  return true;
-}
-
-/** Cierra la votacion de tiempo: arranca a jugar con el tope votado (null = sin tope). */
-export async function finishTimeVote(code: string, deadline: Date | null): Promise<boolean> {
-  const supabase = getSupabase();
-  if (!supabase) return false;
-  const { error } = await supabase
-    .from("rooms")
-    .update({
-      status: "playing",
-      vote_options: null,
-      deadline: deadline ? deadline.toISOString() : null,
-    })
-    .eq("code", code);
-  if (error) {
-    warn("finishTimeVote", error.message);
-    return false;
-  }
-  return true;
-}
-
-/**
  * Adelanta (o cambia) el deadline de la ronda o votacion en curso. Se usa para
  * comprimir la votacion del proximo juego a pocos segundos cuando ya votaron
  * todos los presentes: no tiene sentido esperar el tope completo.
@@ -455,24 +577,42 @@ export async function resetRoom(code: string): Promise<boolean> {
 }
 
 /**
- * El anfitrion expulsa a un jugador: borra su fila de room_players (y sus
- * puntajes/votos de la partida en curso, para que no cuente en los tableros).
- * El expulsado lo detecta al refrescar (ya no esta en state.players) y sale.
+ * Saca todas las filas de un jugador en una sala: su registro y lo que aporto a
+ * la partida en curso (puntajes y votos), para que no cuente en los tableros.
+ *
+ * Devuelve si la fila de room_players realmente desaparecio. El `select()` no es
+ * decorativo: sin la policy de delete, RLS filtra el borrado en silencio (0 filas,
+ * sin error) y el jugador seguia en la sala. Pedir las filas borradas convierte
+ * ese caso en un false en vez de un exito falso.
+ */
+async function removePlayerRows(
+  supabase: NonNullable<ReturnType<typeof getSupabase>>,
+  code: string,
+  player: string,
+): Promise<boolean> {
+  const [playerRes, scoresRes, votesRes] = await Promise.all([
+    supabase.from("room_players").delete().eq("code", code).eq("player", player).select("player"),
+    supabase.from("room_round_scores").delete().eq("code", code).eq("player", player),
+    supabase.from("room_votes").delete().eq("code", code).eq("player", player),
+  ]);
+  const failed = [playerRes, scoresRes, votesRes].find((r) => r.error);
+  if (failed?.error) {
+    warn("removePlayerRows", failed.error.message);
+    return false;
+  }
+  return (playerRes.data ?? []).length > 0;
+}
+
+/**
+ * El anfitrion expulsa a un jugador. El expulsado lo detecta al refrescar (ya no
+ * esta en state.players) y sale. Devuelve false si la fila no se borro (p.ej. la
+ * policy room_players_delete_public no esta aplicada en la DB), asi la UI puede
+ * avisar en vez de simular que lo echo.
  */
 export async function kickPlayer(code: string, player: string): Promise<boolean> {
   const supabase = getSupabase();
   if (!supabase) return false;
-  const deletes = await Promise.all([
-    supabase.from("room_players").delete().eq("code", code).eq("player", player),
-    supabase.from("room_round_scores").delete().eq("code", code).eq("player", player),
-    supabase.from("room_votes").delete().eq("code", code).eq("player", player),
-  ]);
-  const failed = deletes.find((r) => r.error);
-  if (failed?.error) {
-    warn("kickPlayer", failed.error.message);
-    return false;
-  }
-  return true;
+  return removePlayerRows(supabase, code, player);
 }
 
 /** Migracion de host: cualquier jugador toma el control si el host se fue. */

@@ -9,6 +9,10 @@ export const meta: GameEntry = {
   accent: "#5fe1ff",
   category: "Puzzle",
   order: 47,
+  added: "2026-07-09",
+  mobile: true,
+
+  roomTimeLimitSec: 120,
 };
 
 // Scoring por defecto: { direction: "higher" } (nivel mas alto = mejor). No se

@@ -1,25 +1,20 @@
-let audioCtx: AudioContext | null = null;
+import { getAudioContext, resumeAudio } from "./audioContext";
+import { EmoteAudio } from "./EmoteAudio";
+import type { EmoteId } from "./constants";
 
-function getAudioContext(): AudioContext | null {
-  if (typeof window === "undefined") return null;
-  if (!audioCtx) {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (AudioContextClass) audioCtx = new AudioContextClass();
-  }
-  return audioCtx;
-}
-
+/** `delay` (seg) permite encadenar blips en una frase: una risa son varias silabas. */
 function blip(
   type: OscillatorType,
   freq: number,
   dur: number,
   peak: number,
   slideTo?: number,
+  delay = 0,
 ): void {
   const ctx = getAudioContext();
   if (!ctx) return;
-  if (ctx.state === "suspended") ctx.resume();
-  const now = ctx.currentTime;
+  resumeAudio(ctx);
+  const now = ctx.currentTime + delay;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.connect(gain);
@@ -55,6 +50,49 @@ export class SoundEffects {
   /** La mecha exploto en el turno de alguien: golpe seco. */
   static playExplode(): void {
     blip("square", 110, 0.28, 0.16, 55);
+  }
+
+  /**
+   * Voz de cada reaccion. Primero intenta el sample real (`EmoteAudio`, mp3 en
+   * `public/sfx/emotes/`); si todavia no bajo, no existe o no decodifico, cae a la
+   * version sintetizada de abajo. Suenan para todos los de la sala y pueden pisarse con
+   * la mecha y la explosion, asi que van a volumen bajo (pico <= 0.09 las sintetizadas,
+   * `SAMPLE_GAIN` los samples) y cortas (~90ms el "oh!" de sorpresa, ~430ms el sollozo
+   * de llanto, que es la mas larga): son un gesto, no un evento de la partida. El
+   * cooldown de 1s por jugador es lo que evita que se acumulen.
+   */
+  static playEmote(id: EmoteId): void {
+    if (EmoteAudio.play(id)) return;
+    switch (id) {
+      case "risa":
+        // Risa muy aguda y rapida (tipo ardilla/rana de TikTok).
+        blip("sine", 900, 0.06, 0.07, 1100, 0);
+        blip("sine", 1000, 0.06, 0.07, 1200, 0.07);
+        blip("sine", 1100, 0.06, 0.07, 1300, 0.14);
+        blip("sine", 1200, 0.06, 0.07, 1000, 0.21);
+        blip("sine", 1000, 0.06, 0.07, 800, 0.28);
+        blip("sine", 900, 0.06, 0.07, 1100, 0.35);
+        break;
+      case "sorpresa":
+        // Un "oh!" que sube de golpe.
+        blip("sine", 320, 0.13, 0.07, 980);
+        break;
+      case "enojo":
+        // Gruñido grave y aspero.
+        blip("sawtooth", 140, 0.28, 0.09, 70);
+        blip("square", 95, 0.2, 0.04, 62, 0.04);
+        break;
+      case "burla":
+        // Cantito de burla: baja y vuelve a subir.
+        blip("triangle", 600, 0.1, 0.07, 380, 0);
+        blip("triangle", 380, 0.13, 0.07, 640, 0.1);
+        break;
+      case "llanto":
+        // Dos sollozos que se desinflan.
+        blip("sine", 620, 0.22, 0.07, 260, 0);
+        blip("sine", 540, 0.26, 0.06, 220, 0.26);
+        break;
+    }
   }
 
   /** Paso de turno: un tic breve. */

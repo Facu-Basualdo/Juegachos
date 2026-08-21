@@ -1,0 +1,613 @@
+/*
+ * Basta / Tutti Frutti — estetica "hoja de cuaderno" (ver DESIGN.md).
+ * Papel crema rayado con margen rojo, tinta azul, la letra como sello, tachon al
+ * gritar BASTA. Todo sintetico (sin assets ni fuentes externas): la sensacion
+ * manuscrita la da una pila de fuentes cursivas del sistema.
+ */
+
+:root {
+  --bt-paper: #fbfaf3;
+  --bt-line: #cfe0f0;
+  --bt-margin: #e7a3a3;
+  --bt-ink: #2f5bd8;
+  --bt-pencil: #2b2b33;
+  --bt-red: #d23b3b;
+  --bt-green: #2e9e5b;
+  --bt-amber: #c98a1e;
+  --bt-hand: "Bradley Hand", "Comic Sans MS", "Segoe Print", "Marker Felt", cursive;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: #d9d2c4;
+  color: var(--bt-pencil);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overscroll-behavior: none;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+.bt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+/*
+ * El Hud prende y apaga la escena, el cartel y el countdown con el atributo
+ * `hidden`, y el `display: none` que el navegador le da a `[hidden]` lo pisa
+ * cualquier `display` propio (la escena es flex, el cartel y el countdown son
+ * grid). Sin esta regla el "YA" y el cartel de "esperando" quedan clavados
+ * arriba de la hoja y tapan el juego. No sacar.
+ */
+.bt [hidden] {
+  display: none !important;
+}
+
+/* ---------- Escena / hoja ---------- */
+
+.bt__stage {
+  position: relative;
+  width: min(680px, 100%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 14px clamp(14px, 4vw, 34px) 90px;
+  background: var(--bt-paper);
+  /* Renglones del cuaderno + margen rojo a la izquierda. */
+  background-image:
+    linear-gradient(90deg, transparent 0 44px, var(--bt-margin) 44px 46px, transparent 46px),
+    repeating-linear-gradient(var(--bt-paper) 0 33px, var(--bt-line) 33px 34px);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+/* ---------- Topbar: letra + reloj + roster ---------- */
+
+.bt__topbar {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "letter clock"
+    "roster roster";
+  gap: 8px 14px;
+  align-items: center;
+  padding-left: 40px;
+  margin-bottom: 6px;
+}
+
+.bt__letter {
+  grid-area: letter;
+  font-family: var(--bt-hand);
+  font-weight: 700;
+  font-size: clamp(40px, 12vw, 68px);
+  line-height: 1;
+  color: var(--bt-red);
+  width: clamp(64px, 18vw, 96px);
+  height: clamp(64px, 18vw, 96px);
+  display: grid;
+  place-items: center;
+  border: 3px solid var(--bt-red);
+  border-radius: 50%;
+  transform: rotate(-6deg);
+  box-shadow: inset 0 0 0 2px rgba(210, 59, 59, 0.25);
+}
+
+.bt__clock {
+  grid-area: clock;
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(47, 91, 216, 0.14);
+  overflow: hidden;
+}
+
+.bt__clock-bar {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: var(--bt-ink);
+  border-radius: 6px;
+}
+
+.bt__clock-bar.is-low {
+  background: var(--bt-red);
+}
+
+.bt__roster {
+  grid-area: roster;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.bt__round {
+  font-family: var(--bt-hand);
+  font-size: 15px;
+  color: var(--bt-ink);
+  margin-right: 4px;
+}
+
+.bt__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 20px;
+  background: rgba(47, 91, 216, 0.08);
+  border: 1.5px solid rgba(47, 91, 216, 0.25);
+  font-size: 13px;
+  max-width: 46vw;
+}
+
+.bt__chip.is-me {
+  border-color: var(--bt-ink);
+  background: rgba(47, 91, 216, 0.16);
+  font-weight: 700;
+}
+
+.bt__chip.is-off {
+  opacity: 0.4;
+}
+
+.bt__chip.is-basta {
+  border-color: var(--bt-red);
+  color: var(--bt-red);
+}
+
+.bt__chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bt__chip-prog {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--bt-ink);
+}
+
+/* ---------- Banner ---------- */
+
+.bt__banner {
+  font-family: var(--bt-hand);
+  font-size: clamp(16px, 4.5vw, 22px);
+  color: var(--bt-red);
+  text-align: center;
+  padding: 4px 0 8px;
+}
+
+/* ---------- Panel scrollable ---------- */
+
+.bt__panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-left: 40px;
+}
+
+/* ---------- Vista: hoja de llenado ---------- */
+
+.bt__sheet {
+  display: flex;
+  flex-direction: column;
+}
+
+.bt__row {
+  display: grid;
+  grid-template-columns: minmax(78px, 34%) 1fr;
+  align-items: end;
+  gap: 10px;
+  min-height: 44px;
+  padding-bottom: 2px;
+}
+
+.bt__cat {
+  font-family: var(--bt-hand);
+  font-size: clamp(15px, 4vw, 19px);
+  color: var(--bt-pencil);
+  padding-bottom: 6px;
+}
+
+.bt__input {
+  font-family: var(--bt-hand);
+  font-size: clamp(17px, 4.6vw, 22px);
+  color: var(--bt-ink);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid rgba(47, 91, 216, 0.35);
+  padding: 2px 4px 5px;
+  outline: none;
+  width: 100%;
+}
+
+.bt__input:focus {
+  border-bottom-color: var(--bt-ink);
+}
+
+/*
+ * Escrita pero demasiado corta (una letra suelta). El server la anula sola, asi que se
+ * marca mientras se escribe: si no, el boton BASTA queda muerto sin que se entienda por
+ * que. Solo aparece con algo escrito — la celda vacia no se pinta de rojo.
+ */
+.bt__input.is-short {
+  border-bottom-color: var(--bt-red);
+  border-bottom-style: dashed;
+}
+
+/* ---------- Boton BASTA ---------- */
+
+.bt__basta {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%) rotate(-2deg);
+  font-family: var(--bt-hand);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #fff;
+  background: var(--bt-red);
+  border: none;
+  border-radius: 14px;
+  padding: 12px 44px;
+  cursor: pointer;
+  box-shadow: 0 6px 0 #a52a2a, 0 10px 18px rgba(0, 0, 0, 0.25);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.bt__basta:not(:disabled):active {
+  transform: translateX(-50%) rotate(-2deg) translateY(4px);
+  box-shadow: 0 2px 0 #a52a2a, 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+.bt__basta:disabled {
+  background: #b9b3a6;
+  box-shadow: 0 6px 0 #948e82;
+  color: #efece4;
+  cursor: not-allowed;
+}
+
+/* Mismo boton, otra funcion: en la votacion confirma la hoja de tachados (tinta
+   azul de la lapicera, para que no se lea como un segundo BASTA). */
+.bt__basta.is-vote {
+  background: var(--bt-ink);
+  box-shadow: 0 6px 0 #1c3f9c, 0 10px 18px rgba(0, 0, 0, 0.25);
+  font-size: 22px;
+  padding: 12px 38px;
+}
+
+.bt__basta.is-vote:not(:disabled):active {
+  box-shadow: 0 2px 0 #1c3f9c, 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* ---------- Vistas votacion / reveal ---------- */
+
+.bt__board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bt__cat-block {
+  border-left: 3px solid rgba(47, 91, 216, 0.3);
+  padding-left: 10px;
+}
+
+.bt__cat-title {
+  font-family: var(--bt-hand);
+  font-size: 17px;
+  color: var(--bt-ink);
+  margin: 0 0 4px;
+}
+
+.bt__ans {
+  display: grid;
+  grid-template-columns: minmax(64px, 26%) 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.12);
+  font-family: var(--bt-hand);
+  font-size: 17px;
+}
+
+.bt__ans-who {
+  color: var(--bt-pencil);
+  opacity: 0.7;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bt__ans-text {
+  color: var(--bt-ink);
+  overflow-wrap: anywhere;
+}
+
+.bt__ans.is-empty .bt__ans-text {
+  color: #9a958a;
+}
+
+.bt__ans.is-doomed .bt__ans-text,
+.bt__ans.is-rejected .bt__ans-text,
+.bt__ans.is-invalid .bt__ans-text {
+  color: var(--bt-red);
+  text-decoration: line-through;
+  text-decoration-color: var(--bt-red);
+  text-decoration-thickness: 2px;
+}
+
+/* Motivo de la anulacion automatica ("muy corta"), al lado de la respuesta caida. */
+.bt__ans-note {
+  font-family: var(--bt-hand);
+  font-size: clamp(12px, 3vw, 14px);
+  color: var(--bt-red);
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+/* Boton tachar (votacion) */
+.bt__tacha {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: transparent;
+  border: 1.5px solid rgba(210, 59, 59, 0.4);
+  border-radius: 8px;
+  padding: 3px 6px;
+  cursor: pointer;
+  color: var(--bt-red);
+}
+
+.bt__tacha.is-on {
+  background: rgba(210, 59, 59, 0.15);
+  border-color: var(--bt-red);
+}
+
+.bt__cross {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.bt__rejects {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Puntaje (reveal) */
+.bt__ans-pts {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 34px;
+  text-align: right;
+}
+
+.bt__ans.is-unique .bt__ans-pts {
+  color: var(--bt-green);
+}
+
+.bt__ans.is-repeated .bt__ans-pts {
+  color: var(--bt-amber);
+}
+
+.bt__ans.is-rejected .bt__ans-pts,
+.bt__ans.is-empty .bt__ans-pts {
+  color: #9a958a;
+}
+
+/* ---------- Overlay de mensajes ---------- */
+
+.bt__overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(217, 210, 196, 0.7);
+}
+
+.bt__card {
+  background: var(--bt-paper);
+  border: 2px solid var(--bt-ink);
+  border-radius: 16px;
+  padding: 26px 28px;
+  max-width: 420px;
+  text-align: center;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.25);
+}
+
+.bt__card-title {
+  font-family: var(--bt-hand);
+  color: var(--bt-red);
+  margin: 0 0 10px;
+  font-size: 34px;
+}
+
+.bt__card-body {
+  color: var(--bt-pencil);
+  line-height: 1.5;
+  font-size: 16px;
+}
+
+.bt__card-btn {
+  margin-top: 18px;
+  font-family: var(--bt-hand);
+  font-size: 18px;
+  color: #fff;
+  background: var(--bt-ink);
+  border: none;
+  border-radius: 12px;
+  padding: 10px 26px;
+  cursor: pointer;
+}
+
+/* ---------- Countdown 3/2/1/YA ---------- */
+
+.bt__countdown {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--bt-hand);
+  font-weight: 700;
+  font-size: clamp(90px, 30vw, 200px);
+  color: var(--bt-red);
+  pointer-events: none;
+  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.12);
+}
+
+.bt__countdown.is-pop {
+  animation: bt-countdown-pop 0.6s ease-out;
+}
+
+@keyframes bt-countdown-pop {
+  0% {
+    transform: scale(0.4) rotate(-8deg);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(1.15) rotate(3deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 0.9;
+  }
+}
+
+/* ---------- Transicion entre fases ---------- */
+
+/*
+ * Cartel que se cruza entre fase y fase (hoja -> votacion -> puntaje -> letra
+ * nueva). Es un pase de hoja: una banda de papel que barre la pantalla, se planta
+ * un instante con el titulo y sigue de largo. No bloquea: `pointer-events: none`
+ * y la vista de abajo ya esta armada, asi que si el cartel se pierde (pestaña en
+ * segundo plano) no queda nada trabado. Duracion sincronizada con TRANSITION_MS.
+ */
+.bt__wipe {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 15;
+}
+
+.bt__wipe-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px clamp(28px, 9vw, 76px);
+  background: var(--bt-paper);
+  border-top: 3px solid var(--bt-ink);
+  border-bottom: 3px solid var(--bt-ink);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+  transform: translateX(-120%) rotate(-2deg);
+}
+
+.bt__wipe.is-on .bt__wipe-card {
+  animation: bt-wipe 1.4s cubic-bezier(0.22, 0.8, 0.3, 1) forwards;
+}
+
+.bt__wipe-title {
+  font-family: var(--bt-hand);
+  font-weight: 700;
+  font-size: clamp(38px, 12vw, 68px);
+  line-height: 1;
+  color: var(--bt-red);
+  letter-spacing: 2px;
+}
+
+.bt__wipe-sub {
+  font-family: var(--bt-hand);
+  font-size: clamp(15px, 4.5vw, 20px);
+  color: var(--bt-ink);
+}
+
+@keyframes bt-wipe {
+  0% {
+    transform: translateX(-120%) rotate(-6deg);
+    opacity: 0;
+  }
+  22% {
+    transform: translateX(0) rotate(-2deg);
+    opacity: 1;
+  }
+  72% {
+    transform: translateX(0) rotate(-2deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(120%) rotate(4deg);
+    opacity: 0;
+  }
+}
+
+/* Quien prefiere no ver movimiento igual necesita leer el cartel: se queda quieto
+   y se va con un fundido. */
+@media (prefers-reduced-motion: reduce) {
+  .bt__wipe.is-on .bt__wipe-card {
+    animation: bt-wipe-fade 1.4s ease forwards;
+  }
+
+  @keyframes bt-wipe-fade {
+    0%,
+    100% {
+      transform: rotate(-2deg);
+      opacity: 0;
+    }
+    20%,
+    75% {
+      transform: rotate(-2deg);
+      opacity: 1;
+    }
+  }
+}
+
+/* ---------- Back link (compartido) ---------- */
+
+.back-link {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  z-index: 20;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--bt-ink);
+  text-decoration: none;
+  background: rgba(251, 250, 243, 0.85);
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1.5px solid rgba(47, 91, 216, 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bt__countdown.is-pop {
+    animation: none;
+  }
+}

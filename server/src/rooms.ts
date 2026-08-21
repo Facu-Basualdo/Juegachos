@@ -15,8 +15,12 @@ import type { Namespace, Server, Socket } from "socket.io";
 /** Contrato que implementa cada juego. El GameRoom le reenvia los eventos. */
 export interface RoomSim {
   /** Un jugador (re)conecto. `roster` es el orden declarado por el cliente
-   * (room.players() de Supabase, por joined_at), para fijar el orden de turnos. */
-  join(nickname: string, roster: string[]): void;
+   * (room.players() de Supabase, por joined_at), para fijar el orden de turnos.
+   * `meta` es el payload crudo del join, para el juego que necesite algo mas que
+   * nickname + roster (Neon Drift lee de ahi la ronda, para no mezclar el estado
+   * de una ronda con el de la siguiente). Los sims que no lo usan simplemente
+   * declaran `join(nickname, roster)` y listo. */
+  join(nickname: string, roster: string[], meta?: unknown): void;
   /** Un jugador se desconecto (todos sus sockets se fueron). */
   leave(nickname: string): void;
   /** Mensaje del cliente (cualquier evento salvo el de join). */
@@ -118,7 +122,7 @@ export function registerGame(
         rooms.set(code, room);
       }
       room.add(socket, info.nickname);
-      room.sim.join(info.nickname, info.roster);
+      room.sim.join(info.nickname, info.roster, payload);
     });
 
     socket.onAny((event: string, payload: unknown) => {

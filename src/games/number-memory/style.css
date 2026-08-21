@@ -229,6 +229,54 @@ body {
   display: flex;
 }
 
+/* Reloj de la respuesta: una mecha de aqua que se consume, con los segundos al lado. */
+.nm-timer {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  width: min(260px, 70vw);
+  margin-top: 4px;
+}
+
+.nm-timer.is-shown {
+  display: flex;
+}
+
+.nm-timer__track {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 244, 251, 0.12);
+  overflow: hidden;
+}
+
+/* El ancho lo fija el juego en cada tick: sin transition, o la barra iria atrasada. */
+.nm-timer__fill {
+  height: 100%;
+  width: 100%;
+  border-radius: 999px;
+  background: var(--aqua);
+  box-shadow: 0 0 10px var(--aqua-dark);
+}
+
+.nm-timer__text {
+  min-width: 32px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--aqua);
+}
+
+.nm-timer.is-urgent .nm-timer__fill {
+  background: var(--flash);
+  box-shadow: 0 0 12px var(--flash-dark);
+}
+
+.nm-timer.is-urgent .nm-timer__text {
+  color: var(--flash);
+}
+
 .nm-slot {
   display: flex;
   align-items: center;

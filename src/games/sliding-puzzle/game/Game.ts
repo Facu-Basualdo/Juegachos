@@ -8,9 +8,24 @@ import {
 import { Hud } from "./Hud";
 import { SoundEffects } from "./SoundEffects";
 import { initRoomMode, ROOM_VARIANTS, type RoomMode } from "../../../shared/room/roomMode";
+import {
+  clearRoomRun,
+  elapsedSince,
+  loadRoomRun,
+  saveRoomRun,
+} from "../../../shared/room/roomRun";
 import { encodeTimeMoves } from "../../../shared/scoring";
 
 type State = "ready" | "countdown" | "playing" | "victory";
+
+/** Partida en curso persistida en sala, para sobrevivir un F5 (ver roomRun.ts). */
+interface SavedRun {
+  size: number;
+  grid: number[][];
+  moves: number;
+  /** Epoch ms del arranque; el tiempo se recalcula contra el reloj de pared. */
+  startedAt: number;
+}
 
 export class Game {
   private readonly hud: Hud;
@@ -28,7 +43,9 @@ export class Game {
   private moves: number = 0;
   private elapsedTime: number = 0;
   private lastTime: number = 0;
-  
+  /** Epoch ms del arranque de la partida. Solo en sala (ver `update`). */
+  private startedAt = 0;
+
   // Timers
   private countdownTime: number = 0;
   /** Last countdown index that played a tick, so each number sounds once. */
@@ -51,7 +68,7 @@ export class Game {
       if (selector) selector.style.display = "none";
     }
 
-    this.bindInputs();
+    this.bindInputs(container);
     
     this.lastTime = performance.now();
     requestAnimationFrame(this.tick);
@@ -61,9 +78,22 @@ export class Game {
     this.size = size;
   };
 
-  private bindInputs(): void {
+  private bindInputs(container: HTMLElement): void {
     window.addEventListener("keydown", this.handleKeyDown);
+    // En movil no hay Enter: el toque tiene que poder arrancar. Va sobre el
+    // container porque la pantalla de inicio es un overlay que tapa al resto,
+    // y se exenta el selector (.overlay__size-selector), que sigue
+    // siendo solo un selector para poder mirar el record de cada opcion antes
+    // de jugar. El panel de ranking corta la propagacion de sus pointerdown.
+    container.addEventListener("pointerdown", this.handlePointerDown);
   }
+
+  private handlePointerDown = (e: PointerEvent): void => {
+    if ((e.target as HTMLElement).closest(".overlay__size-selector")) return;
+    if (this.state === "victory" && this.room) return;
+    if (this.state === "ready" || this.state === "victory") this.beginCountdown();
+  };
+
 
   private handleKeyDown = (e: KeyboardEvent): void => {
     if (e.key === "Enter") {
@@ -109,17 +139,65 @@ export class Game {
   };
 
   private beginCountdown(): void {
+    // En sala, un F5 vuelve a pasar por aca (la ronda sigue en "playing" y
+    // RoomMode redispara onStart): si hay partida guardada se retoma tal cual,
+    // sin countdown ni tablero nuevo.
+    if (this.room && this.resumeSavedRun()) return;
+
     this.state = "countdown";
     this.countdownTime = 0;
     this.lastCountdownIndex = -1;
     this.hud.hideOverlay();
     this.hud.showCountdown(COUNTDOWN_LABELS[0]);
-    
+
     // Set up board elements in HUD (but don't show the full HUD bar/board yet)
     this.hud.setupBoard(this.size, this.handleTileClick);
     this.initBoard();
     this.scrambleBoard();
     this.hud.renderBoard(this.grid, this.size);
+  }
+
+  /**
+   * Retoma la partida guardada de esta ronda tras un reload. Devuelve false si no
+   * hay nada guardado (o no cuadra con el tamano de la sala) y hay que empezar.
+   */
+  private resumeSavedRun(): boolean {
+    const saved = loadRoomRun<SavedRun>(this.room!, "sliding-puzzle");
+    if (!saved || saved.size !== this.size) return false;
+    if (!Array.isArray(saved.grid) || saved.grid.length !== this.size) return false;
+    if (saved.grid.some((row) => !Array.isArray(row) || row.length !== this.size)) return false;
+    if (!Number.isFinite(saved.startedAt) || !Number.isFinite(saved.moves)) return false;
+
+    this.grid = saved.grid.map((row) => [...row]);
+    // El hueco no se guarda: se deriva del tablero, que es la unica fuente.
+    const emptyRow = this.grid.findIndex((row) => row.includes(0));
+    if (emptyRow < 0) return false;
+    this.emptyRow = emptyRow;
+    this.emptyCol = this.grid[emptyRow].indexOf(0);
+
+    this.moves = saved.moves;
+    this.startedAt = saved.startedAt;
+    this.elapsedTime = elapsedSince(saved.startedAt);
+
+    this.state = "playing";
+    this.hud.showCountdown(null);
+    this.hud.hideOverlay();
+    this.hud.setupBoard(this.size, this.handleTileClick);
+    this.hud.renderBoard(this.grid, this.size);
+    this.hud.updateStats(this.moves, this.elapsedTime);
+    return true;
+  }
+
+  /** Snapshot de la partida para sobrevivir un F5. No hace nada fuera de sala. */
+  private saveRun(): void {
+    if (!this.room) return;
+    const data: SavedRun = {
+      size: this.size,
+      grid: this.grid,
+      moves: this.moves,
+      startedAt: this.startedAt,
+    };
+    saveRoomRun(this.room, "sliding-puzzle", data);
   }
 
   private initBoard(): void {
@@ -229,6 +307,7 @@ export class Game {
       SoundEffects.playSlide();
       this.hud.renderBoard(this.grid, this.size);
       this.hud.updateStats(this.moves, this.elapsedTime);
+      this.saveRun();
 
       if (this.checkWin()) {
         this.handleVictory();
@@ -253,7 +332,9 @@ export class Game {
   private handleVictory(): void {
     this.state = "victory";
     SoundEffects.playVictory();
-    
+    // La partida de la ronda termino: un reload ya no debe retomarla.
+    if (this.room) clearRoomRun(this.room, "sliding-puzzle");
+
     // Save/check personal bests
     const movesKey = `${BEST_KEY_PREFIX}${this.size}_moves`;
     const timeKey = `${BEST_KEY_PREFIX}${this.size}_time`;
@@ -316,15 +397,19 @@ export class Game {
         this.state = "playing";
         this.moves = 0;
         this.elapsedTime = 0;
+        this.startedAt = Date.now();
         this.hud.hideOverlay();
         this.hud.updateStats(this.moves, this.elapsedTime);
+        this.saveRun();
       } else if (index !== this.lastCountdownIndex) {
         this.lastCountdownIndex = index;
         SoundEffects.playCountdownTick();
         this.hud.showCountdown(COUNTDOWN_LABELS[index]);
       }
     } else if (this.state === "playing") {
-      this.elapsedTime += dt;
+      // En sala el cronometro es el reloj de pared desde `startedAt`, no la suma
+      // de dt: asi un F5 (o una pestana en segundo plano) no regala tiempo.
+      this.elapsedTime = this.room ? elapsedSince(this.startedAt) : this.elapsedTime + dt;
       this.hud.updateStats(this.moves, this.elapsedTime);
     }
   }

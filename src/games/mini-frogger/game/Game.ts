@@ -16,9 +16,13 @@ import { Hud } from "./Hud";
 import { SoundEffects } from "./SoundEffects";
 import { initRoomMode, type RoomMode } from "../../../shared/room/roomMode";
 
-type State = "ready" | "playing" | "dead" | "gameover";
+type State = "ready" | "countdown" | "playing" | "dead" | "gameover";
 
 const BEST_KEY = "mini-frogger:best";
+
+/** Countdown 3 / 2 / 1 / YA compartido por todo el repo (ver CLAUDE.md raiz). */
+const COUNTDOWN_LABELS = ["3", "2", "1", "YA"];
+const COUNTDOWN_STEP = 0.6;
 
 export class Game {
   private readonly canvas: HTMLCanvasElement;
@@ -47,6 +51,8 @@ export class Game {
 
   private maxRowReached = 0;
   private lastTime = 0;
+  private countdownTime = 0;
+  private lastCountdownIndex = -1;
 
   constructor(container: HTMLElement) {
     // Create canvas
@@ -72,11 +78,17 @@ export class Game {
 
     this.room = initRoomMode("mini-frogger", {
       getScore: () => this.score,
-      onStart: () => this.start(),
+      onStart: () => this.beginCountdown(),
     });
 
     // Setup input listeners
     window.addEventListener("keydown", (e) => this.handleKeyDown(e));
+    // En movil no hay Enter, y el boton JUGAR del overlay no alcanza: el toque
+    // tiene que arrancar desde cualquier parte de la pantalla. Va sobre el
+    // container (el overlay lo tapa) y se ignoran los <button>, que ya tienen
+    // su propio handler, para no disparar dos veces el arranque. Los controles
+    // virtuales (.mobile-btn) ya frenan la propagacion de los suyos.
+    container.addEventListener("pointerdown", this.handlePointerDown);
 
     // Handle resizing
     this.resize();
@@ -100,11 +112,16 @@ export class Game {
     this.canvas.style.height = `${VIEW_HEIGHT * scale}px`;
   }
 
+  private handlePointerDown = (e: PointerEvent): void => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    this.onAction();
+  };
+
   private onAction(): void {
     // En modo sala se juega una sola partida por ronda: sin reintento.
     if (this.state === "gameover" && this.room) return;
     if (this.state === "ready" || this.state === "gameover") {
-      this.start();
+      this.beginCountdown();
     }
   }
 
@@ -166,8 +183,8 @@ export class Game {
     this.onMove(dx, dy);
   }
 
-  private start(): void {
-    this.state = "playing";
+  /** Prepara el mundo (mapa, rana, marcadores) sin largar la partida. */
+  private resetWorld(): void {
     this.score = 0;
     this.lives = LIVES_START;
     this.maxRowReached = 0;
@@ -210,6 +227,32 @@ export class Game {
     this.hud.setScore(0);
     this.hud.setLives(this.lives);
     this.hud.hideOverlay();
+  }
+
+  /** Resetea el mundo y corre el countdown 3 / 2 / 1 / YA antes de jugar. */
+  private beginCountdown(): void {
+    this.resetWorld();
+    this.state = "countdown";
+    this.countdownTime = 0;
+    this.lastCountdownIndex = -1;
+    this.hud.showCountdown(COUNTDOWN_LABELS[0]);
+  }
+
+  private start(): void {
+    this.state = "playing";
+    this.hud.showCountdown(null);
+  }
+
+  /** Avanza el countdown y larga la partida al terminar. */
+  private updateCountdown(dt: number): void {
+    this.countdownTime += dt;
+    const index = Math.floor(this.countdownTime / COUNTDOWN_STEP);
+    if (index >= COUNTDOWN_LABELS.length) this.start();
+    else if (index !== this.lastCountdownIndex) {
+      this.lastCountdownIndex = index;
+      SoundEffects.playCountdownTick();
+      this.hud.showCountdown(COUNTDOWN_LABELS[index]);
+    }
   }
 
   private generateLanesUpTo(targetRow: number): void {
@@ -301,6 +344,7 @@ export class Game {
   }
 
   private update(dt: number): void {
+    if (this.state === "countdown") this.updateCountdown(dt);
     // Determine visible row range to update obstacles
     const visibleTopRow = Math.floor((this.cameraY - 2 * GRID_SIZE) / GRID_SIZE);
     const visibleBottomRow = Math.ceil((this.cameraY + VIEW_HEIGHT + 2 * GRID_SIZE) / GRID_SIZE);

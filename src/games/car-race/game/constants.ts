@@ -47,8 +47,23 @@ export const CAR_RADIUS = 15;
 
 export const MAX_DT = 0.05;
 
-/** Cadencia de envio de la posicion propia al resto de la sala. */
+/**
+ * Cadencia de envio de la posicion propia por el broadcast de Supabase (el
+ * fallback sin game server). El trafico del canal es
+ * `jugadores x (1000 / NET_SEND_MS)` y la sala llena son 8: a 100ms son 80 msg/s,
+ * debajo del tope de ~100/s por canal de Realtime. No bajarlo sin hacer esa
+ * multiplicacion (ver el CLAUDE.md raiz, "Canales efimeros").
+ */
 export const NET_SEND_MS = 100;
+/**
+ * Cadencia cuando el enlace es el game server (`/carrace`). Ahi no existe el tope
+ * por canal de Realtime — el server es propio y un relay de 8 jugadores a 16/s son
+ * ~130 mensajes entrando y ~1000 saliendo, nada para socket.io — asi que se puede
+ * emitir mas seguido y los autos rivales se ven bastante mas fluidos.
+ */
+export const NET_SEND_SERVER_MS = 60;
+/** Un auto quieto (o ya terminado) repite su snapshot solo cada tanto. */
+export const NET_IDLE_MS = 1000;
 /** Un auto remoto sin updates por este tiempo se considera desconectado. */
 export const REMOTE_STALE_MS = 6000;
 

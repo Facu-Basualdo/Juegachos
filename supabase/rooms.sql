@@ -11,23 +11,39 @@
 create table if not exists public.rooms (
   code          text primary key,                 -- 6 chars, alfabeto A-Z2-9 sin ambiguos (sin O/0/I/1)
   host          text not null,                    -- nickname del anfitrion
-  status        text not null default 'lobby',    -- lobby|briefing|playing|results|voting|time_voting|finished
-  settings      jsonb not null default '{}',      -- { totalRounds, playlist: string[]|null, roundTimeLimitSec, timeVote }
+  status        text not null default 'lobby',    -- lobby|briefing|playing|results|voting|finished ('time_voting' quedo como legacy)
+  settings      jsonb not null default '{}',      -- { totalRounds, playlist: string[]|null }
+  visibility    text not null default 'public',   -- public = listada en /rooms/; private = solo por codigo/link
+  last_active   timestamptz not null default now(), -- heartbeat de los clientes; las salas frias se purgan
   current_round int  not null default 0,
   current_game  text,
-  vote_options  text[],                           -- candidatos durante 'voting' (ids de juego) o 'time_voting' (segundos)
+  vote_options  text[],                           -- candidatos durante 'voting' (ids de juego)
   deadline      timestamptz,                      -- fin aproximado de la ronda o votacion en curso
   created_at    timestamptz not null default now(),
   constraint code_format check (code ~ '^[A-Z2-9]{6}$'),
   constraint host_len    check (char_length(host) between 1 and 12),
-  constraint status_ok   check (status in ('lobby','briefing','playing','results','voting','time_voting','finished'))
+  constraint status_ok   check (status in ('lobby','briefing','playing','results','voting','time_voting','finished')),
+  constraint visibility_ok check (visibility in ('public','private'))
 );
 
 -- Migracion idempotente del CHECK de status para salas ya creadas (agrega
--- 'briefing' y 'time_voting'). create table ... if not exists no toca tablas existentes.
+-- 'briefing'). create table ... if not exists no toca tablas existentes.
+-- 'time_voting' sigue permitido aunque el cliente ya no lo escriba: sacarlo del
+-- CHECK haria fallar el ALTER si alguna sala vieja quedo parada en ese estado.
 alter table public.rooms drop constraint if exists status_ok;
 alter table public.rooms add constraint status_ok
   check (status in ('lobby','briefing','playing','results','voting','time_voting','finished'));
+
+-- Migracion idempotente de las salas publicas / privadas y del heartbeat.
+alter table public.rooms add column if not exists visibility text not null default 'public';
+alter table public.rooms add column if not exists last_active timestamptz not null default now();
+alter table public.rooms drop constraint if exists visibility_ok;
+alter table public.rooms add constraint visibility_ok check (visibility in ('public','private'));
+
+-- Listado de salas publicas abiertas: filtra por visibility + status y ordena
+-- por actividad, asi que este es el indice que sirve a fetchPublicRooms.
+create index if not exists rooms_public_open_idx
+  on public.rooms (visibility, status, last_active desc);
 
 -- Jugadores registrados en cada sala. El upsert sobre la PK es el rejoin.
 create table if not exists public.room_players (
@@ -181,6 +197,20 @@ drop policy if exists "room_match_state_update_public" on public.room_match_stat
 create policy "room_match_state_update_public" on public.room_match_state
   for update using (true) with check (true);
 
+-- Expulsar a un jugador (el host borra su fila) y salir de una sala (el propio
+-- jugador borra la suya). Sin esta policy el delete de room_players no falla:
+-- RLS lo filtra en silencio (0 filas afectadas, sin error), y el expulsado se
+-- quedaba en la sala. Es lo que rompia "Expulsar".
+drop policy if exists "room_players_delete_public" on public.room_players;
+create policy "room_players_delete_public" on public.room_players
+  for delete using (true);
+
+-- Borrado de salas: al quedar vacias (ultimo jugador que se va) y en la purga
+-- de salas frias (sin heartbeat). El on delete cascade arrastra el resto.
+drop policy if exists "rooms_delete_public" on public.rooms;
+create policy "rooms_delete_public" on public.rooms
+  for delete using (true);
+
 -- "Jugar otra vez": al terminar, el host resetea la sala al lobby borrando el
 -- historial de rondas/puntajes/votos (los jugadores registrados se conservan).
 drop policy if exists "room_rounds_delete_public" on public.room_rounds;
@@ -199,10 +229,13 @@ drop policy if exists "room_match_state_delete_public" on public.room_match_stat
 create policy "room_match_state_delete_public" on public.room_match_state
   for delete using (true);
 
--- Limpieza opcional: las filas son minusculas, pero si algun dia molesta se
--- puede correr a mano (o con pg_cron):
---   delete from public.rooms where created_at < now() - interval '2 days';
--- El on delete cascade arrastra players/rounds/scores/votes.
+-- Limpieza de salas muertas. Cada cliente adentro de una sala le hace touch a
+-- last_active cada ~15s (touchRoom), y al entrar a /rooms/ se corre purgeStaleRooms(),
+-- que borra las salas sin heartbeat reciente (ROOM_STALE_MS). Ademas leaveRoom()
+-- borra la sala apenas se va su ultimo jugador. Esto alcanza para que el listado
+-- publico no muestre salas fantasma; si algun dia sobra basura se puede forzar:
+--   delete from public.rooms where last_active < now() - interval '1 hour';
+-- El on delete cascade arrastra players/rounds/scores/votes/match_state.
 
 -- Nota: el "Salon de la fama" (/fame/) NO usa ninguna tabla: es un ranking
 -- derivado en vivo de public.scores (ver src/shared/leaders.ts). Si en una

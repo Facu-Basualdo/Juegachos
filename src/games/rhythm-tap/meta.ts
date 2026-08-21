@@ -9,4 +9,7 @@ export const meta: GameEntry = {
   accent: "#ff3f81",
   category: "Ritmo",
   order: 40,
+  added: "2026-07-03",
+  mobile: true,
+
 };

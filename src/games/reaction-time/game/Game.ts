@@ -10,8 +10,20 @@ import {
 import { Hud, type RoundStatus } from "./Hud";
 import { SoundEffects } from "./SoundEffects";
 import { initRoomMode, type RoomMode } from "../../../shared/room/roomMode";
+import { clearRoomRun, loadRoomRun, saveRoomRun } from "../../../shared/room/roomRun";
 
 type State = "ready" | "countdown" | "waitingForTrigger" | "triggerActive" | "earlyClick" | "roundFinished" | "gameOver";
+
+/**
+ * Rondas ya jugadas, persistidas en sala para sobrevivir un F5 (ver roomRun.ts).
+ * Sin esto, recargar borraba los tiempos y dejaba volver a intentar las rondas
+ * malas: el puntaje es el promedio y `direction` es "lower", asi que reiniciar
+ * tras un mal reflejo MEJORABA el resultado.
+ */
+interface SavedRun {
+  roundTimes: number[];
+  roundStatuses: RoundStatus[];
+}
 
 export class Game {
   private readonly hud: Hud;
@@ -33,8 +45,8 @@ export class Game {
   private triggerDelay = 0;
   private triggerTimestamp = 0;
   
-  // Clickable elements and event listeners
-  private reactionCardEl!: HTMLDivElement;
+  /** Se guarda solo para poder desenganchar el pointerdown en `dispose`. */
+  private container: HTMLElement | null = null;
 
   constructor(container: HTMLElement) {
     // Load best score
@@ -54,31 +66,29 @@ export class Game {
       onStart: () => this.beginCountdown(),
     });
     
-    // Retrieve reference to the reaction card for input binding
-    this.reactionCardEl = container.querySelector(".reaction-card")!;
-    
-    this.bindInputs();
+    this.container = container;
+    this.bindInputs(container);
     
     this.lastTime = performance.now();
     requestAnimationFrame(this.tick);
   }
   
-  private bindInputs(): void {
-    // Click / touch input on the main reaction card
-    this.reactionCardEl.addEventListener("mousedown", this.handleInteraction);
-    this.reactionCardEl.addEventListener("touchstart", this.handleTouchInteraction, { passive: false });
-    
+  private bindInputs(container: HTMLElement): void {
+    // Click / touch input. Va sobre el container y no sobre la reaction-card
+    // porque las pantallas de inicio y de fin son un overlay que la tapa: en
+    // movil (donde no hay Enter) el toque sobre el cartel moria ahi y no habia
+    // forma de empezar. Un solo `pointerdown` cubre mouse y dedo sin el doble
+    // disparo que obligaba al preventDefault, y el panel de ranking corta la
+    // propagacion de los suyos.
+    container.addEventListener("pointerdown", this.handleInteraction);
+
     // Keyboard input
     window.addEventListener("keydown", this.handleKeyDown);
   }
-  
-  private handleTouchInteraction = (e: TouchEvent): void => {
-    e.preventDefault(); // Prevent double triggers on mobile
-    this.onAction();
-  };
 
-  private handleInteraction = (e: MouseEvent): void => {
-    if (e.button === 0) { // Left click
+  private handleInteraction = (e: PointerEvent): void => {
+    if (e.button === 0) { // Left click / toque
+      e.preventDefault();
       this.onAction();
     }
   };
@@ -140,16 +150,59 @@ export class Game {
   }
 
   private beginCountdown(): void {
+    // En sala, un F5 vuelve a pasar por aca (la ronda sigue en "playing" y
+    // RoomMode redispara onStart): si hay rondas ya jugadas se retoman.
+    if (this.room && this.resumeSavedRun()) return;
+
     this.state = "countdown";
     this.currentRound = 1;
     this.roundTimes = [];
     this.roundStatuses = Array(TOTAL_ROUNDS).fill("empty");
     this.countdownTime = 0;
     this.lastCountdownIndex = -1;
-    
+
     this.hud.hideOverlay();
     this.hud.showCountdown(COUNTDOWN_LABELS[0]);
     this.hud.updateRoundProgress(this.currentRound, this.roundStatuses);
+  }
+
+  /**
+   * Retoma las rondas ya jugadas tras un reload, sin countdown. La ronda que
+   * estaba en curso se rehace (todavia no tenia tiempo registrado), pero las
+   * completadas no se pueden volver a intentar, que es lo que importa.
+   *
+   * `currentRound` no se guarda: se deriva de los tiempos. Un foul repite la ronda
+   * sin registrar tiempo, asi que la ronda a jugar es siempre `roundTimes.length + 1`
+   * — guardar el numero aparte permitiria que se desfasara y se repitiera una ronda
+   * ya puntuada.
+   */
+  private resumeSavedRun(): boolean {
+    const s = loadRoomRun<SavedRun>(this.room!, "reaction-time");
+    if (!s || !Array.isArray(s.roundTimes) || !Array.isArray(s.roundStatuses)) return false;
+    if (s.roundStatuses.length !== TOTAL_ROUNDS) return false;
+    if (s.roundTimes.length === 0 || s.roundTimes.length > TOTAL_ROUNDS) return false;
+    if (s.roundTimes.some((t) => !Number.isFinite(t))) return false;
+
+    this.roundTimes = [...s.roundTimes];
+    this.roundStatuses = [...s.roundStatuses];
+    this.currentRound = this.roundTimes.length + 1;
+
+    this.hud.hideOverlay();
+    this.hud.showCountdown(null);
+    // Ya estaban las 5: la corrida termino durante el reload, se cierra sin rejugar.
+    if (this.roundTimes.length >= TOTAL_ROUNDS) this.endGame();
+    else this.startRound();
+    return true;
+  }
+
+  /** Snapshot de las rondas jugadas. No hace nada fuera de sala. */
+  private saveRun(): void {
+    if (!this.room) return;
+    const data: SavedRun = {
+      roundTimes: this.roundTimes,
+      roundStatuses: this.roundStatuses,
+    };
+    saveRoomRun(this.room, "reaction-time", data);
   }
   
   private startRound(): void {
@@ -173,6 +226,7 @@ export class Game {
 
     this.hud.showEarlyClickState();
     this.hud.updateRoundProgress(this.currentRound, this.roundStatuses);
+    this.saveRun();
   }
   
   private handleReactionClick(): void {
@@ -186,6 +240,8 @@ export class Game {
     SoundEffects.playReaction();
     this.hud.showResultState(reactionTime);
     this.hud.updateRoundProgress(this.currentRound, this.roundStatuses);
+    // Recien aca la ronda quedo registrada: es el momento de persistirla.
+    this.saveRun();
   }
   
   private endGame(): void {
@@ -202,8 +258,13 @@ export class Game {
     this.state = "gameOver";
     SoundEffects.playFinish();
     this.hud.showGameOver(this.roundTimes, average, isNewBest, this.bestAverage);
-    if (this.room) this.room.reportScore(average);
-    else this.hud.showRanking("reaction-time", average);
+    if (this.room) {
+      // La corrida de la ronda termino: un reload ya no debe retomarla.
+      clearRoomRun(this.room, "reaction-time");
+      this.room.reportScore(average);
+    } else {
+      this.hud.showRanking("reaction-time", average);
+    }
   }
   
   private calculateCurrentAverage(): number | null {
@@ -246,8 +307,7 @@ export class Game {
   }
   
   dispose(): void {
-    this.reactionCardEl.removeEventListener("mousedown", this.handleInteraction);
-    this.reactionCardEl.removeEventListener("touchstart", this.handleTouchInteraction);
+    this.container?.removeEventListener("pointerdown", this.handleInteraction);
     window.removeEventListener("keydown", this.handleKeyDown);
   }
 }

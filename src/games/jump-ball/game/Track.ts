@@ -85,20 +85,28 @@ export class Track {
     return lanes ? lanes[lane] : true;
   }
 
-  /** Checks if the given X coordinate is on a generated platform at the specified row. */
-  isOnPlatform(index: number, x: number): boolean {
+  /** The lane whose platform the given X is standing on: a lane index, `null`
+   *  for a miss (fall), or `undefined` when the row is unknown (missing rows
+   *  default to safe, so a lookup race can't cause a bogus death).
+   *  Platforms are wider than the lane spacing, so their spans overlap: when X
+   *  is over two of them, the closest center wins. This is the single source of
+   *  truth for "which tile am I on" — the death check and the landing paint must
+   *  agree, or a landing on a tile edge paints the wrong (often empty) lane. */
+  landedLane(index: number, x: number): number | null | undefined {
     const lanes = this.occupancy.get(index);
-    if (!lanes) return true; // defaults to safe
+    if (!lanes) return undefined;
+    let best: number | null = null;
+    let bestDist = Infinity;
     for (let lane = 0; lane < 3; lane++) {
-      if (lanes[lane]) {
-        const laneX = (lane - 1) * LANE_X;
-        const halfW = PLATFORM_WIDTH / 2;
-        if (x >= laneX - halfW && x <= laneX + halfW) {
-          return true;
-        }
+      if (!lanes[lane]) continue;
+      const laneX = (lane - 1) * LANE_X;
+      const dist = Math.abs(x - laneX);
+      if (dist <= PLATFORM_WIDTH / 2 && dist < bestDist) {
+        best = lane;
+        bestDist = dist;
       }
     }
-    return false;
+    return best;
   }
 
   /** Change the material of the platform at (index, lane) to white when landed on. */

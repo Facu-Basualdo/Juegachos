@@ -1,56 +1,56 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getSupabase } from "../../../shared/supabase";
+import type { MapPayload, RaceLink, RacePayload, VotePayload } from "./RaceTransport";
 
-/** Snapshot de posicion que cada cliente emite ~10 veces por segundo. */
-export interface RacePayload {
-  /** Nickname del emisor. */
-  p: string;
-  x: number;
-  y: number;
-  /** Angulo del auto en radianes. */
-  a: number;
-  /** Vuelta actual (0-based). */
-  l: number;
-  /** Progreso dentro de la vuelta ∈ [0,1). */
-  s: number;
-  /** True cuando el emisor ya cruzo la meta final. */
-  f: boolean;
-}
-
-/** Voto de un jugador por un circuito, antes de largar (fase de votacion). */
-export interface VotePayload {
-  /** Nickname del emisor. */
-  p: string;
-  /** Indice del circuito votado. */
-  m: number;
-}
-
-/** Circuito ganador que anuncia el anfitrion al cerrar la votacion. */
-export interface MapPayload {
-  /** Indice del circuito elegido. */
-  m: number;
-}
+/** Backoff entre reintentos de re-suscripcion cuando el canal se cae (ms). */
+const RETRY_BASE_MS = 700;
+const RETRY_MAX_MS = 5000;
 
 /**
  * Canal efimero de la carrera: broadcast puro (sin DB) de las posiciones de
  * cada auto y de la votacion de circuito previa, separado del RoomChannel para
  * no mezclar el trafico de alta frecuencia con el sync de salas. Un canal por
  * sala+ronda.
+ *
+ * **Es el fallback**: con `VITE_GAME_SERVER_URL` configurada el juego usa
+ * [RaceSocket](RaceSocket.ts) (el game server), que no tiene el tope de
+ * mensajes/s que motiva la mitad de las precauciones de abajo. Este camino queda
+ * para el deploy sin game server (ver [RaceTransport](RaceTransport.ts)).
+ *
+ * Vigila el estado de la suscripcion y reconstruye el canal cuando se cae.
+ * Realtime cierra el socket a mitad de ronda (una sala llena emitiendo
+ * posiciones roza el tope de mensajes/s del canal), y un `subscribe()` pelado
+ * sin callback de estado nunca se entera: el cliente sigue emitiendo contra un
+ * canal muerto, todos los rivales quedan stale y se purgan, y uno termina la
+ * carrera solo. Peor: `send()` sobre un canal caido cae en silencio al fallback
+ * REST de realtime-js, un POST HTTP por heartbeat.
  */
-export class RaceChannel {
-  private readonly channel: RealtimeChannel | null;
+export class RaceChannel implements RaceLink {
+  private readonly code: string;
+  private readonly round: number;
+  private channel: RealtimeChannel | null = null;
   private readonly cbs: Array<(p: RacePayload) => void> = [];
   private readonly voteCbs: Array<(v: VotePayload) => void> = [];
   private readonly mapCbs: Array<(m: MapPayload) => void> = [];
+  /** True solo mientras el canal esta unido y puede empujar por el websocket. */
+  private ready = false;
+  private retries = 0;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private disposed = false;
 
   constructor(code: string, round: number) {
-    const supabase = getSupabase();
-    if (!supabase) {
-      this.channel = null;
-      return;
-    }
+    this.code = code;
+    this.round = round;
+    if (!getSupabase()) return;
+    this.open();
+  }
 
-    this.channel = supabase.channel(`race:${code}:${round}`, {
+  /** (Re)crea y suscribe el canal, reintentando con backoff si falla. */
+  private open(): void {
+    const supabase = getSupabase();
+    if (!supabase || this.disposed) return;
+
+    this.channel = supabase.channel(`race:${this.code}:${this.round}`, {
       config: { broadcast: { self: false } },
     });
     this.channel.on("broadcast", { event: "pos" }, ({ payload }) => {
@@ -62,14 +62,48 @@ export class RaceChannel {
     this.channel.on("broadcast", { event: "map" }, ({ payload }) => {
       for (const cb of this.mapCbs) cb(payload as MapPayload);
     });
-    this.channel.subscribe();
+    this.channel.subscribe((status) => {
+      if (this.disposed) return;
+      if (status === "SUBSCRIBED") {
+        this.ready = true;
+        this.retries = 0;
+        return;
+      }
+      this.ready = false;
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        this.scheduleReopen();
+      }
+    });
+  }
+
+  private scheduleReopen(): void {
+    if (this.disposed || this.retryTimer !== null) return;
+    const delay = Math.min(RETRY_BASE_MS * 2 ** this.retries, RETRY_MAX_MS);
+    this.retries += 1;
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      this.teardown();
+      this.open();
+    }, delay);
+  }
+
+  private teardown(): void {
+    if (!this.channel) return;
+    const supabase = getSupabase();
+    if (supabase) void supabase.removeChannel(this.channel);
+    this.channel = null;
+    this.ready = false;
   }
 
   send(payload: RacePayload): void {
-    if (!this.channel) return;
+    if (!this.channel || !this.ready) return;
     void this.channel.send({ type: "broadcast", event: "pos", payload });
   }
 
+  // Los eventos de la votacion NO se bloquean con `ready`: son uno por jugador
+  // y por carrera, asi que el fallback REST de realtime-js (un POST) es un
+  // beneficio, no un problema — entrega el voto igual si el canal todavia no
+  // termino de unirse. Lo que hay que bloquear es el chorro de posiciones.
   sendVote(payload: VotePayload): void {
     if (!this.channel) return;
     void this.channel.send({ type: "broadcast", event: "vote", payload });

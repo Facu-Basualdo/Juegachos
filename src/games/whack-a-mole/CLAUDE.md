@@ -6,7 +6,8 @@ escondan.
 
 **Por vidas** (solo y salas): empiezas con `INITIAL_LIVES` (3) y **solo** pierdes
 una al golpear una bomba; la partida termina al llegar a 0. En salas ademas hay
-un tope de tiempo por ronda que **fija el anfitrion** (ver "Modo sala").
+un tope de tiempo de 2 minutos por ronda, declarado por el propio juego (ver
+"Modo sala").
 
 ## Mecanica
 
@@ -53,15 +54,14 @@ Countdown 3/2/1/YA obligatorio con blip de 750 Hz por label
 Cableado al modo fiesta compartido (ver root `CLAUDE.md`, "Salas"):
 `initRoomMode("whack-a-mole", { getScore, onStart: beginCountdown })`. En salas
 la mecanica sigue siendo **por vidas** (3, se pierden con bombas) pero se agrega
-un **tope de tiempo** por ronda que fija el anfitrion (ajuste fijo o votacion de
-tiempo). Diferencias cuando `this.room` esta activo:
-- El tope sale de `this.room.deadline()` (el fin de ronda que ya calculo la sala,
-  contemplando la votacion de tiempo y el margen de navegacion). `roomRemaining()`
+un **tope de tiempo** de 2 minutos por ronda, que el juego declara con
+`roomTimeLimitSec: 120` en su `meta.ts` (sin tope, una partida podria no terminar
+nunca). Diferencias cuando `this.room` esta activo:
+- El tope sale de `this.room.deadline()` (el fin de ronda que ya calculo la sala a
+  partir de `roomTimeLimitSec`, mas el margen de navegacion). `roomRemaining()`
   cuenta hacia ese deadline; el HUD lo muestra (`setTimer`) y al llegar a 0 el
-  loop llama a `gameOver()`. Si el host eligio "Sin límite", `deadline()` es null:
-  no hay timer ni corte por tiempo (la ronda termina por vidas o cuando cierran
-  todos). En solo tampoco hay tope de tiempo (`setTimer(null)`).
+  loop llama a `gameOver()`. En solo no hay tope de tiempo (`setTimer(null)`).
 - `gameOver` reporta a la sala (`this.room.reportScore`) en vez de al ranking
   global; el reintento queda bloqueado (`onPrimary` retorna si hay sala, una
   sola partida por ronda) y el inicio lo dispara `onStart` para que todos
-  arranquen juntos. `getScore` da el parcial si el host fija un tope menor a 60 s.
+  arranquen juntos. `getScore` da el parcial si la ronda se corta por tiempo.

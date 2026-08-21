@@ -35,7 +35,8 @@ su propio ranking global vía `variants`):
 2. **showing**: se genera un número de `digits` dígitos (sin cero inicial, así la
    cantidad no es ambigua) y se muestra `showMsFor(digits)` ms; después se
    dispara la animación de esfumado (`vanishNumber`, `VANISH_MS`).
-3. **input**: se abren `digits` slots y el teclado. Se tipea con teclas físicas
+3. **input**: se abren `digits` slots y el teclado, y arranca el **tope de
+   `ANSWER_TIME_MS` (10s) para responder** (ver abajo). Se tipea con teclas físicas
    (0-9, Backspace, Enter) o el teclado en pantalla (⌫ borra, OK confirma). El
    envío (`submit`) sólo evalúa cuando están **todos** los slots llenos.
 4. **correct**: `score = digits`, se actualiza el récord si mejora, y tras
@@ -62,6 +63,16 @@ arranque lo dispara `RoomMode.onStart`, con el modo fijo en Aleatorio).
   longitud actual y `digits++` en cada acierto.
 - **Sin auto-submit**: hace falta OK/Enter con todos los slots llenos, para que un
   dedo de más no termine la partida sin querer.
+- **Tope de 10s para responder** (`ANSWER_TIME_MS`). Al vencer **cuenta como
+  error** y termina la partida (`onWrong()` con lo que hubiera tipeado): fallar es
+  la única forma de perder que tiene el juego, así que un reloj sin consecuencia no
+  sería un límite. El reloj corre contra `performance.now()` (un `inputDeadline`
+  absoluto, refrescado por un `setInterval` de `ANSWER_TICK_MS`), **no** acumulando
+  ticks: si acumulara, irse a otra pestaña lo congelaría y daría tiempo infinito
+  para pensar — que en salas es directamente trampa. Se limpia en `onCorrect` /
+  `onWrong` / `clearTimers`, y `tickInput` se auto-cancela si el estado dejó de ser
+  `input`. La UI es `nm-timer` (mecha aqua que se consume + segundos), visible sólo
+  durante el ingreso y en `--flash` cuando quedan `ANSWER_URGENT_MS` (3s).
 - **El número no titila**: brilla estable y la fugacidad está en la *salida*
   (animación de esfumado), no en un parpadeo (ver `DESIGN.md`).
 

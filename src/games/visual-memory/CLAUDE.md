@@ -45,6 +45,14 @@ dispara `RoomMode.onStart`).
   por debajo de ~50% (tope `MAX_GRID = 7`).
 - **Una vida por celda equivocada**, y no se penaliza dos veces la misma celda
   (se guardan en un `Set` `wrong`).
+- **`menuVisible` gatea el reinicio, no el estado.** Al perder, el estado pasa a
+  `gameOver` pero el overlay recién aparece 1100ms después (revelado de celdas
+  faltantes). En esa ventana el estado ya es `gameOver`, así que gatear el tap /
+  Enter de reinicio por estado hacía que un toque reflejo tras perder llamara a
+  `beginCountdown()`, cuyo `clearTimers()` cancelaba el `overTimer` pendiente:
+  `endGame()` nunca corría y la partida se reiniciaba **sin mostrar el puntaje ni
+  el ranking**. El flag `menuVisible` es true solo cuando el overlay de inicio /
+  fin está realmente en pantalla, y los handlers gatean por él.
 
 ## Salas (multijugador)
 

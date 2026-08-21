@@ -1,0 +1,181 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #07060a; /* funereal near-black */
+  font-family: "Cinzel", "Times New Roman", "Consolas", serif;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+canvas {
+  display: block;
+  touch-action: none;
+}
+
+.back-link {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 30;
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: #cbb98a;
+  text-decoration: none;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+  opacity: 0.8;
+}
+
+.back-link:hover {
+  opacity: 1;
+}
+
+/* Blood-red impact flash on death */
+.flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 28;
+  background: radial-gradient(circle at center, rgba(150, 8, 20, 0.0) 20%, rgba(120, 0, 12, 0.55) 100%);
+  opacity: 0;
+}
+
+.flash.is-hit {
+  animation: danger-flash 0.5s ease-out;
+}
+
+@keyframes danger-flash {
+  0% { opacity: 0; }
+  8% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 10;
+}
+
+.hud__score {
+  margin-top: 34px;
+  font-size: 72px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #efe8d2;
+  text-shadow:
+    0 0 18px rgba(180, 30, 40, 0.35),
+    0 4px 14px rgba(0, 0, 0, 0.8);
+  transition: transform 0.1s ease-out;
+}
+
+.hud__best {
+  margin-top: 4px;
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: #b79a55;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+  opacity: 0.85;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  background: radial-gradient(circle at center, rgba(7, 6, 10, 0.35) 0%, rgba(5, 4, 8, 0.9) 92%);
+  text-align: center;
+  pointer-events: auto;
+  z-index: 20;
+  transition: opacity 0.3s ease;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay__title {
+  font-size: 56px;
+  font-weight: 700;
+  letter-spacing: 8px;
+  color: #d8c88f;
+  text-shadow:
+    0 0 24px rgba(150, 20, 30, 0.4),
+    2px 3px 0 rgba(0, 0, 0, 0.6),
+    0 8px 26px rgba(0, 0, 0, 0.85);
+}
+
+.overlay__subtitle {
+  font-size: 15px;
+  letter-spacing: 3px;
+  color: #e6ddc6;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+
+.overlay__score {
+  font-size: 22px;
+  letter-spacing: 2px;
+  color: #c0303a;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+.overlay__hint {
+  margin-top: 8px;
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: #9c8c66;
+  opacity: 0.9;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 25;
+  font-size: 170px;
+  font-weight: 700;
+  letter-spacing: 8px;
+  color: #e7dbb0;
+  text-shadow:
+    0 0 30px rgba(150, 20, 30, 0.5),
+    0 8px 34px rgba(0, 0, 0, 0.75);
+  opacity: 0;
+}
+
+.countdown.is-shown {
+  animation: countdown-pop 0.75s ease-out;
+}
+
+@keyframes countdown-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  20% { opacity: 1; transform: scale(1.15); }
+  40% { transform: scale(1); }
+  80% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.4); }
+}

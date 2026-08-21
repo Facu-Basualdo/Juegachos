@@ -12,11 +12,44 @@ export interface GameEntry {
   category: string;
   /** Orden en la landing (menor primero). Sin valor va al final, alfabetico por titulo. */
   order?: number;
+  /** Fecha en que se agrego el juego (ISO `YYYY-MM-DD`). Ordena el modo "Nuevos"
+   * de la landing, que es el orden por defecto. Obligatorio en juegos nuevos:
+   * `order` es curado a mano y no refleja cuando entro cada juego. */
+  added: string;
+  /**
+   * Si el juego se puede jugar en celular. **Obligatorio** (como `added`) y a
+   * proposito: sin un valor por defecto, un juego nuevo no puede colarse
+   * marcado como apto sin que alguien lo haya probado en un telefono.
+   *
+   * Para poner `true` hacen falta las dos cosas, no una:
+   * 1. Que se pueda **arrancar** con un toque. En movil no hay Enter, asi que el
+   *    listener de arranque tiene que colgar del container o del overlay, nunca
+   *    del canvas: la pantalla de inicio es un overlay que lo tapa y se come el
+   *    toque (era el bug de 10 juegos). Ver `flappy-bird` (container) o
+   *    `timberman` (overlay) como referencia.
+   * 2. Que se pueda **jugar** sin teclado fisico: puntero/tactil, botones en
+   *    pantalla, o su propio teclado en pantalla (como `wordle`).
+   *
+   * Hoy son `false`: `mecano`, `typing-race` y `hackerman` (escuchan
+   * `window keydown` sin ningun `<input>`, asi que en un telefono el teclado
+   * virtual no aparece nunca y no hay con que jugarlos) y `la-escalera`, que
+   * si trae cruceta en pantalla pero probado en un telefono real no se puede
+   * jugar.
+   */
+  mobile: boolean;
   /** Ocultar del roster sin borrar la entrada (landing y salas). El juego sigue en el repo. */
   hidden?: boolean;
   /** Excluir solo del modo sala (selección, votación, random y picker del host),
    * pero seguir mostrándolo en la landing. Para juegos que no van bien en multijugador. */
   roomsHidden?: boolean;
+  /**
+   * Tope de tiempo de la ronda **en modo sala**, en segundos. Solo lo declaran los
+   * juegos que sin reloj no terminan nunca (o se estiran demasiado): al vencer, cada
+   * jugador reporta su parcial y la ronda cierra. Sin este campo la ronda no tiene
+   * reloj y cierra cuando todos terminan su partida, que es el caso normal.
+   * No afecta al juego fuera de las salas.
+   */
+  roomTimeLimitSec?: number;
 }
 
 /** Portada del juego generada por IA; si falta, la card muestra un fallback. */

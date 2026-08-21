@@ -96,6 +96,12 @@ export async function fetchTop(
     .eq("game_id", gameId)
     .eq("variant", opts.variant ?? "")
     .order("score", { ascending })
+    // Desempate estable: a igual puntaje, primero el que lo hizo antes. Sin esto
+    // el orden de los empatados lo decide Postgres y el #1 de la card podia no
+    // coincidir con el lider que cuenta el Salon de la fama (game_leaders usa el
+    // mismo criterio).
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
     .limit(limit);
 
   if (error) {

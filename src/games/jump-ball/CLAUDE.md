@@ -16,7 +16,8 @@ Built with **Three.js** (see the repo's `threejs-*` skills).
   height, and the death-fall. Owns its own mesh.
 - `game/Track.ts` — the streaming stepping-stone track: a pool of platform rows
   that scroll toward the camera and recycle to the back, plus lane-occupancy
-  generation and the `laneOccupied(row, lane)` query.
+  generation, the `laneOccupied(row, lane)` query and `landedLane(row, x)` (see
+  "One lane test" below).
 - `game/InputController.ts` — steering input plus an `onAnyInput` start/restart
   signal. Keyboard: hold Left/A or Right/D (`getSteerDir` returns -1/0/1).
   Mouse/touch: the ball follows the cursor's horizontal position
@@ -51,6 +52,19 @@ visual X easing), so a steer registered anytime during the row counts at
 landing.
 
 ## Non-obvious decisions
+
+**One lane test, not two.** `PLATFORM_WIDTH` (2.7) is wider than the lane
+spacing `LANE_X` (2.0), so a tile's span (±1.35 around its lane center) reaches
+past the neighbouring lane's center and adjacent tiles overlap. Any "which lane
+is the ball on" answer computed by rounding X to the nearest lane center is
+therefore *not* the same answer as "which tile is under the ball", and the two
+disagree exactly on a tile's outer edge. `Track.landedLane(row, x)` is the
+single source of truth: it returns the occupied lane whose span contains X
+(closest center wins when two overlap), `null` for a miss (fall) and `undefined`
+for an unknown row (missing rows default to safe). Both the death check and the
+white landing paint read it — when the paint used its own `Math.round(x /
+LANE_X)` instead, landing on a tile edge painted the empty neighbour and the
+tile you were standing on stayed green.
 
 **No dead-end levels.** `Track.generateLanes` guarantees that every occupied
 lane in a row has a reachable platform (same or ±1 lane) in the next row, so a

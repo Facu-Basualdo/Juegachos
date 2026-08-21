@@ -38,6 +38,17 @@ export class Game {
   private lastCountdownIndex = -1;
   private oddIndex = -1;
   private lastTime = 0;
+  /**
+   * True solo cuando el overlay de inicio / fin esta realmente en pantalla. Al
+   * perder, el estado pasa a "gameOver" pero el overlay aparece
+   * `GAME_OVER_REVEAL_MS` despues (revelado de la ficha distinta): sin este guard
+   * un Enter en esa ventana reinicia la partida, y el setTimeout del revelado
+   * (que quedaba huerfano) disparaba igual y tapaba el juego nuevo con la pantalla
+   * de fin y el tablero borrado. Nunca se mostraba el puntaje.
+   */
+  private menuVisible = true;
+  /** Timer del revelado -> overlay de fin (para poder cancelarlo). */
+  private overTimer: number | null = null;
 
   constructor(container: HTMLElement) {
     const savedBest = localStorage.getItem(BEST_KEY);
@@ -74,6 +85,9 @@ export class Game {
   };
 
   private tryStart(): void {
+    // Solo se arranca con el overlay realmente en pantalla, nunca durante el
+    // revelado de fin (estado "gameOver" pero overlay aun oculto).
+    if (!this.menuVisible) return;
     if (this.state === "ready") {
       this.beginCountdown();
     } else if (this.state === "gameOver") {
@@ -84,6 +98,11 @@ export class Game {
   }
 
   private beginCountdown(): void {
+    if (this.overTimer !== null) {
+      window.clearTimeout(this.overTimer);
+      this.overTimer = null;
+    }
+    this.menuVisible = false;
     this.state = "countdown";
     this.score = 0;
     this.timeLeft = START_TIME;
@@ -155,7 +174,9 @@ export class Game {
     }
     this.hud.updateBest(this.best);
 
-    window.setTimeout(() => {
+    this.overTimer = window.setTimeout(() => {
+      this.overTimer = null;
+      this.menuVisible = true;
       this.hud.clearBoard();
       this.hud.showGameOver(this.score, isNewBest, this.best!, this.room !== null);
 
@@ -194,6 +215,7 @@ export class Game {
   }
 
   dispose(): void {
+    if (this.overTimer !== null) window.clearTimeout(this.overTimer);
     window.removeEventListener("keydown", this.handleKeyDown);
     this.hud.overlay.removeEventListener("pointerdown", this.handleOverlayTap);
   }

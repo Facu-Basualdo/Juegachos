@@ -1,4 +1,5 @@
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { ANSWER_URGENT_MS } from "./constants";
 
 export type KeyInput = string; // "0".."9" | "del" | "ok"
 
@@ -21,6 +22,9 @@ export class Hud {
   // Input (teclado + respuesta)
   private readonly inputPanel: HTMLDivElement;
   private readonly answerEl: HTMLDivElement;
+  private readonly timerEl: HTMLDivElement;
+  private readonly timerFillEl: HTMLDivElement;
+  private readonly timerTextEl: HTMLDivElement;
 
   // Overlays
   private readonly overlayEl: HTMLDivElement;
@@ -62,6 +66,18 @@ export class Hud {
     prompt.className = "fm-input__prompt";
     prompt.textContent = "¿Cuánto suma?";
 
+    // Reloj de la respuesta: barra que se vacia + segundos restantes.
+    this.timerEl = document.createElement("div");
+    this.timerEl.className = "fm-timer";
+    this.timerFillEl = document.createElement("div");
+    this.timerFillEl.className = "fm-timer__fill";
+    this.timerTextEl = document.createElement("div");
+    this.timerTextEl.className = "fm-timer__text";
+    const timerTrack = document.createElement("div");
+    timerTrack.className = "fm-timer__track";
+    timerTrack.append(this.timerFillEl);
+    this.timerEl.append(timerTrack, this.timerTextEl);
+
     this.answerEl = document.createElement("div");
     this.answerEl.className = "fm-input__answer";
     this.answerEl.textContent = "";
@@ -91,7 +107,7 @@ export class Hud {
       pad.append(btn);
     }
 
-    this.inputPanel.append(prompt, this.answerEl, pad);
+    this.inputPanel.append(prompt, this.timerEl, this.answerEl, pad);
     this.stage.append(this.bannerEl, this.termEl, this.inputPanel);
 
     // --- Overlay (inicio / fin) ---
@@ -213,6 +229,14 @@ export class Hud {
     this.answerEl.textContent = "";
     this.answerEl.classList.remove("is-error");
     this.inputPanel.classList.remove("hidden");
+  }
+
+  /** Reloj de la respuesta: `msLeft` de `totalMs`. El panel lo oculta al cerrarse. */
+  setAnswerTime(msLeft: number, totalMs: number): void {
+    const frac = totalMs > 0 ? Math.max(0, Math.min(1, msLeft / totalMs)) : 0;
+    this.timerFillEl.style.width = `${frac * 100}%`;
+    this.timerTextEl.textContent = `${Math.ceil(msLeft / 1000)}s`;
+    this.timerEl.classList.toggle("is-urgent", msLeft <= ANSWER_URGENT_MS);
   }
 
   updateAnswer(value: string): void {

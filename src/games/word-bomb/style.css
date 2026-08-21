@@ -477,6 +477,14 @@ body {
 
 /* ---------- Jugadores en circulo ---------- */
 
+/* Las tarjetas van POR ENCIMA del dock de reacciones (z-index 20), no por debajo.
+   El circulo llega hasta el borde de abajo y el dock termina sobre la tarjeta de
+   alguien; la palabra es la informacion critica del juego (mas todavia si el tapado
+   es el de TURNO, que no puede ver lo que escribe), asi que gana ella y el dock
+   queda detras. `pointer-events: none` es lo que mantiene los botones del dock
+   clickeables por debajo (la tarjeta no tiene nada interactivo; el foco del input
+   invisible lo maneja `.wb__input`, que cubre el stage). Mismo criterio que en
+   Cadena de Palabras (los dos juegos lo implementan por separado). */
 .wb__player {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -486,7 +494,8 @@ body {
   align-items: center;
   gap: 4px;
   text-align: center;
-  z-index: 2;
+  z-index: 25;
+  pointer-events: none;
 }
 
 .wb__pname {
@@ -586,6 +595,11 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Halo oscuro: la palabra puede caer sobre el dock de reacciones y tiene que
+     leerse igual (ver el z-index de `.wb__player`). */
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.9),
+    0 0 8px rgba(0, 0, 0, 0.75);
 }
 
 /* Turno: concentrado (cejas + boca firme), nombre verde y realce del personaje. */
@@ -633,6 +647,419 @@ body {
 }
 .wb__player.is-happy .wb__mouth--happy {
   display: block;
+}
+
+/* ---------- Reacciones (la cara del propio personaje) ---------- */
+
+/* Los rasgos automaticos (`.wb__base-face`) y los de reaccion (`.wb__emote-face`) son
+   grupos excluyentes: reaccionar apaga el grupo entero. Asi la cara de reaccion no
+   tiene que ganarle en especificidad a las de turno / panico / feliz / muerto, que se
+   apilan con hasta cinco clases. */
+.wb__emote-face,
+.wb__emo {
+  display: none;
+}
+.wb__player.is-emote .wb__base-face {
+  display: none;
+}
+.wb__player.is-emote .wb__emote-face {
+  display: block;
+}
+.wb__player.is-emote--risa .wb__emo--risa,
+.wb__player.is-emote--sorpresa .wb__emo--sorpresa,
+.wb__player.is-emote--enojo .wb__emo--enojo,
+.wb__player.is-emote--burla .wb__emo--burla,
+.wb__player.is-emote--llanto .wb__emo--llanto {
+  display: block;
+}
+
+/* Rasgos de las caras de reaccion (los de la cara base los pinta `.wb__mouth` y cia). */
+.wb__emo .wb__ln {
+  fill: none;
+  stroke: #241033;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.wb__emo .wb__fl,
+.wb__emo .wb__pupil {
+  fill: #241033;
+}
+.wb__emo .wb__white {
+  fill: #fff;
+}
+.wb__emo .wb__tongue {
+  fill: #ff7a8a;
+}
+.wb__emo .wb__frog-skin {
+  fill: #52a447;
+}
+.wb__emo .wb__tear {
+  fill: #8fd3ff;
+  stroke: #4a90c2;
+  stroke-width: 1;
+}
+
+/* ---------- Caras vivas: cada reaccion se mueve mientras dura (EMOTE_MS = 1.8s) ----------
+
+   El movimiento subraya lo que ya dice el sonido: la risa abre la mandibula en las mismas
+   tres silabas del blip, el llanto suelta lagrimas escalonadas, el enojo tiembla. Todo con
+   keyframes CSS sobre los paths del SVG (cero assets, escala perfecto, y el cuerpo del enojo
+   se sigue tinendo desde CSS). Los rasgos animados llevan un gancho `wb__a-*` puesto en el
+   Hud; sin el habria que apuntarlos por `nth-of-type`, que se rompe al tocar el dibujo.
+
+   `transform-box: fill-box` es obligatorio: sin el, el origen de un transform SVG es la
+   esquina del viewBox y la boca escalaria desde afuera de la cara. */
+.wb__emo [class*="wb__a-"] {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* RISA: es una rana. Ojos saltones, boca enorme, saltitos. El verde del cuerpo se
+   declara abajo, junto al rojo del enojo. */
+.wb__player.is-emote--risa .wb__frog-skin {
+  fill: #52a447;
+}
+.wb__player.is-emote--risa .wb__emo--risa {
+  animation: wb-frog-jump 0.4s ease-in-out infinite;
+}
+.wb__player.is-emote--risa .wb__a-mouth {
+  transform-origin: top center;
+  animation: wb-frog-mouth 0.2s ease-in-out infinite alternate;
+}
+.wb__player.is-emote--risa .wb__a-tongue {
+  transform-origin: center;
+  animation: wb-frog-tongue 0.2s ease-in-out infinite alternate;
+}
+
+/* LLANTO: dos lagrimas que caen alternadas (la derecha va media fase atrasada) y un
+   puchero que tiembla. La gota nace en el ojo, engorda y se desvanece al caer. */
+.wb__player.is-emote--llanto .wb__a-tear--l {
+  animation: wb-tear-fall 1.25s ease-in infinite;
+}
+.wb__player.is-emote--llanto .wb__a-tear--r {
+  animation: wb-tear-fall 1.25s ease-in 0.62s infinite;
+}
+.wb__player.is-emote--llanto .wb__a-mouth {
+  animation: wb-sob-mouth 0.7s ease-in-out infinite;
+}
+
+/* SORPRESA: un golpe seco al aparecer, despues las pupilas y la boca laten. */
+.wb__player.is-emote--sorpresa .wb__emo--sorpresa {
+  animation: wb-gasp-hit 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.wb__player.is-emote--sorpresa .wb__a-pupil {
+  animation: wb-gasp-pupil 0.7s ease-in-out infinite alternate;
+}
+.wb__player.is-emote--sorpresa .wb__a-mouth {
+  animation: wb-gasp-mouth 0.7s ease-in-out infinite alternate;
+}
+
+/* ENOJO: temblor de furia, cejas que se aprietan y el cuerpo que se recalienta. */
+.wb__player.is-emote--enojo .wb__emo--enojo {
+  animation: wb-rage-shake 0.11s linear infinite;
+}
+.wb__player.is-emote--enojo .wb__a-brow--l {
+  animation: wb-rage-brow-l 0.22s ease-in-out infinite alternate;
+}
+.wb__player.is-emote--enojo .wb__a-brow--r {
+  animation: wb-rage-brow-r 0.22s ease-in-out infinite alternate;
+}
+.wb__player.is-emote--enojo .wb__a-mouth {
+  animation: wb-rage-mouth 0.22s ease-in-out infinite alternate;
+}
+/* Va despues del `fill` plano del enojo: misma especificidad, pero una animacion pisa
+   la declaracion estatica mientras corre. */
+.wb__player.is-emote--enojo .wb__face-body {
+  animation: wb-rage-heat 0.5s ease-in-out infinite alternate;
+}
+
+/* BURLA: la lengua se sacude y el ojo abierto guina cada tanto. */
+.wb__player.is-emote--burla .wb__a-tongue {
+  transform-origin: top center; /* la lengua cuelga: se mueve desde la boca */
+  animation: wb-taunt-tongue 0.3s ease-in-out infinite alternate;
+}
+.wb__player.is-emote--burla .wb__a-eye {
+  animation: wb-taunt-wink 1.4s ease-in-out infinite;
+}
+
+@keyframes wb-frog-jump {
+  0%, 100% {
+    transform: translateY(0) scaleY(1) scaleX(1);
+  }
+  30% {
+    transform: translateY(-8px) scaleY(1.05) scaleX(0.95);
+  }
+  50% {
+    transform: translateY(-10px) scaleY(1.1) scaleX(0.9);
+  }
+  80% {
+    transform: translateY(0) scaleY(0.9) scaleX(1.1);
+  }
+}
+@keyframes wb-frog-mouth {
+  from {
+    transform: scale(0.9);
+  }
+  to {
+    transform: scale(1.1);
+  }
+}
+@keyframes wb-frog-tongue {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(0, 2px);
+  }
+}
+@keyframes wb-tear-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.5);
+  }
+  14% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(17px) scale(0.8);
+  }
+}
+@keyframes wb-sob-mouth {
+  0%,
+  100% {
+    transform: scaleX(1) translateY(0);
+  }
+  50% {
+    transform: scaleX(1.12) translateY(0.6px);
+  }
+}
+@keyframes wb-gasp-hit {
+  0% {
+    transform: scale(0.72);
+  }
+  60% {
+    transform: scale(1.07);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes wb-gasp-pupil {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.3);
+  }
+}
+@keyframes wb-gasp-mouth {
+  from {
+    transform: scaleY(1);
+  }
+  to {
+    transform: scaleY(1.2);
+  }
+}
+@keyframes wb-rage-shake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-0.7px, 0.3px);
+  }
+  75% {
+    transform: translate(0.7px, -0.3px);
+  }
+}
+@keyframes wb-rage-brow-l {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(4deg);
+  }
+}
+@keyframes wb-rage-brow-r {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-4deg);
+  }
+}
+@keyframes wb-rage-mouth {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(1.1);
+  }
+}
+@keyframes wb-rage-heat {
+  from {
+    fill: #a8384f;
+  }
+  to {
+    fill: #d1504a;
+  }
+}
+@keyframes wb-taunt-tongue {
+  from {
+    transform: rotate(-9deg);
+  }
+  to {
+    transform: rotate(9deg);
+  }
+}
+@keyframes wb-taunt-wink {
+  0%,
+  62%,
+  100% {
+    transform: scaleY(1);
+  }
+  68%,
+  74% {
+    transform: scaleY(0.1);
+  }
+}
+
+/* Respeta a quien pidio menos movimiento: la cara cambia igual, pero queda quieta. */
+@media (prefers-reduced-motion: reduce) {
+  .wb__emo,
+  .wb__emo * {
+    animation: none !important;
+  }
+}
+
+/* El eliminado tambien reacciona (es media la gracia): mientras dura, sale del gris. */
+.wb__player.is-out.is-emote {
+  opacity: 0.95;
+}
+.wb__player.is-out.is-emote .wb__face-body {
+  fill: var(--silhouette);
+}
+
+/* El enojo le calienta el cuerpo a la bocha. Va despues del gris del eliminado (misma
+   especificidad) para que el muerto tambien se ponga rojo si se enoja. */
+.wb__player.is-emote--enojo .wb__face-body {
+  fill: #a8384f;
+}
+/* `.is-emote` de mas para igualar la especificidad de `.is-out.is-emote` (0,4,0) y, al ir
+   despues, ganarle: el eliminado que se rie tambien se pone verde. Sin eso quedaba con el
+   cuerpo de acero y los ojos de rana. El enojo se salva solo porque su color lo aplica una
+   animacion (`wb-rage-heat`), y la cascada de animaciones pisa las declaraciones normales. */
+.wb__player.is-emote.is-emote--risa .wb__face-body {
+  fill: #52a447;
+}
+
+/* Salto al reaccionar. Va en el avatar y no en `.wb__face` porque esa ya la usa la
+   sacudida de panico (`wb-panic`), que sigue corriendo si al de turno se le da por
+   reaccionar con la mecha al rojo. */
+.wb__player.is-emote-pop .wb__avatar {
+  animation: wb-emote-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Dock: por encima del input invisible (z-index 5), que cubre todo el stage. Va a la
+   esquina inferior derecha y NO centrado abajo: con la mesa llena hay un jugador a
+   las 6 en punto y el dock centrado le tapaba la palabra justo cuando le tocaba
+   escribirla (medido con Playwright: pasaba desde 1366x768 para abajo, con 2, 4, 5,
+   6 y 8 jugadores). La esquina queda fuera del circulo salvo en pantallas muy bajas,
+   y para ese resto esta el z-index de `.wb__player`. */
+.wb__emotes {
+  position: absolute;
+  bottom: clamp(8px, 2.4vh, 20px);
+  right: clamp(8px, 2vw, 22px);
+  z-index: 20;
+  display: flex;
+  gap: clamp(4px, 1vmin, 9px);
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(3px);
+}
+.wb__emotes[hidden] {
+  display: none;
+}
+.wb__emote {
+  position: relative;
+  width: clamp(38px, 6.4vmin, 50px);
+  height: clamp(38px, 6.4vmin, 50px);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    background 120ms ease;
+}
+.wb__emote:hover,
+.wb__emote:focus-visible {
+  transform: translateY(-3px) scale(1.08);
+  background: rgba(255, 210, 63, 0.2);
+  outline: none;
+}
+.wb__emote:active {
+  transform: translateY(0) scale(0.94);
+}
+.wb__emo-head {
+  width: 100%;
+  height: 100%;
+}
+.wb__emo-head .wb__emo {
+  display: block;
+}
+.wb__emo-head .wb__face-body {
+  fill: var(--silhouette);
+}
+.wb__emote-key {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 6px;
+  color: var(--night-deep);
+  background: var(--spark);
+}
+/* Cooldown: el dock se apaga hasta que el server vuelva a aceptar una reaccion. */
+.wb__emotes.is-cooling {
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+/* Pantalla baja (celular apaisado, o vertical con el teclado abierto: el stage es
+   100dvh y se achica). Ahi el circulo ocupa TODO el alto y la banda de abajo deja de
+   estar libre. La que si sobra es la LATERAL — la arena es cuadrada de 92vmin y en
+   apaisado deja aire a los costados — asi que el dock pasa a columna pegada al borde
+   derecho. El badge del atajo se esconde: en tactil no hay teclado que apretar. */
+@media (max-height: 500px) {
+  .wb__emotes {
+    flex-direction: column;
+    top: 50%;
+    bottom: auto;
+    right: 4px;
+    transform: translateY(-50%);
+    gap: 3px;
+    padding: 4px;
+  }
+  .wb__emote {
+    width: 34px;
+    height: 34px;
+  }
+  .wb__emote-key {
+    display: none;
+  }
 }
 
 /* Yo: nombre subrayado (sutil, para ubicarme). */
@@ -726,6 +1153,18 @@ body {
   }
   75% {
     transform: scale(1.12) translateX(1.5px);
+  }
+}
+/* Salto corto al reaccionar: la cara cambia y el personaje pega un brinco. */
+@keyframes wb-emote-pop {
+  0% {
+    transform: scale(1) translateY(0);
+  }
+  45% {
+    transform: scale(1.18) translateY(-7px);
+  }
+  100% {
+    transform: scale(1) translateY(0);
   }
 }
 @keyframes wb-bubble {

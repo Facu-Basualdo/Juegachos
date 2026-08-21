@@ -1,5 +1,6 @@
 import type { Socket } from "socket.io-client";
 import type {
+  WbEmoteId,
   WbGameover,
   WbRejectReason,
   WbState,
@@ -17,6 +18,7 @@ export class SocketTransport implements WordBombTransport {
   private stateCb: (s: WbState) => void = () => {};
   private invalidCb: (r: WbRejectReason) => void = () => {};
   private typingCb: (player: string, text: string) => void = () => {};
+  private emoteCb: (player: string, emote: WbEmoteId) => void = () => {};
   private gameoverCb: (r: WbGameover) => void = () => {};
 
   private readonly serverUrl: string;
@@ -48,6 +50,9 @@ export class SocketTransport implements WordBombTransport {
     socket.on("wb:typing", (m: { player: string; text: string }) =>
       this.typingCb(m.player, m.text),
     );
+    socket.on("wb:emote", (m: { player: string; emote: WbEmoteId }) =>
+      this.emoteCb(m.player, m.emote),
+    );
     socket.on("wb:gameover", (m: WbGameover) => this.gameoverCb(m));
   }
 
@@ -60,6 +65,9 @@ export class SocketTransport implements WordBombTransport {
   onTyping(cb: (player: string, text: string) => void): void {
     this.typingCb = cb;
   }
+  onEmote(cb: (player: string, emote: WbEmoteId) => void): void {
+    this.emoteCb = cb;
+  }
   onGameover(cb: (r: WbGameover) => void): void {
     this.gameoverCb = cb;
   }
@@ -69,6 +77,9 @@ export class SocketTransport implements WordBombTransport {
   }
   sendTyping(text: string): void {
     this.socket?.emit("wb:typing", { text });
+  }
+  sendEmote(emote: WbEmoteId): void {
+    this.socket?.emit("wb:emote", { emote });
   }
   dispose(): void {
     this.socket?.disconnect();

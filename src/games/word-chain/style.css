@@ -1,0 +1,1344 @@
+/* Cadena de Palabras — "Cadena forjada" (ver DESIGN.md): taller de herreria en una
+   noche fria, el eslabon incandescente con la letra grabada en el centro del yunque,
+   chispas de metal subiendo, los jugadores en circulo. Sin caja de texto (un input
+   invisible captura el tecleo). */
+
+:root {
+  --night: #0d1219;
+  --night-deep: #070a0f;
+  --forge: #ff6a1f;
+  --hot: #ffb347;
+  --white-hot: #fff3d6;
+  --steel: #8fa3b8;
+  --steel-dark: #3d4c5c;
+  --name: #eef3f7;
+  --muted: #93a3b3;
+  --silhouette: #4f7ea8;
+  --turn: #43dba1;
+  --danger: #e2452f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at 50% 46%, rgba(255, 106, 31, 0.26) 0%, rgba(255, 90, 20, 0.07) 30%, transparent 55%),
+    radial-gradient(circle at 50% 44%, var(--night) 0%, var(--night-deep) 70%, #04060a 100%);
+  color: var(--name);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+#app {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.back-link {
+  position: fixed;
+  top: 12px;
+  left: 14px;
+  z-index: 60;
+  color: var(--name);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 6px 12px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.back-link:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.wc {
+  height: 100%;
+  position: relative;
+}
+
+/* ---------- Escena en-juego ---------- */
+
+.wc__stage {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.wc__stage[hidden] {
+  display: none;
+}
+
+.wc__arena {
+  position: relative;
+  width: min(92vmin, 720px);
+  height: min(92vmin, 720px);
+}
+
+/* Input invisible: captura el tecleo y summonea el teclado en movil, sin caja
+   visible. El texto se refleja bajo el avatar propio (JS). */
+.wc__input {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  font-size: 16px; /* evita el zoom de iOS al enfocar */
+  outline: none;
+  cursor: default;
+  text-align: center;
+}
+.wc__input:disabled {
+  pointer-events: none;
+}
+
+/* ---------- Ambiente (chispas + forja) ---------- */
+
+/* Chispas de la forja que suben lento, por detras de todo. Las siembra el JS
+   (posicion, tamano y tiempos aleatorios). Atmosfera, siempre sutil. */
+.wc__sparks {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+}
+.wc__spark {
+  position: absolute;
+  bottom: -14px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--white-hot) 0%, var(--hot) 45%, rgba(255, 106, 31, 0) 100%);
+  opacity: 0;
+  will-change: transform, opacity;
+  animation-name: wc-spark;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes wc-spark {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.85;
+  }
+  85% {
+    opacity: 0.35;
+  }
+  100% {
+    transform: translateY(-94vh) translateX(14px) scale(0.3);
+    opacity: 0;
+  }
+}
+
+/* Forja: el charco de calor sobre el que flota el eslabon (foco central). */
+.wc__forge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: clamp(170px, 38vmin, 300px);
+  height: clamp(170px, 38vmin, 300px);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 130, 30, 0.45) 0%,
+    rgba(255, 100, 20, 0.24) 42%,
+    rgba(255, 80, 10, 0.06) 66%,
+    transparent 78%
+  );
+  filter: blur(2px);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Largo de la cadena forjada hasta ahora, grabado en acero. Vive en el stage y no en
+   la arena: dentro de la arena caia justo sobre el avatar de las 12 en punto. */
+.wc__count {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  z-index: 1;
+  font-size: clamp(0.62rem, 1.7vmin, 0.85rem);
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  color: var(--steel);
+  opacity: 0.75;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ---------- Eslabon central ---------- */
+
+.wc__link {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: clamp(116px, 30vmin, 200px);
+  height: clamp(93px, 24vmin, 160px);
+  z-index: 3;
+}
+
+/* El eslabon caliente: anillo de metal al rojo con el hueco oscuro en el medio,
+   donde va grabada la letra. El borde con gradiente se logra con dos backgrounds
+   (padding-box para el centro, border-box para el aro). */
+.wc__link-body {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: clamp(11px, 2.4vmin, 18px) solid transparent;
+  background:
+    linear-gradient(#1a1410, #120e0c) padding-box,
+    linear-gradient(155deg, var(--white-hot) 0%, var(--hot) 30%, var(--forge) 62%, #a83208 100%) border-box;
+  box-shadow:
+    0 0 34px rgba(255, 106, 31, 0.42),
+    inset 0 0 22px rgba(255, 106, 31, 0.28);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 200ms ease;
+}
+
+/* Eslabones vecinos, ya frios: enganchados a los lados, por detras. Dan la lectura
+   de "cadena" sin competir con el eslabon caliente. */
+.wc__link-side {
+  position: absolute;
+  top: 50%;
+  width: 30%;
+  height: 66%;
+  border-radius: 999px;
+  border: clamp(7px, 1.5vmin, 11px) solid var(--steel-dark);
+  background: transparent;
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.6);
+  z-index: -1;
+}
+.wc__link-side--l {
+  left: -14%;
+  transform: translateY(-50%);
+  border-color: var(--steel-dark);
+}
+.wc__link-side--r {
+  right: -14%;
+  transform: translateY(-50%);
+  /* El de la derecha es el proximo a forjar: apenas templado por el calor. */
+  border-color: #6b5544;
+}
+
+/* La letra grabada en el eslabon: el reto del turno. */
+.wc__letter {
+  font-size: clamp(2.2rem, 8vmin, 4rem);
+  font-weight: 900;
+  line-height: 1;
+  color: var(--white-hot);
+  text-shadow:
+    0 0 14px rgba(255, 140, 40, 0.85),
+    0 2px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Segundos restantes, bajo la letra (color lo pone el JS: de metal caliente a rojo). */
+.wc__time {
+  min-height: 1em;
+  margin-top: 2px;
+  font-size: clamp(0.75rem, 2.3vmin, 1rem);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--hot);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+/* Eslabon recien forjado: el metal recibe el martillazo y refulge. */
+.wc__link.is-forged .wc__link-body {
+  animation: wc-forge 500ms ease-out;
+}
+@keyframes wc-forge {
+  0% {
+    box-shadow:
+      0 0 70px rgba(255, 220, 150, 0.9),
+      inset 0 0 40px rgba(255, 220, 150, 0.7);
+  }
+  100% {
+    box-shadow:
+      0 0 34px rgba(255, 106, 31, 0.42),
+      inset 0 0 22px rgba(255, 106, 31, 0.28);
+  }
+}
+
+/* Tiempo critico: el metal se enfria al rojo y late. */
+.wc__stage.is-critical .wc__link-body {
+  background:
+    linear-gradient(#1a1010, #120c0c) padding-box,
+    linear-gradient(155deg, #ff9a86 0%, var(--danger) 45%, #7d1a10 100%) border-box;
+  animation: wc-link-pulse 0.5s ease-in-out infinite;
+}
+@keyframes wc-link-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 30px rgba(226, 69, 47, 0.5),
+      inset 0 0 20px rgba(226, 69, 47, 0.3);
+  }
+  50% {
+    box-shadow:
+      0 0 48px rgba(226, 69, 47, 0.8),
+      inset 0 0 26px rgba(226, 69, 47, 0.5);
+  }
+}
+
+/* ---------- Quiebre (al jugador se le acabo el reloj) ---------- */
+
+.wc__snap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+/* Fogonazo del hierro que cede: blanco-caliente, mas frio que una explosion. */
+.wc__snap-flash {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: clamp(140px, 30vmin, 210px);
+  height: clamp(140px, 30vmin, 210px);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0.4);
+  opacity: 0;
+  background: radial-gradient(
+    circle,
+    #fff 0%,
+    var(--white-hot) 22%,
+    var(--forge) 50%,
+    rgba(226, 69, 47, 0.5) 72%,
+    transparent 82%
+  );
+}
+.wc__snap.is-on .wc__snap-flash {
+  animation: wc-snap-flash 320ms ease-out forwards;
+}
+/* Onda del golpe. */
+.wc__snap-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: clamp(120px, 26vmin, 180px);
+  height: clamp(120px, 26vmin, 180px);
+  border-radius: 50%;
+  border: 5px solid rgba(255, 190, 120, 0.9);
+  transform: translate(-50%, -50%) scale(0.3);
+  opacity: 0;
+}
+.wc__snap.is-on .wc__snap-ring {
+  animation: wc-snap-ring 520ms ease-out forwards;
+}
+/* Esquirlas de metal: salen disparadas al angulo --a hasta la distancia --d. */
+.wc__snap-shard {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--white-hot), var(--forge));
+  transform: translate(-50%, -50%);
+  opacity: 0;
+}
+.wc__snap.is-on .wc__snap-shard {
+  animation: wc-snap-shard 600ms ease-out forwards;
+}
+
+@keyframes wc-snap-flash {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.7);
+    opacity: 0;
+  }
+}
+@keyframes wc-snap-ring {
+  0% {
+    transform: translate(-50%, -50%) scale(0.3);
+    opacity: 0.9;
+    border-width: 5px;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.3);
+    opacity: 0;
+    border-width: 1px;
+  }
+}
+@keyframes wc-snap-shard {
+  0% {
+    transform: translate(-50%, -50%) rotate(var(--a)) translateX(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(var(--a)) translateX(var(--d)) scale(0.2);
+    opacity: 0;
+  }
+}
+
+/* El eslabon se sacude cuando se parte (mantiene su centrado translate(-50%,-50%)). */
+.wc__link.is-snap {
+  animation: wc-snap-shake 320ms ease-in-out;
+}
+@keyframes wc-snap-shake {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+  20% {
+    transform: translate(calc(-50% - 5px), calc(-50% + 1px)) rotate(-2deg);
+  }
+  40% {
+    transform: translate(calc(-50% + 5px), -50%) rotate(2deg);
+  }
+  60% {
+    transform: translate(calc(-50% - 3px), calc(-50% - 1px)) rotate(-1deg);
+  }
+  80% {
+    transform: translate(calc(-50% + 2px), -50%);
+  }
+}
+
+/* ---------- Anillo del reloj ---------- */
+
+/* Rodea al eslabon y se consume con el tiempo. A diferencia de Bomba Palabra es un
+   circulo COMPLETO (no hay mecha que esquivar): rotado -90deg para empezar arriba. */
+.wc__timer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  width: clamp(150px, 40vmin, 268px);
+  height: clamp(150px, 40vmin, 268px);
+  z-index: 3;
+  pointer-events: none;
+  overflow: visible;
+}
+.wc__timer[hidden] {
+  display: none;
+}
+.wc__timer-track {
+  fill: none;
+  stroke: rgba(143, 163, 184, 0.16);
+  stroke-width: 3.5;
+}
+.wc__timer-bar {
+  fill: none;
+  stroke: var(--hot);
+  stroke-width: 4;
+  stroke-linecap: round;
+  /* stroke-dasharray (largo del arco visible) y stroke los setea el JS por frame. */
+  transition: stroke 180ms linear;
+  filter: drop-shadow(0 0 4px rgba(255, 160, 60, 0.55));
+}
+.wc__timer.is-critical .wc__timer-bar {
+  animation: wc-timer-pulse 0.5s ease-in-out infinite;
+}
+
+@keyframes wc-timer-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* Flecha que apunta al jugador de turno (gira segun el angulo). */
+.wc__pointer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-left: 13px solid transparent;
+  border-right: 13px solid transparent;
+  border-bottom: 26px solid var(--hot);
+  filter: drop-shadow(0 0 6px rgba(255, 160, 60, 0.7));
+  z-index: 4;
+  /* el transform lo setea el JS: translate(-50%,-50%) rotate(a) translateY(-Npx) */
+}
+.wc__pointer[hidden] {
+  display: none;
+}
+/* En pantallas chicas la arena se achica pero las tarjetas no: no queda banda libre
+   entre el anillo del reloj y el nombre del jugador, y la flecha terminaba encima de
+   uno de los dos. El turno igual se lee por el nombre verde, el glow del personaje y
+   el globo "RAPIDO!", asi que ahi la flecha sobra. */
+@media (max-width: 560px) {
+  .wc__pointer {
+    display: none;
+  }
+}
+
+/* ---------- Jugadores en circulo ---------- */
+
+/* Las tarjetas van POR ENCIMA del dock de reacciones (z-index 20), no por debajo.
+   En una pantalla baja (celular apaisado, o vertical con el teclado abierto: el
+   stage es 100dvh y se achica) el circulo llega hasta el borde de abajo y no queda
+   ninguna esquina libre, asi que el dock termina sobre la tarjeta de alguien —
+   medido a 700x350, 640x360, 480x320 y 412x400, y varias veces sobre el jugador de
+   TURNO, que es el unico que no puede permitirse no leer lo que escribe. La palabra
+   es la informacion critica de este juego: gana ella y el dock queda detras.
+   `pointer-events: none` es lo que mantiene los botones del dock clickeables por
+   debajo (la tarjeta no tiene nada interactivo; el foco del input invisible lo
+   maneja `.wc__input`, que cubre el stage). */
+.wc__player {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: clamp(84px, 15vmin, 120px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  z-index: 25;
+  pointer-events: none;
+}
+
+.wc__pname {
+  font-weight: 800;
+  font-size: clamp(0.85rem, 2.4vmin, 1.15rem);
+  color: var(--name);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+/* Una sola vida: un eslabon entero, o partido si quedo afuera. Al lado, cuantos
+   eslabones aporto a la cadena. */
+.wc__badge {
+  height: clamp(14px, 2.6vmin, 19px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.wc__link-badge,
+.wc__broken {
+  width: clamp(20px, 3.6vmin, 27px);
+  height: clamp(13px, 2.3vmin, 17px);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
+}
+.wc__link-badge rect {
+  stroke: var(--hot);
+}
+.wc__broken path {
+  stroke: var(--steel-dark);
+  stroke-linecap: round;
+}
+.wc__links {
+  font-size: clamp(0.6rem, 1.7vmin, 0.8rem);
+  font-weight: 900;
+  line-height: 1;
+  color: var(--steel);
+}
+
+/* ---------- Personaje (bocha de acero con cara reactiva) ---------- */
+
+.wc__avatar {
+  width: clamp(58px, 11vmin, 84px);
+  height: clamp(64px, 12vmin, 92px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wc__face {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45));
+  transition: transform 140ms ease;
+}
+.wc__face-body {
+  fill: var(--silhouette);
+}
+.wc__face-hi {
+  fill: rgba(255, 255, 255, 0.16);
+}
+/* Rasgos con trazo oscuro comun. */
+.wc__mouth,
+.wc__brows path,
+.wc__eyes-dead path {
+  fill: none;
+  stroke: #10202c;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.wc__sweat {
+  fill: #8fd3ff;
+  stroke: #4a90c2;
+  stroke-width: 1;
+}
+/* Por defecto: cara neutral (resto oculto). */
+.wc__brows,
+.wc__eyes-dead,
+.wc__sweat,
+.wc__mouth {
+  display: none;
+}
+.wc__mouth--neutral {
+  display: block;
+}
+.wc__mouth--panic,
+.wc__mouth--happy {
+  fill: #10202c;
+  stroke: none;
+}
+
+.wc__word {
+  min-height: 1.3em;
+  font-weight: 800;
+  font-size: clamp(0.8rem, 2.2vmin, 1.1rem);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  max-width: 130%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* Halo oscuro: la palabra puede caer sobre el dock de reacciones o sobre una
+     chispa, y tiene que leerse igual (ver el z-index de `.wc__player`). */
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.9),
+    0 0 8px rgba(0, 0, 0, 0.75);
+}
+
+/* La cola de la palabra: la letra que hereda el siguiente jugador, al rojo vivo.
+   Es la regla del juego hecha visible. */
+.wc__tail {
+  color: var(--hot);
+  text-shadow: 0 0 10px rgba(255, 140, 40, 0.7);
+}
+
+/* Turno: concentrado (cejas + boca firme), nombre verde y realce del personaje. */
+.wc__player.is-turn .wc__pname {
+  color: var(--turn);
+}
+.wc__player.is-turn .wc__word {
+  color: var(--name);
+}
+.wc__player.is-turn .wc__face {
+  transform: scale(1.1);
+  filter:
+    drop-shadow(0 0 10px rgba(67, 219, 161, 0.6))
+    drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45));
+}
+.wc__player.is-turn .wc__mouth--neutral {
+  display: none;
+}
+.wc__player.is-turn .wc__mouth--focus {
+  display: block;
+}
+.wc__player.is-turn .wc__brows {
+  display: block;
+}
+
+/* Panico: el jugador de turno cuando el tiempo es critico (stage.is-critical): boca
+   abierta + gota de sudor + leve sacudida (el globo lo maneja .wc__bubble). */
+.wc__stage.is-critical .wc__player.is-turn .wc__mouth--focus {
+  display: none;
+}
+.wc__stage.is-critical .wc__player.is-turn .wc__mouth--panic {
+  display: block;
+}
+.wc__stage.is-critical .wc__player.is-turn .wc__sweat {
+  display: block;
+}
+.wc__stage.is-critical .wc__player.is-turn .wc__face {
+  animation: wc-panic 0.28s ease-in-out infinite;
+}
+
+/* Acierto: carita feliz breve (flashAccept pone .is-happy 800ms). */
+.wc__player.is-happy .wc__mouth--neutral,
+.wc__player.is-happy .wc__mouth--focus {
+  display: none;
+}
+.wc__player.is-happy .wc__mouth--happy {
+  display: block;
+}
+
+/* ---------- Reacciones (la cara del propio personaje) ---------- */
+
+/* Los rasgos automaticos (`.wc__base-face`) y los de reaccion (`.wc__emote-face`) son
+   grupos excluyentes: reaccionar apaga el grupo entero. Asi la cara de reaccion no
+   tiene que ganarle en especificidad a las de turno / panico / feliz / muerto, que se
+   apilan con hasta cinco clases. */
+.wc__emote-face,
+.wc__emo {
+  display: none;
+}
+.wc__player.is-emote .wc__base-face {
+  display: none;
+}
+.wc__player.is-emote .wc__emote-face {
+  display: block;
+}
+.wc__player.is-emote--risa .wc__emo--risa,
+.wc__player.is-emote--sorpresa .wc__emo--sorpresa,
+.wc__player.is-emote--enojo .wc__emo--enojo,
+.wc__player.is-emote--burla .wc__emo--burla,
+.wc__player.is-emote--llanto .wc__emo--llanto {
+  display: block;
+}
+
+/* Rasgos de las caras de reaccion (los de la cara base los pinta `.wc__mouth` y cia). */
+.wc__emo .wc__ln {
+  fill: none;
+  stroke: #10202c;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.wc__emo .wc__fl,
+.wc__emo .wc__pupil {
+  fill: #10202c;
+}
+.wc__emo .wc__white {
+  fill: #fff;
+}
+.wc__emo .wc__tongue {
+  fill: #ff7a8a;
+}
+.wc__emo .wc__frog-skin {
+  fill: #52a447;
+}
+.wc__emo .wc__tear {
+  fill: #8fd3ff;
+  stroke: #4a90c2;
+  stroke-width: 1;
+}
+
+/* ---------- Caras vivas: cada reaccion se mueve mientras dura (EMOTE_MS = 1.8s) ----------
+
+   El movimiento subraya lo que ya dice el sonido: la risa abre la mandibula en las mismas
+   tres silabas del blip, el llanto suelta lagrimas escalonadas, el enojo tiembla. Todo con
+   keyframes CSS sobre los paths del SVG (cero assets, escala perfecto, y el cuerpo del enojo
+   se sigue tinendo desde CSS). Los rasgos animados llevan un gancho `wc__a-*` puesto en el
+   Hud; sin el habria que apuntarlos por `nth-of-type`, que se rompe al tocar el dibujo.
+
+   `transform-box: fill-box` es obligatorio: sin el, el origen de un transform SVG es la
+   esquina del viewBox y la boca escalaria desde afuera de la cara. */
+.wc__emo [class*="wc__a-"] {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* RISA: es una rana. Ojos saltones, boca enorme, saltitos. El verde del cuerpo se
+   declara abajo, junto al rojo del enojo. */
+.wc__player.is-emote--risa .wc__frog-skin {
+  fill: #52a447;
+}
+.wc__player.is-emote--risa .wc__emo--risa {
+  animation: wc-frog-jump 0.4s ease-in-out infinite;
+}
+.wc__player.is-emote--risa .wc__a-mouth {
+  transform-origin: top center;
+  animation: wc-frog-mouth 0.2s ease-in-out infinite alternate;
+}
+.wc__player.is-emote--risa .wc__a-tongue {
+  transform-origin: center;
+  animation: wc-frog-tongue 0.2s ease-in-out infinite alternate;
+}
+
+/* LLANTO: dos lagrimas que caen alternadas (la derecha va media fase atrasada) y un
+   puchero que tiembla. La gota nace en el ojo, engorda y se desvanece al caer. */
+.wc__player.is-emote--llanto .wc__a-tear--l {
+  animation: wc-tear-fall 1.25s ease-in infinite;
+}
+.wc__player.is-emote--llanto .wc__a-tear--r {
+  animation: wc-tear-fall 1.25s ease-in 0.62s infinite;
+}
+.wc__player.is-emote--llanto .wc__a-mouth {
+  animation: wc-sob-mouth 0.7s ease-in-out infinite;
+}
+
+/* SORPRESA: un golpe seco al aparecer, despues las pupilas y la boca laten. */
+.wc__player.is-emote--sorpresa .wc__emo--sorpresa {
+  animation: wc-gasp-hit 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.wc__player.is-emote--sorpresa .wc__a-pupil {
+  animation: wc-gasp-pupil 0.7s ease-in-out infinite alternate;
+}
+.wc__player.is-emote--sorpresa .wc__a-mouth {
+  animation: wc-gasp-mouth 0.7s ease-in-out infinite alternate;
+}
+
+/* ENOJO: temblor de furia, cejas que se aprietan y el cuerpo que se recalienta. */
+.wc__player.is-emote--enojo .wc__emo--enojo {
+  animation: wc-rage-shake 0.11s linear infinite;
+}
+.wc__player.is-emote--enojo .wc__a-brow--l {
+  animation: wc-rage-brow-l 0.22s ease-in-out infinite alternate;
+}
+.wc__player.is-emote--enojo .wc__a-brow--r {
+  animation: wc-rage-brow-r 0.22s ease-in-out infinite alternate;
+}
+.wc__player.is-emote--enojo .wc__a-mouth {
+  animation: wc-rage-mouth 0.22s ease-in-out infinite alternate;
+}
+/* Va despues del `fill` plano del enojo: misma especificidad, pero una animacion pisa
+   la declaracion estatica mientras corre. */
+.wc__player.is-emote--enojo .wc__face-body {
+  animation: wc-rage-heat 0.5s ease-in-out infinite alternate;
+}
+
+/* BURLA: la lengua se sacude y el ojo abierto guina cada tanto. */
+.wc__player.is-emote--burla .wc__a-tongue {
+  transform-origin: top center; /* la lengua cuelga: se mueve desde la boca */
+  animation: wc-taunt-tongue 0.3s ease-in-out infinite alternate;
+}
+.wc__player.is-emote--burla .wc__a-eye {
+  animation: wc-taunt-wink 1.4s ease-in-out infinite;
+}
+
+@keyframes wc-frog-jump {
+  0%, 100% {
+    transform: translateY(0) scaleY(1) scaleX(1);
+  }
+  30% {
+    transform: translateY(-8px) scaleY(1.05) scaleX(0.95);
+  }
+  50% {
+    transform: translateY(-10px) scaleY(1.1) scaleX(0.9);
+  }
+  80% {
+    transform: translateY(0) scaleY(0.9) scaleX(1.1);
+  }
+}
+@keyframes wc-frog-mouth {
+  from {
+    transform: scale(0.9);
+  }
+  to {
+    transform: scale(1.1);
+  }
+}
+@keyframes wc-frog-tongue {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(0, 2px);
+  }
+}
+@keyframes wc-tear-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.5);
+  }
+  14% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(17px) scale(0.8);
+  }
+}
+@keyframes wc-sob-mouth {
+  0%,
+  100% {
+    transform: scaleX(1) translateY(0);
+  }
+  50% {
+    transform: scaleX(1.12) translateY(0.6px);
+  }
+}
+@keyframes wc-gasp-hit {
+  0% {
+    transform: scale(0.72);
+  }
+  60% {
+    transform: scale(1.07);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes wc-gasp-pupil {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.3);
+  }
+}
+@keyframes wc-gasp-mouth {
+  from {
+    transform: scaleY(1);
+  }
+  to {
+    transform: scaleY(1.2);
+  }
+}
+@keyframes wc-rage-shake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-0.7px, 0.3px);
+  }
+  75% {
+    transform: translate(0.7px, -0.3px);
+  }
+}
+@keyframes wc-rage-brow-l {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(4deg);
+  }
+}
+@keyframes wc-rage-brow-r {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-4deg);
+  }
+}
+@keyframes wc-rage-mouth {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(1.1);
+  }
+}
+@keyframes wc-rage-heat {
+  from {
+    fill: #a8384f;
+  }
+  to {
+    fill: #d1504a;
+  }
+}
+@keyframes wc-taunt-tongue {
+  from {
+    transform: rotate(-9deg);
+  }
+  to {
+    transform: rotate(9deg);
+  }
+}
+@keyframes wc-taunt-wink {
+  0%,
+  62%,
+  100% {
+    transform: scaleY(1);
+  }
+  68%,
+  74% {
+    transform: scaleY(0.1);
+  }
+}
+
+/* Respeta a quien pidio menos movimiento: la cara cambia igual, pero queda quieta. */
+@media (prefers-reduced-motion: reduce) {
+  .wc__emo,
+  .wc__emo * {
+    animation: none !important;
+  }
+}
+
+/* El eliminado tambien reacciona (es media la gracia): mientras dura, sale del gris. */
+.wc__player.is-out.is-emote {
+  opacity: 0.95;
+}
+.wc__player.is-out.is-emote .wc__face-body {
+  fill: var(--silhouette);
+}
+
+/* El enojo le calienta el cuerpo a la bocha. Va despues del gris del eliminado (misma
+   especificidad) para que el muerto tambien se ponga rojo si se enoja. */
+.wc__player.is-emote--enojo .wc__face-body {
+  fill: #a8384f;
+}
+/* `.is-emote` de mas para igualar la especificidad de `.is-out.is-emote` (0,4,0) y, al ir
+   despues, ganarle: el eliminado que se rie tambien se pone verde. Sin eso quedaba con el
+   cuerpo de acero y los ojos de rana. El enojo se salva solo porque su color lo aplica una
+   animacion (`wc-rage-heat`), y la cascada de animaciones pisa las declaraciones normales. */
+.wc__player.is-emote.is-emote--risa .wc__face-body {
+  fill: #52a447;
+}
+
+/* Salto al reaccionar. Va en el avatar y no en `.wc__face` porque esa ya la usa la
+   sacudida de panico (`wc-panic`), que sigue corriendo si al de turno se le da por
+   reaccionar con el reloj al rojo. */
+.wc__player.is-emote-pop .wc__avatar {
+  animation: wc-emote-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Dock: por encima del input invisible (z-index 5), que cubre todo el stage. Va a la
+   esquina y no centrado abajo (como en Bomba Palabra): con la mesa llena hay un
+   jugador a las 6 en punto y el dock le tapaba la palabra, que es justo lo que hay
+   que leer. La esquina inferior derecha queda fuera del circulo siempre. */
+.wc__emotes {
+  position: absolute;
+  bottom: clamp(8px, 2.4vh, 20px);
+  right: clamp(8px, 2vw, 22px);
+  z-index: 20;
+  display: flex;
+  gap: clamp(4px, 1vmin, 9px);
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(3px);
+}
+.wc__emotes[hidden] {
+  display: none;
+}
+.wc__emote {
+  position: relative;
+  width: clamp(38px, 6.4vmin, 50px);
+  height: clamp(38px, 6.4vmin, 50px);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    background 120ms ease;
+}
+.wc__emote:hover,
+.wc__emote:focus-visible {
+  transform: translateY(-3px) scale(1.08);
+  background: rgba(255, 179, 71, 0.2);
+  outline: none;
+}
+.wc__emote:active {
+  transform: translateY(0) scale(0.94);
+}
+.wc__emo-head {
+  width: 100%;
+  height: 100%;
+}
+.wc__emo-head .wc__emo {
+  display: block;
+}
+.wc__emo-head .wc__face-body {
+  fill: var(--silhouette);
+}
+.wc__emote-key {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 6px;
+  color: var(--night-deep);
+  background: var(--hot);
+}
+/* Cooldown: el dock se apaga hasta que el server vuelva a aceptar una reaccion. */
+.wc__emotes.is-cooling {
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+/* Pantalla baja (celular apaisado, o vertical con el teclado abierto: el stage es
+   100dvh y se achica). Ahi el circulo ocupa TODO el alto y la banda de abajo deja de
+   estar libre: el dock horizontal caia sobre la palabra de la tarjeta de las 4-5 en
+   punto (medido a 700x350, 640x360, 480x320 y 412x400). La banda que si sobra es la
+   LATERAL — la arena es cuadrada de 92vmin y en apaisado deja aire a los costados —
+   asi que el dock pasa a columna pegada al borde derecho. Con eso el solape cae de
+   la palabra entera (91px) a 26px como maximo y solo a 412x400. El badge del atajo
+   se esconde: en tactil no hay teclado que apretar. */
+@media (max-height: 500px) {
+  .wc__emotes {
+    flex-direction: column;
+    top: 50%;
+    bottom: auto;
+    right: 4px;
+    transform: translateY(-50%);
+    gap: 3px;
+    padding: 4px;
+  }
+  .wc__emote {
+    width: 34px;
+    height: 34px;
+  }
+  .wc__emote-key {
+    display: none;
+  }
+}
+
+/* Yo: nombre subrayado (sutil, para ubicarme). */
+.wc__player.is-me .wc__pname {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Eliminado: cuerpo gris + ojos X + boca muerta, atenuado. */
+.wc__player.is-out {
+  opacity: 0.6;
+}
+.wc__player.is-out .wc__pname,
+.wc__player.is-out .wc__word {
+  text-decoration: line-through;
+}
+.wc__player.is-out .wc__face-body {
+  fill: #46505c;
+}
+.wc__player.is-out .wc__face-hi,
+.wc__player.is-out .wc__eyes {
+  display: none;
+}
+.wc__player.is-out .wc__eyes-dead {
+  display: block;
+}
+.wc__player.is-out .wc__mouth--neutral {
+  display: none;
+}
+.wc__player.is-out .wc__mouth--dead {
+  display: block;
+}
+/* Al caer, su cola de palabra deja de estar al rojo (ya no hereda nada). */
+.wc__player.is-out .wc__tail {
+  color: inherit;
+  text-shadow: none;
+}
+
+/* Desconectado (sigue en la ronda): en cursiva y gris. */
+.wc__player.is-off .wc__pname {
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* Globo "RAPIDO!" del jugador de turno cuando aprieta el tiempo (stage.is-critical). */
+.wc__bubble {
+  position: absolute;
+  bottom: calc(100% - 4px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.5);
+  background: #fff;
+  color: var(--danger);
+  font-weight: 900;
+  font-size: clamp(0.6rem, 1.7vmin, 0.82rem);
+  padding: 3px 9px;
+  border: 2px solid #10202c;
+  border-radius: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.wc__bubble::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #10202c;
+}
+.wc__stage.is-critical .wc__player.is-turn .wc__bubble {
+  animation: wc-bubble 0.35s ease-out forwards;
+}
+
+/* Rechazo / aceptada bajo el avatar. */
+.wc__player.is-reject {
+  animation: wc-shake 0.35s;
+}
+.wc__word.is-reject {
+  color: var(--danger);
+  text-decoration: none;
+}
+.wc__word.is-accept {
+  color: var(--name);
+  animation: wc-stamp 0.4s;
+}
+
+@keyframes wc-panic {
+  0%,
+  100% {
+    transform: scale(1.1) translateX(0);
+  }
+  25% {
+    transform: scale(1.12) translateX(-1.5px);
+  }
+  75% {
+    transform: scale(1.12) translateX(1.5px);
+  }
+}
+/* Salto corto al reaccionar: la cara cambia y el personaje pega un brinco. */
+@keyframes wc-emote-pop {
+  0% {
+    transform: scale(1) translateY(0);
+  }
+  45% {
+    transform: scale(1.18) translateY(-7px);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+@keyframes wc-bubble {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.5) translateY(4px);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+/* ---------- Cartel de mensaje ---------- */
+
+.wc__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.wc__overlay[hidden] {
+  display: none;
+}
+
+.wc__card {
+  max-width: 460px;
+  width: 100%;
+  text-align: center;
+  padding: 34px 28px;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  background: #1b232c;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.wc__title {
+  margin: 0 0 14px;
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: var(--name);
+}
+.wc__body {
+  margin: 0 0 20px;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.wc__btn {
+  font: inherit;
+  font-weight: 800;
+  font-size: 1rem;
+  padding: 12px 26px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--turn);
+  color: #0b2019;
+  cursor: pointer;
+}
+.wc__btn:hover {
+  filter: brightness(1.08);
+}
+
+/* ---------- Countdown ---------- */
+
+.wc__countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+  font-size: clamp(5rem, 22vw, 12rem);
+  font-weight: 900;
+  color: var(--name);
+  text-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.wc__countdown[hidden] {
+  display: none;
+}
+.wc__countdown.is-pop {
+  animation: countdown-pop var(--step, 700ms) ease-out;
+}
+
+@keyframes countdown-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  30% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+}
+
+@keyframes wc-shake {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+  25% {
+    transform: translate(calc(-50% - 6px), -50%);
+  }
+  75% {
+    transform: translate(calc(-50% + 6px), -50%);
+  }
+}
+
+@keyframes wc-stamp {
+  0% {
+    transform: scale(0.7) rotate(-3deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.15) rotate(1deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}

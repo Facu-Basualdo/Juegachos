@@ -43,7 +43,11 @@ export class Game {
 
   private lastTime = 0;
 
+  /** Se guarda solo para poder desenganchar el pointerdown en `dispose`. */
+  private container: HTMLElement | null = null;
+
   constructor(container: HTMLElement) {
+    this.container = container;
     const savedBest = localStorage.getItem(BEST_KEY);
     if (savedBest) this.bestAverage = parseFloat(savedBest);
 
@@ -58,8 +62,11 @@ export class Game {
     });
 
     window.addEventListener("keydown", this.handleKeyDown);
-    this.hud.getCanvas().addEventListener("mousedown", this.handlePointer);
-    this.hud.getCanvas().addEventListener("touchstart", this.handleTouch, { passive: false });
+    // Sobre el container y no sobre el canvas: la pantalla de inicio / game over
+    // es un overlay que lo tapa, asi que en movil (donde no hay Enter) el toque
+    // sobre el cartel no llegaba a arrancar. Un solo `pointerdown` cubre mouse y
+    // dedo, y el panel de ranking corta la propagacion de los suyos.
+    container.addEventListener("pointerdown", this.handlePointer);
 
     this.lastTime = performance.now();
     requestAnimationFrame(this.tick);
@@ -74,12 +81,8 @@ export class Game {
     }
   };
 
-  private handlePointer = (e: MouseEvent): void => {
+  private handlePointer = (e: PointerEvent): void => {
     if (e.button !== 0) return;
-    this.onTap();
-  };
-
-  private handleTouch = (e: TouchEvent): void => {
     e.preventDefault();
     this.onTap();
   };
@@ -236,8 +239,7 @@ export class Game {
 
   dispose(): void {
     window.removeEventListener("keydown", this.handleKeyDown);
-    this.hud.getCanvas().removeEventListener("mousedown", this.handlePointer);
-    this.hud.getCanvas().removeEventListener("touchstart", this.handleTouch);
+    this.container?.removeEventListener("pointerdown", this.handlePointer);
     this.renderer.dispose();
   }
 }

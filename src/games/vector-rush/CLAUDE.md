@@ -41,6 +41,8 @@ Debris density is set by `DEBRIS_CELL` (bigger = fewer objects), `DEBRIS_KEEP_CH
 
 **Crash juice (`endGame`):** the hit fires an `Explosion.burst` at the ship, spikes a red `crashFlash` PointLight (decayed in `tick`), starts a decaying camera shake (`applyShake` jitters the otherwise-fixed camera, then snaps it back to `(0,0,CAMERA_Z)`), and hides the ship. The game-over overlay is deferred 550 ms via `setTimeout` (guarded by a `state === "gameover"` re-check) so the fireball is visible before the dark overlay covers it. These run in every tick state, so they play over game-over. Ported in spirit from the event pulses + camera shake in `penalty-keeper` / `barra-libre`.
 
+**`menuVisible` gates the restart during that 550 ms.** The deferred overlay is what calls `reportScore`/`showRanking`, and its `state === "gameover"` re-check aborts if the player restarted mid-window — so without a guard, restarting during the explosion silently **dropped the run's leaderboard submission**. `handleActivate` now bails on `!menuVisible` (true only while the start/game-over overlay is actually shown), so the score always lands.
+
 **Fixed axial camera:** the camera is fixed at `(0,0,CAMERA_Z)` looking straight down the corridor axis (-Z). Because the field is large, the ship (which moves freely in x/y) can sit anywhere on screen, seen tail-on. `CAMERA_Z` must stay far enough back that the whole field cross-section fits in the vertical FOV.
 
 **Despawn point:** debris despawns shortly after passing the *ship* (`OBSTACLE_DESPAWN_MARGIN` from `playerZ`), not the camera, so an object never balloons across the screen and blows out the bloom.

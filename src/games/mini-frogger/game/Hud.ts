@@ -12,6 +12,7 @@ export class Hud {
   private overlayStat2ValEl!: HTMLElement;
   private overlayButtonEl!: HTMLElement;
   private mobileControlsEl!: HTMLElement;
+  private countdownEl!: HTMLElement;
   private readonly leaderboard = new LeaderboardPanel();
 
   private onActionCallback?: () => void;
@@ -98,6 +99,11 @@ export class Hud {
       <div class="mobile-btn mobile-btn--down" data-dir="down">▼</div>
     `;
     container.append(this.mobileControlsEl);
+
+    // Etiqueta del countdown 3 / 2 / 1 / YA (patron obligatorio del repo).
+    this.countdownEl = document.createElement("div");
+    this.countdownEl.className = "countdown";
+    container.append(this.countdownEl);
   }
 
   private setupListeners(): void {
@@ -168,6 +174,21 @@ export class Hud {
     this.overlayStat2ValEl.textContent = String(best);
     this.overlayButtonEl.textContent = "REINTENTAR";
     this.overlayEl.classList.remove("hidden");
+  }
+
+  /** Muestra una etiqueta del countdown, o la oculta con `null`. */
+  public showCountdown(text: string | null): void {
+    if (text === null) {
+      this.countdownEl.classList.remove("is-shown");
+      this.countdownEl.textContent = "";
+      return;
+    }
+    if (this.countdownEl.textContent === text) return;
+    this.countdownEl.textContent = text;
+    this.countdownEl.classList.remove("is-shown");
+    // Reflow forzado para que al re-agregar la clase se reinicie el pop.
+    void this.countdownEl.offsetWidth;
+    this.countdownEl.classList.add("is-shown");
   }
 
   public hideOverlay(): void {

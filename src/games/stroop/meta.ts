@@ -9,6 +9,9 @@ export const meta: GameEntry = {
   accent: "#ff3b4e",
   category: "Reflejos",
   order: 51,
+  added: "2026-07-09",
+  mobile: true,
+
 };
 
 // Scoring por defecto: { direction: "higher" } (mas aciertos = mejor). No se

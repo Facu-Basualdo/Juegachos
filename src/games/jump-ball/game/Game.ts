@@ -19,7 +19,6 @@ import {
   FOG_FAR,
   FOG_NEAR,
   IDLE_SPEED,
-  LANE_X,
   MAX_DT,
   MAX_SPEED,
   ROW_DEPTH,
@@ -224,17 +223,12 @@ export class Game {
     const currentRow = Math.floor(this.worldScroll / ROW_DEPTH + 1e-4);
     if (currentRow > this.lastLandedRow) {
       this.lastLandedRow = currentRow;
-      if (!this.track.isOnPlatform(currentRow, this.ball.object.position.x)) {
+      const lane = this.track.landedLane(currentRow, this.ball.object.position.x);
+      if (lane === null) {
         this.die();
         return;
       }
-      // Determine the closest lane (0, 1, 2) to turn white
-      const closestLane = THREE.MathUtils.clamp(
-        Math.round(this.ball.object.position.x / LANE_X) + 1,
-        0,
-        2
-      );
-      this.track.landOn(currentRow, closestLane);
+      if (lane !== undefined) this.track.landOn(currentRow, lane);
       SoundEffects.playHop();
       this.score = currentRow;
       this.hud.setScore(this.score);

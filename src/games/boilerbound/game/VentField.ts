@@ -47,6 +47,9 @@ type Pattern = "single" | "cluster" | "wave" | "cage";
 export class VentField {
   private readonly vents: SteamVent[] = [];
   private readonly queue: ScheduledTrigger[] = [];
+  /** Indices belonging to the wave currently sweeping, tracked so no other
+   *  pattern can stack onto it while it's still a real threat (see `waveActive`). */
+  private waveCols: number[] = [];
   private patternTimer = 1.2;
   private elapsed = 0;
   private playerX = 0;
@@ -122,11 +125,29 @@ export class VentField {
     // --- Launch a fresh pattern when the gap elapses. ---
     this.patternTimer -= sdt;
     if (this.patternTimer <= 0) {
-      this.launchPattern();
-      this.patternTimer = this.currentGap();
+      if (this.waveInProgress()) {
+        // A sweep is still a live threat — hold off instead of stacking another
+        // pattern's vents onto it (that's what used to blow past 3-wide bands).
+        this.patternTimer = 0.15;
+      } else {
+        this.launchPattern();
+        this.patternTimer = this.currentGap();
+      }
     }
 
     return { overloadStarted };
+  }
+
+  /** True while a launched wave still poses a real threat: either it hasn't
+   *  finished triggering all its columns (`queue`, wave-only) or one of its
+   *  already-triggered columns is still warning/active. Dissipate (visual-only)
+   *  doesn't count, so the field frees up as soon as the sweep stops being live. */
+  private waveInProgress(): boolean {
+    if (this.queue.length > 0) return true;
+    if (this.waveCols.length === 0) return false;
+    const stillDangerous = this.waveCols.some((i) => this.vents[i].dangerous);
+    if (!stillDangerous) this.waveCols = [];
+    return stillDangerous;
   }
 
   private currentWarn(): number {
@@ -138,7 +159,13 @@ export class VentField {
   }
 
   private launchPattern(): void {
-    const pattern = this.pickPattern();
+    let pattern = this.pickPattern();
+    // A wave wants a clean field to sweep — if another pattern's leftover danger
+    // is still live, fall back rather than starting a sweep already tangled up
+    // with it (that combination is what could exceed the 3-wide cap).
+    if (pattern === "wave" && this.vents.some((v) => v.dangerous)) {
+      pattern = Math.random() < 0.6 ? "single" : "cluster";
+    }
     const warn = this.currentWarn();
     switch (pattern) {
       case "single":
@@ -198,8 +225,10 @@ export class VentField {
     // first-time player can watch the red sweep before anything erupts.
     const waveWarn = this.firstWave ? Math.max(warn, 1.9) : warn;
     this.firstWave = false;
+    this.waveCols = [];
     for (let n = 0; n < VENT_COUNT; n++) {
       const index = leftToRight ? n : VENT_COUNT - 1 - n;
+      this.waveCols.push(index);
       this.queue.push({ index, delay: n * step, warn: waveWarn, active: waveActive });
     }
   }
@@ -230,6 +259,7 @@ export class VentField {
   reset(): void {
     for (const v of this.vents) v.reset();
     this.queue.length = 0;
+    this.waveCols = [];
     this.patternTimer = 1.2;
     this.firstWave = true;
     this.elapsed = 0;

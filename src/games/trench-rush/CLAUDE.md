@@ -68,3 +68,5 @@ Cada entidad (nave, enemigo, trinchera, explosión, láser, power-up) libera sus
 ## Rankings / salas
 
 Scoring por defecto (`higher`), así que `meta.ts` no exporta `scoring`. Room mode cableado: `initRoomMode("trench-rush", { getScore, onStart: beginCountdown })`; en game over reporta a la sala o, si es solo, a `hud.showRanking`. El input de reinicio se bloquea en room mode vía `handleActivate` (`if (this.room && this.state === "gameover") return;`).
+
+El overlay de fin (con `reportScore`/`showRanking`) se difiere 550ms para que la explosión se vea primero, y `handleActivate` gatea el reinicio con un flag `menuVisible` (true solo con el overlay realmente en pantalla). Sin ese flag, reiniciar durante esos 550ms hacía que el `setTimeout` del overlay retornara temprano por su propio chequeo `state === "gameover"` y **el puntaje de esa corrida nunca se enviara al ranking**.

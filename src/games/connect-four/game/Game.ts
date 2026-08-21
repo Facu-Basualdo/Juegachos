@@ -66,6 +66,15 @@ export class Game {
   private pending: number[] = [];
   /** Se incrementa en cada partida nueva: los timeouts viejos se descartan. */
   private runId = 0;
+  /**
+   * True solo cuando el overlay de inicio / fin esta realmente en pantalla. Al
+   * perder la racha, el estado pasa a "over" pero el overlay de fin aparece
+   * `SOLO_RESULT_MS` despues (se muestra un momento el tablero perdido): sin este
+   * guard un Enter en esa ventana reiniciaba la partida y su `cancelPending()`
+   * cancelaba el `schedule` del overlay, asi que nunca se mostraba el puntaje ni
+   * el ranking.
+   */
+  private menuVisible = true;
 
   constructor(container: HTMLElement) {
     const savedBest = localStorage.getItem(BEST_KEY);
@@ -103,6 +112,9 @@ export class Game {
   };
 
   private tryStart(): void {
+    // Solo se arranca con el overlay realmente en pantalla, nunca durante el
+    // tiempo en que se muestra el tablero perdido antes del overlay de fin.
+    if (!this.menuVisible) return;
     if (this.state === "ready") {
       this.beginCountdown();
     } else if (this.state === "over") {
@@ -113,6 +125,7 @@ export class Game {
 
   private beginCountdown(): void {
     this.cancelPending();
+    this.menuVisible = false;
     this.state = "countdown";
     this.countdownTime = 0;
     this.lastCountdownIndex = -1;
@@ -346,6 +359,7 @@ export class Game {
     }
 
     this.schedule(() => {
+      this.menuVisible = true;
       this.hud.showGameOver(this.streak, isNewBest, this.best!);
       this.hud.showRanking("connect-four", this.streak);
     }, SOLO_RESULT_MS);

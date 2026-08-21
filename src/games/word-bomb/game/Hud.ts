@@ -1,3 +1,5 @@
+import { EMOTES, EMOTE_COOLDOWN_MS, EMOTE_MS, type EmoteId } from "./constants";
+
 export interface HudPlayer {
   nickname: string;
   lives: number;
@@ -16,31 +18,95 @@ export interface PlayView {
   usedCount: number;
 }
 
+/** Silueta de la bocha, compartida por el avatar y las cabecitas del dock. */
+const BODY_PATH = "M32 5C47 5 55 19 55 39 55 62 45 73 32 73 19 73 9 62 9 39 9 19 17 5 32 5Z";
+
+/**
+ * Caras de reaccion, una por `EmoteId`. Son la version "emoji" de este juego: en vez
+ * de un glifo Unicode (el repo prohibe emojis) el jugador le presta su cara al mensaje.
+ * Cada grupo es un juego completo de rasgos — se muestra en lugar de `.wb__base-face`,
+ * no encima — asi que no compite en especificidad con las caras automaticas (turno /
+ * panico / feliz / muerto): basta con ocultar el `<g>` padre. Ver `showEmote`.
+ */
+const EMOTE_FACES: Record<EmoteId, string> = {
+  risa: `
+    <circle class="wb__frog-skin" cx="20" cy="22" r="10"/>
+    <circle class="wb__frog-skin" cx="44" cy="22" r="10"/>
+    <circle class="wb__white" cx="20" cy="22" r="7"/>
+    <circle class="wb__white" cx="44" cy="22" r="7"/>
+    <circle class="wb__pupil wb__a-pupil" cx="20" cy="22" r="3.5"/>
+    <circle class="wb__pupil wb__a-pupil" cx="44" cy="22" r="3.5"/>
+    <path class="wb__fl wb__a-mouth" d="M12 44Q32 68 52 44Z"/>
+    <path class="wb__tongue wb__a-tongue" d="M20 52Q32 68 44 52Q32 48 20 52Z"/>`,
+  sorpresa: `
+    <path class="wb__ln" d="M17 21Q24 17 30 21"/>
+    <path class="wb__ln" d="M34 21Q40 17 47 21"/>
+    <ellipse class="wb__white" cx="24" cy="34" rx="8" ry="9"/>
+    <ellipse class="wb__white" cx="41" cy="34" rx="8" ry="9"/>
+    <circle class="wb__pupil wb__a-pupil" cx="24" cy="34" r="3"/>
+    <circle class="wb__pupil wb__a-pupil" cx="41" cy="34" r="3"/>
+    <ellipse class="wb__fl wb__a-mouth" cx="32" cy="55" rx="5.5" ry="7"/>`,
+  enojo: `
+    <path class="wb__ln wb__a-brow--l" d="M17 25 30 32"/>
+    <path class="wb__ln wb__a-brow--r" d="M47 25 34 32"/>
+    <ellipse class="wb__white" cx="24" cy="37" rx="6.5" ry="4.6"/>
+    <ellipse class="wb__white" cx="41" cy="37" rx="6.5" ry="4.6"/>
+    <circle class="wb__pupil" cx="24" cy="37" r="3"/>
+    <circle class="wb__pupil" cx="41" cy="37" r="3"/>
+    <path class="wb__ln wb__a-mouth" d="M25 55Q32 48 39 55"/>`,
+  burla: `
+    <ellipse class="wb__white wb__a-eye" cx="24" cy="34" rx="6.5" ry="7.5"/>
+    <circle class="wb__pupil wb__a-eye" cx="24" cy="35" r="3.2"/>
+    <path class="wb__ln" d="M35 35Q40.5 30 46 35"/>
+    <path class="wb__ln" d="M24 49Q32 55 40 49"/>
+    <path class="wb__tongue wb__a-tongue" d="M29 52Q31 63 36 54 33 51 29 52Z"/>`,
+  llanto: `
+    <path class="wb__ln" d="M17 29Q23 25 30 26"/>
+    <path class="wb__ln" d="M47 29Q41 25 34 26"/>
+    <path class="wb__ln" d="M18 33Q24 39 30 33"/>
+    <path class="wb__ln" d="M34 33Q40 39 46 33"/>
+    <path class="wb__tear wb__a-tear--l" d="M22 37C22 37 17 47 20.5 50.5 24 53 26 45 22 37Z"/>
+    <path class="wb__tear wb__a-tear--r" d="M42 37C42 37 47 47 43.5 50.5 40 53 38 45 42 37Z"/>
+    <path class="wb__ln wb__a-mouth" d="M26 57Q32 50 38 57"/>`,
+};
+
+/** Los cinco grupos de reaccion, ocultos hasta que la tarjeta lleve `is-emote--<id>`. */
+const EMOTE_FACES_SVG = EMOTES.map(
+  (e) => `<g class="wb__emo wb__emo--${e.id}">${EMOTE_FACES[e.id]}</g>`,
+).join("");
+
 /**
  * Personaje generico compartido por todos: una bocha violeta con cara que reacciona
  * al estado (ver DESIGN.md "Fiesta de la bomba"). Todas las variantes de ojos/cejas/
  * boca/sudor viven en el SVG y el CSS muestra la que corresponde segun las clases de
  * la tarjeta (`is-turn`, `is-out`, `is-happy`) y el `is-critical` del stage. La
  * identidad la da el nombre, no una imagen propia.
+ *
+ * Los rasgos automaticos van dentro de `.wb__base-face` y las reacciones dentro de
+ * `.wb__emote-face`: son excluyentes, y al reaccionar se apaga el grupo entero en vez
+ * de pisar rasgo por rasgo.
  */
 const CHARACTER_SVG = `
   <svg class="wb__face" viewBox="0 0 64 76" aria-hidden="true">
-    <path class="wb__face-body" d="M32 5C47 5 55 19 55 39 55 62 45 73 32 73 19 73 9 62 9 39 9 19 17 5 32 5Z"/>
+    <path class="wb__face-body" d="${BODY_PATH}"/>
     <ellipse class="wb__face-hi" cx="24" cy="24" rx="9" ry="11"/>
-    <g class="wb__eyes">
-      <ellipse cx="24" cy="34" rx="6.5" ry="7.5" fill="#fff"/>
-      <ellipse cx="40" cy="34" rx="6.5" ry="7.5" fill="#fff"/>
-      <circle cx="25" cy="35" r="3.2" fill="#241033"/>
-      <circle cx="41" cy="35" r="3.2" fill="#241033"/>
+    <g class="wb__base-face">
+      <g class="wb__eyes">
+        <ellipse cx="24" cy="34" rx="6.5" ry="7.5" fill="#fff"/>
+        <ellipse cx="40" cy="34" rx="6.5" ry="7.5" fill="#fff"/>
+        <circle cx="25" cy="35" r="3.2" fill="#241033"/>
+        <circle cx="41" cy="35" r="3.2" fill="#241033"/>
+      </g>
+      <g class="wb__brows"><path d="M18 26 30 30"/><path d="M46 26 34 30"/></g>
+      <g class="wb__eyes-dead"><path d="M20 30 28 38M28 30 20 38"/><path d="M36 30 44 38M44 30 36 38"/></g>
+      <path class="wb__sweat" d="M50 29C50 29 45 38 49 42 53 45 55 38 50 29Z"/>
+      <path class="wb__mouth wb__mouth--neutral" d="M26 50Q32 54 38 50"/>
+      <path class="wb__mouth wb__mouth--focus" d="M27 51 37 51"/>
+      <ellipse class="wb__mouth wb__mouth--panic" cx="32" cy="52" rx="5" ry="6"/>
+      <path class="wb__mouth wb__mouth--happy" d="M25 48Q32 59 39 48Z"/>
+      <path class="wb__mouth wb__mouth--dead" d="M26 54Q29 51 32 54 35 57 38 54"/>
     </g>
-    <g class="wb__brows"><path d="M18 26 30 30"/><path d="M46 26 34 30"/></g>
-    <g class="wb__eyes-dead"><path d="M20 30 28 38M28 30 20 38"/><path d="M36 30 44 38M44 30 36 38"/></g>
-    <path class="wb__sweat" d="M50 29C50 29 45 38 49 42 53 45 55 38 50 29Z"/>
-    <path class="wb__mouth wb__mouth--neutral" d="M26 50Q32 54 38 50"/>
-    <path class="wb__mouth wb__mouth--focus" d="M27 51 37 51"/>
-    <ellipse class="wb__mouth wb__mouth--panic" cx="32" cy="52" rx="5" ry="6"/>
-    <path class="wb__mouth wb__mouth--happy" d="M25 48Q32 59 39 48Z"/>
-    <path class="wb__mouth wb__mouth--dead" d="M26 54Q29 51 32 54 35 57 38 54"/>
+    <g class="wb__emote-face">${EMOTE_FACES_SVG}</g>
   </svg>`;
 
 /** Corazon (vida) dibujado — nada de emojis (regla del repo). */
@@ -67,6 +133,8 @@ const EMBER_COUNT = 16;
 const BOOM_SHARDS = 12;
 /** Duracion total de la explosion (limpieza del DOM). */
 const BOOM_MS = 700;
+/** Salto del avatar al reaccionar (debe coincidir con `wb-emote-pop` del CSS). */
+const EMOTE_POP_MS = 380;
 
 /** Aleatorio en [a, b). */
 const rnd = (a: number, b: number): number => a + Math.random() * (b - a);
@@ -121,8 +189,16 @@ export class Hud {
   private readonly pointer: HTMLDivElement;
   private boomTimer = 0;
   private readonly input: HTMLInputElement;
+  private readonly emoteDock: HTMLDivElement;
   private readonly overlay: HTMLDivElement;
   private readonly countdownEl: HTMLDivElement;
+
+  /** Reaccion vigente por jugador. Se guarda porque `render()` reconstruye las
+   *  tarjetas en cada `wb:state` y la cara se perderia a mitad de camino. */
+  private readonly emoteState = new Map<string, { id: EmoteId; timer: number }>();
+  private emotesEnabled = false;
+  /** Cooldown local del dock (el server tiene el suyo, que es el que manda). */
+  private emoteReadyAt = 0;
 
   /** Mecha visible: anclaje al reloj monotono local para animar sin drift. */
   private fuseEnd = 0;
@@ -137,6 +213,7 @@ export class Hud {
 
   private submitCb: (word: string) => void = () => {};
   private typeCb: (text: string) => void = () => {};
+  private emoteCb: (id: EmoteId) => void = () => {};
 
   constructor(root: HTMLElement) {
     root.innerHTML = "";
@@ -163,6 +240,7 @@ export class Hud {
         <input class="wb__input" type="text" inputmode="text" autocapitalize="off"
                autocomplete="off" autocorrect="off" spellcheck="false" maxlength="32"
                aria-label="escribi una palabra" />
+        <div class="wb__emotes" role="group" aria-label="reacciones" hidden></div>
       </div>
       <div class="wb__overlay"></div>
       <div class="wb__countdown" hidden></div>
@@ -180,11 +258,13 @@ export class Hud {
     this.boomEl = wrap.querySelector(".wb__boom")!;
     this.pointer = wrap.querySelector(".wb__pointer")!;
     this.input = wrap.querySelector(".wb__input")!;
+    this.emoteDock = wrap.querySelector(".wb__emotes")!;
     this.overlay = wrap.querySelector(".wb__overlay")!;
     this.countdownEl = wrap.querySelector(".wb__countdown")!;
 
     // Brasas de ambiente (ver DESIGN.md): suben lento de fondo, por detras de todo.
     this.buildEmbers(wrap.querySelector(".wb__embers")!);
+    this.buildEmoteDock();
 
     // Enter envia; el texto tipeado se refleja bajo el avatar propio en vivo.
     this.input.addEventListener("keydown", (e) => {
@@ -202,6 +282,18 @@ export class Hud {
     this.arena.addEventListener("pointerdown", () => {
       if (!this.input.disabled) this.input.focus();
     });
+
+    // Atajos 1-5 para reaccionar. Van en `window` (no en el input) porque el que NO
+    // tiene el turno lo tiene deshabilitado y sin foco. El de turno si lo tiene: por
+    // eso se hace `preventDefault`, que cancela la insercion del digito en el input
+    // — y no se pierde nada, las palabras son solo `[a-zñ]`.
+    window.addEventListener("keydown", (e) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      const emote = EMOTES.find((x) => x.key === e.key);
+      if (!emote) return;
+      e.preventDefault();
+      this.sendEmote(emote.id);
+    });
   }
 
   onSubmit(cb: (word: string) => void): void {
@@ -209,6 +301,9 @@ export class Hud {
   }
   onType(cb: (text: string) => void): void {
     this.typeCb = cb;
+  }
+  onEmote(cb: (id: EmoteId) => void): void {
+    this.emoteCb = cb;
   }
 
   // ---------- Mensajes / countdown ----------
@@ -298,6 +393,11 @@ export class Hud {
         <div class="wb__avatar">${CHARACTER_SVG}</div>
         <div class="wb__word">${escapeHtml(word)}</div>
       `;
+      // La tarjeta es nueva: si el jugador esta reaccionando, se le repone la cara
+      // (sin el "pop", que ya sono cuando llego la reaccion).
+      const emote = this.emoteState.get(p.nickname);
+      if (emote) applyEmoteClasses(card, emote.id);
+
       this.arena.appendChild(card);
       this.cardEls.set(p.nickname, card);
       this.wordEls.set(p.nickname, card.querySelector<HTMLDivElement>(".wb__word")!);
@@ -358,6 +458,72 @@ export class Hud {
       e.style.animationDelay = `${-rnd(0, 13)}s`; // desfasadas desde el arranque
       host.appendChild(e);
     }
+  }
+
+  // ---------- Reacciones (la cara del propio personaje) ----------
+
+  /** Dock de reacciones: una cabecita por cara, con su atajo. */
+  private buildEmoteDock(): void {
+    for (const e of EMOTES) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "wb__emote";
+      btn.title = `${e.label} (${e.key})`;
+      btn.setAttribute("aria-label", e.label);
+      btn.innerHTML = `
+        <svg class="wb__emo-head" viewBox="0 0 64 76" aria-hidden="true">
+          <path class="wb__face-body" d="${BODY_PATH}"/>
+          <g class="wb__emo">${EMOTE_FACES[e.id]}</g>
+        </svg>
+        <span class="wb__emote-key">${e.key}</span>`;
+      // Sin `preventDefault` el click le roba el foco al input invisible y el jugador
+      // de turno deja de poder escribir a mitad de palabra.
+      btn.addEventListener("pointerdown", (ev) => ev.preventDefault());
+      btn.addEventListener("click", () => this.sendEmote(e.id));
+      this.emoteDock.appendChild(btn);
+    }
+  }
+
+  /** Reacciona solo durante la partida (el dock queda oculto y los atajos inertes). */
+  setEmotesEnabled(on: boolean): void {
+    this.emotesEnabled = on;
+    this.emoteDock.hidden = !on;
+  }
+
+  /**
+   * Manda una reaccion. No se pinta la cara propia aca: se espera el eco del server,
+   * asi lo que ve uno es exactamente lo que ven los demas (y el cooldown del server
+   * es el que manda). El cooldown local solo apaga el dock para no invitar al spam.
+   */
+  private sendEmote(id: EmoteId): void {
+    if (!this.emotesEnabled) return;
+    const now = performance.now();
+    if (now < this.emoteReadyAt) return;
+    this.emoteReadyAt = now + EMOTE_COOLDOWN_MS;
+    this.emoteDock.classList.add("is-cooling");
+    window.setTimeout(() => this.emoteDock.classList.remove("is-cooling"), EMOTE_COOLDOWN_MS);
+    this.emoteCb(id);
+  }
+
+  /** Le pone la cara de reaccion a un jugador por `EMOTE_MS` (llega del server). */
+  showEmote(player: string, id: EmoteId): void {
+    const prev = this.emoteState.get(player);
+    if (prev) window.clearTimeout(prev.timer);
+    const timer = window.setTimeout(() => {
+      this.emoteState.delete(player);
+      const el = this.cardEls.get(player);
+      if (el) clearEmoteClasses(el);
+    }, EMOTE_MS);
+    this.emoteState.set(player, { id, timer });
+
+    const card = this.cardEls.get(player);
+    if (!card) return;
+    applyEmoteClasses(card, id);
+    // Reinicia el "pop" aunque ya estuviera reaccionando.
+    card.classList.remove("is-emote-pop");
+    void card.offsetWidth;
+    card.classList.add("is-emote-pop");
+    window.setTimeout(() => card.classList.remove("is-emote-pop"), EMOTE_POP_MS);
   }
 
   // ---------- Mecha visible (anillo + segundos) ----------
@@ -479,6 +645,16 @@ export class Hud {
     el.classList.add("is-accept");
     window.setTimeout(() => el.classList.remove("is-accept"), 700);
   }
+}
+
+function applyEmoteClasses(card: HTMLDivElement, id: EmoteId): void {
+  clearEmoteClasses(card);
+  card.classList.add("is-emote", `is-emote--${id}`);
+}
+
+function clearEmoteClasses(card: HTMLDivElement): void {
+  card.classList.remove("is-emote", "is-emote-pop");
+  for (const e of EMOTES) card.classList.remove(`is-emote--${e.id}`);
 }
 
 function escapeHtml(s: string): string {

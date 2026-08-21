@@ -56,6 +56,14 @@ export class Game {
 
   private readonly container: HTMLElement;
   private state: GameState = "ready";
+  /**
+   * True solo cuando el overlay de inicio / fin esta realmente en pantalla. Al
+   * morir, el estado pasa a "gameover" pero el overlay aparece 550ms despues (la
+   * explosion se ve primero): sin este guard, reiniciar en esa ventana hacia que
+   * el setTimeout del overlay retornara temprano por su propio chequeo de estado
+   * y el puntaje de esa corrida nunca se enviara al ranking.
+   */
+  private menuVisible = true;
   private score = 0;
   private best = 0;
   private elapsed = 0;
@@ -132,6 +140,7 @@ export class Game {
 
   private handleActivate(): void {
     if (this.state === "playing" || this.state === "countdown") return;
+    if (!this.menuVisible) return; // no reiniciar durante la explosion previa al overlay
     // En modo sala se juega una sola partida por ronda: sin reintento.
     if (this.room && this.state === "gameover") return;
     this.beginCountdown();
@@ -139,6 +148,7 @@ export class Game {
 
   /** Resets the run and runs the 3-2-1-YA countdown before play begins. */
   private beginCountdown(): void {
+    this.menuVisible = false;
     this.player.reset();
     this.player.object.visible = true;
     this.spawner.reset();
@@ -188,6 +198,7 @@ export class Game {
     // Delay the game-over overlay so the explosion + shake play in the clear first.
     window.setTimeout(() => {
       if (this.state !== "gameover") return; // player may have restarted
+      this.menuVisible = true;
       this.hud.showGameOver(this.score, this.best);
       if (this.room) this.room.reportScore(this.score);
       else this.hud.showRanking("vector-rush", this.score);

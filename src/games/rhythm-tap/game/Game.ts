@@ -70,8 +70,12 @@ export class Game {
       onStart: () => this.beginCountdown(),
     });
 
+    // El target es el container, no el canvas: las pantallas de inicio y game
+    // over son un overlay que lo tapa, asi que en movil (donde no hay Enter) el
+    // toque sobre el cartel no llegaba a arrancar la partida. El panel de ranking
+    // corta la propagacion de sus propios pointerdown.
     this.input = new InputController(
-      this.canvas,
+      container,
       (figure) => this.onFigure(figure),
       (lane) => this.onLane(lane),
       (clientX) => this.toViewX(clientX),

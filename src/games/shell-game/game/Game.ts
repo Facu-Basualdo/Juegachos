@@ -1,6 +1,7 @@
 import {
   BEST_KEY,
   getLevelConfig,
+  getRoomLevelConfig,
   COUNTDOWN_LABELS,
   COUNTDOWN_STEP,
   MAX_DT,
@@ -10,7 +11,12 @@ import {
 import { Hud } from "./Hud";
 import { initRoomMode, type RoomMode } from "../../../shared/room/roomMode";
 import { SoundEffects } from "./SoundEffects";
-import { fetchMatchState, createMatchState, updateMatchState } from "../../../shared/room/matchState";
+import {
+  fetchMatchState,
+  createMatchState,
+  updateMatchState,
+  CREATE_FALLBACK_MS,
+} from "../../../shared/room/matchState";
 
 type State = "ready" | "countdown" | "showingCoin" | "shuffling" | "waitingChoice" | "revealing" | "roundEnd" | "gameOver";
 
@@ -36,6 +42,8 @@ interface SharedGameState {
 export class Game {
   private readonly hud: Hud;
   private readonly room: RoomMode | null;
+  /** Se guarda solo para poder desenganchar el pointerdown en `dispose`. */
+  private container: HTMLElement | null = null;
 
   private state: State = "ready";
   private level = 1;
@@ -43,6 +51,8 @@ export class Game {
   private bestLevel: number | null = null;
   private lastTime = 0;
   private roomState: SharedGameState | null = null;
+  /** Cuando esta pagina entro al modo sala (para el fallback de creacion). */
+  private roomBootAt = 0;
 
   // Gameplay variables
   private countdownTime = 0;
@@ -74,7 +84,7 @@ export class Game {
       onStart: () => this.beginCountdown(),
     });
 
-    this.bindInputs();
+    this.bindInputs(container);
 
     this.lastTime = performance.now();
     requestAnimationFrame(this.tick);
@@ -84,9 +94,19 @@ export class Game {
     }
   }
 
-  private bindInputs(): void {
+  private bindInputs(container: HTMLElement): void {
     window.addEventListener("keydown", this.handleKeyDown);
+    // En movil no hay Enter: un toque en cualquier parte tiene que arrancar y
+    // continuar. `onAction` solo reacciona en ready / roundEnd / gameOver, asi
+    // que los toques sobre los vasos durante el juego siguen siendo inofensivos
+    // (y el panel de ranking corta la propagacion de los suyos).
+    this.container = container;
+    container.addEventListener("pointerdown", this.handlePointerDown);
   }
+
+  private handlePointerDown = (): void => {
+    this.onAction();
+  };
 
   private handleKeyDown = (e: KeyboardEvent): void => {
     if (e.key === "Enter" || e.key === " ") {
@@ -513,10 +533,27 @@ export class Game {
 
   private async startRoomMode(): Promise<void> {
     this.hud.updateStats(this.level);
+    this.roomBootAt = Date.now();
 
     this.room!.onSync(() => void this.syncRoomState());
-    
+
     await this.syncRoomState();
+    void this.waitForRoomState();
+  }
+
+  /**
+   * Reintenta hasta que exista el estado compartido de la ronda. Sin esto, si el
+   * host no llegaba a crearlo (se desconecto antes de cargar la ronda) los demas
+   * se quedaban esperando para siempre: `syncRoomState` solo se dispara con el
+   * broadcast "sync", que en ese caso no llega nunca. Pasado CREATE_FALLBACK_MS
+   * el propio reintento lo crea (ver `syncRoomState`).
+   */
+  private async waitForRoomState(): Promise<void> {
+    for (let attempt = 0; attempt < 30 && !this.roomState; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (this.roomState || !this.room) return;
+      await this.syncRoomState();
+    }
   }
 
   private async syncRoomState(): Promise<void> {
@@ -555,8 +592,10 @@ export class Game {
         this.startNextLevel();
       }
 
-    } else if (this.room.isHost()) {
-      const config = getLevelConfig(1);
+    } else if (this.room.isHost() || Date.now() - this.roomBootAt > CREATE_FALLBACK_MS) {
+      // Normalmente lo crea el host; si no aparece, lo crea cualquiera pasado el
+      // margen (el insert es idempotente por PK: gana el primero).
+      const config = getRoomLevelConfig(1);
       const initialCoinSlot = Math.floor(Math.random() * config.cups);
       const swaps = this.generateSwapsList(config.cups, config.swaps);
 
@@ -734,7 +773,7 @@ export class Game {
       data.choices = {};
       data.revealed = false;
 
-      const config = getLevelConfig(data.level);
+      const config = getRoomLevelConfig(data.level);
       data.cupsCount = config.cups;
       data.initialCoinSlot = Math.floor(Math.random() * config.cups);
       data.swaps = this.generateSwapsList(config.cups, config.swaps);
@@ -887,6 +926,7 @@ export class Game {
 
   dispose(): void {
     window.removeEventListener("keydown", this.handleKeyDown);
+    this.container?.removeEventListener("pointerdown", this.handlePointerDown);
     this.clearSelectionTimer();
   }
 }

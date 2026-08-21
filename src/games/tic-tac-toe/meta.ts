@@ -10,4 +10,7 @@ export const meta: GameEntry = {
   accent: "#22d3ee",
   category: "Puzzle",
   order: 260,
+  added: "2026-07-03",
+  mobile: true,
+
 };

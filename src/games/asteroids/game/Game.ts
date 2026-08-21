@@ -84,6 +84,15 @@ export class Game {
 
     // Initialize HUD
     this.hud = new Hud(container, () => this.handleStartAction());
+
+    // En movil no hay Enter: el toque tiene que poder arrancar desde cualquier
+    // parte de la pantalla, no solo desde el boton del cartel. Va sobre el
+    // container (el overlay de inicio tapa al canvas) y se ignoran los <button>,
+    // que ya tienen su propio handler, para no arrancar dos veces.
+    container.addEventListener("pointerdown", (e) => {
+      if ((e.target as HTMLElement).closest("button")) return;
+      this.handleStartAction();
+    });
     this.bestScore = Number(localStorage.getItem(BEST_KEY) || 0);
     this.hud.setBest(this.bestScore);
     this.hud.showStart();

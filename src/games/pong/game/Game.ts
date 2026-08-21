@@ -1,5 +1,4 @@
 import {
-  GAME_SERVER_URL,
   MAX_DT,
   PADDLE_HEIGHT,
   PADDLE_MARGIN,
@@ -16,12 +15,14 @@ import { InputController } from "./InputController";
 import { Hud } from "./Hud";
 import { SoundEffects } from "./SoundEffects";
 import { initRoomMode, type RoomMode } from "../../../shared/room/roomMode";
+import { isGameServerConfigured, resolveGameServerUrl } from "../../../shared/server-status";
 import { PongSocket } from "./PongSocket";
 import type { PongMatchState } from "./PongProtocol";
 
 type State = "ready" | "countdown" | "playing" | "dead";
 
-/** Snapshot del server con marca de tiempo local, para interpolar entidades. */
+/** Snapshot del server para interpolar entidades. `t` es el reloj de la simulacion
+ *  del server (`pg:state.t`) llevado al reloj local con `clockOffset`. */
 interface PongSnap {
   t: number;
   bx: number;
@@ -44,14 +45,23 @@ const COUNTDOWN_STEP = 0.75;
  * de los snapshots del server reproducidos con este retraso (ms). Es la tecnica
  * estandar de netcode (estilo Source): absorbe el jitter de red y elimina el
  * stutter/rubber-band de predecir la pelota localmente (nunca "pasa" la paleta y
- * vuelve, porque solo se muestran posiciones reales del server). El costo es ver
- * ~este retraso + la latencia de red por detras del server; bajarlo da menos
- * delay pero mas sensibilidad al jitter.
+ * vuelve, porque solo se muestran posiciones reales del server).
+ *
+ * El retraso se aplica sobre la LINEA DE TIEMPO DEL SERVER (`pg:state.t`, ver
+ * `pushSnap`), no sobre la hora de llegada del paquete: por eso NO tiene que
+ * cubrir la latencia (esa ya la absorbe el offset de reloj), solo el espaciado
+ * entre snapshots (TICK_MS = 16) mas el jitter de entrega. ~3 ticks alcanzan.
+ * Antes eran 80 ms sobre la hora de llegada, que ademas de ir mas atrasado metia
+ * el jitter directo en la velocidad dibujada de la pelota.
  */
-const BALL_INTERP_DELAY = 80;
+const BALL_INTERP_DELAY = 50;
 /** Salto (px) entre snapshots que delata un evento discreto (gol/relanzamiento):
  *  no se interpola a traves de el, se reinicia el buffer en la posicion nueva. */
 const BALL_SNAP_DIST = 130;
+/** Correccion por snapshot del offset de reloj hacia arriba (fraccion del error).
+ *  Lenta a proposito: baja de golpe (un paquete rapido es informacion buena) y sube
+ *  de a poco, para no seguirle el jitter a cada paquete lento. */
+const CLOCK_DRIFT_RATE = 0.01;
 
 /**
  * PONG. Solo (landing): 1 jugador contra la IA, endless por devoluciones. En
@@ -77,6 +87,8 @@ export class Game {
   /** En sala con game server: PvP arbitrado por el server. */
   private readonly serverMode: boolean;
   private socket: PongSocket | null = null;
+  /** Guarda contra doble conexion mientras `connectServer()` resuelve la URL. */
+  private connecting = false;
   /** Se cayo a un partido local vs IA en esta ronda (server inalcanzable). */
   private serverFellBack = false;
   /** Momento del primer error de conexion del socket (0 = ninguno todavia). */
@@ -90,9 +102,14 @@ export class Game {
   private broadcastTimer = 0;
 
   /** Buffer de snapshots del server (pelota + paleta rival) para interpolar con
-   *  BALL_INTERP_DELAY de retraso. El tiempo es del reloj local (performance.now). */
+   *  BALL_INTERP_DELAY de retraso, en la linea de tiempo del server llevada al
+   *  reloj local (ver `pushSnap` / `clockOffset`). */
   private snaps: PongSnap[] = [];
   private ballReady = false;
+  /** Offset entre el reloj del server y el local: `tLocal = t + clockOffset`. Se
+   *  estima con el MINIMO de (llegada - t) visto, que es la muestra menos afectada
+   *  por el jitter (el paquete que viajo mas rapido). null hasta el 1er snapshot. */
+  private clockOffset: number | null = null;
 
   private state: State = "ready";
   private score = 0;
@@ -123,7 +140,7 @@ export class Game {
       onStart: () => this.beginCountdown(),
     });
     this.isRoomMode = this.room !== null;
-    this.serverMode = this.isRoomMode && !!GAME_SERVER_URL;
+    this.serverMode = this.isRoomMode && isGameServerConfigured();
 
     this.hud.setHintText(
       this.isRoomMode ? "esperando emparejamiento…" : "mouse / flechas / W S para mover",
@@ -159,11 +176,21 @@ export class Game {
 
   /** Conecta al game server cuando arranca la ronda (en el constructor la lista
    *  de jugadores todavia no cargo: boot() es async). El server empareja por el
-   *  roster y responde con `pg:state`, de donde sale el lado propio. */
-  private connectServer(): void {
-    if (!this.serverMode || this.socket || !this.room || !GAME_SERVER_URL) return;
+   *  roster y responde con `pg:state`, de donde sale el lado propio.
+   *
+   *  Async porque resolver el server puede implicar un health check (ver
+   *  `shared/server-status.ts`); `connecting` cubre la ventana del await, en la que
+   *  `this.socket` todavia es null y una segunda llamada abriria un socket de mas.
+   *  Si no responde ninguna URL, el `SERVER_ERROR_GRACE_MS` de siempre cae al
+   *  partido local vs IA. */
+  private async connectServer(): Promise<void> {
+    if (!this.serverMode || this.socket || this.connecting || !this.room) return;
+    this.connecting = true;
+    const url = await resolveGameServerUrl();
+    this.connecting = false;
+    if (this.socket || !url) return;
     const socket = new PongSocket(
-      GAME_SERVER_URL,
+      url,
       this.room.code,
       this.room.me,
       this.room.players(),
@@ -178,7 +205,7 @@ export class Game {
 
   private beginCountdown(): void {
     if (this.state === "countdown" || this.state === "playing") return;
-    if (this.serverMode) this.connectServer();
+    if (this.serverMode) void this.connectServer();
     else if (this.isRoomMode) this.hud.setHintText("mouse / flechas / W S para mover (vs IA)");
 
     this.state = "countdown";
@@ -191,6 +218,9 @@ export class Game {
     this.ball.reset();
     this.snaps.length = 0;
     this.ballReady = false;
+    // El offset se re-estima por ronda: el socket se rearma y el server puede haber
+    // reiniciado su simTime.
+    this.clockOffset = null;
     this.hud.showScore(false);
     this.hud.hide();
     this.hud.showCountdown(COUNTDOWN_LABELS[0]);
@@ -332,16 +362,44 @@ export class Game {
     }
   }
 
-  /** Agrega el snapshot al buffer de interpolacion. Ante un salto grande de la
-   *  pelota (gol/relanzamiento) reinicia el buffer para no interpolar el teleport. */
+  /**
+   * Agrega el snapshot al buffer de interpolacion, fechado con el reloj de la
+   * SIMULACION del server (`s.t`, que avanza de a TICK_MS exactos) traido al reloj
+   * local con `clockOffset`. Fecharlo con la hora de llegada — como se hacia antes —
+   * mete el jitter de entrega en la interpolacion: dos snapshots que llegan pegados
+   * dan un `span` de 2 ms para un movimiento de un tick entero, asi que la pelota se
+   * dibuja pegando un salto y despues frenando. Ese era el temblor.
+   *
+   * Ante un salto grande de la pelota (gol/relanzamiento) reinicia el buffer para no
+   * interpolar el teleport.
+   */
   private pushSnap(s: PongMatchState): void {
     const oppY = s.side === "p1" ? s.p2Y : s.p1Y;
     const now = performance.now();
+
+    let t: number;
+    if (typeof s.t === "number") {
+      // Estimacion del offset: el minimo (llegada - t) es la muestra que menos
+      // jitter comio. Se corrige lento hacia arriba para tolerar la deriva entre
+      // relojes sin quedar pegado a un minimo optimista de hace un rato.
+      const sample = now - s.t;
+      if (this.clockOffset === null || sample < this.clockOffset) this.clockOffset = sample;
+      else this.clockOffset += (sample - this.clockOffset) * CLOCK_DRIFT_RATE;
+      t = s.t + this.clockOffset;
+    } else {
+      // Server viejo sin `t` (no redeployado): se cae a la hora de llegada.
+      t = now;
+    }
+
     const last = this.snaps[this.snaps.length - 1];
     if (last && Math.hypot(s.ball.x - last.bx, s.ball.y - last.by) > BALL_SNAP_DIST) {
       this.snaps.length = 0;
     }
-    this.snaps.push({ t: now, bx: s.ball.x, by: s.ball.y, oppY });
+    // Fuera de orden (el snapshot llego despues que uno mas nuevo): se descarta.
+    const tail = this.snaps[this.snaps.length - 1];
+    if (tail && t <= tail.t) return;
+
+    this.snaps.push({ t, bx: s.ball.x, by: s.ball.y, oppY });
     // Descarta lo viejo (queda sobrado para interpolar en renderTime = now - delay).
     const cutoff = now - 500;
     while (this.snaps.length > 2 && this.snaps[0].t < cutoff) this.snaps.shift();

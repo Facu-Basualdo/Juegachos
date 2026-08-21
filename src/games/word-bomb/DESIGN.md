@@ -75,6 +75,12 @@ turno** y **que esta escribiendo**.
 - **Texto en vivo** debajo del avatar: lo que se teclea se ve al instante (propio y
   ajeno, via el relay del server). La ultima palabra aceptada queda ahi hasta el
   proximo turno de ese jugador.
+- **Reacciones = la cara del personaje.** No hay globo de emoji ni sticker flotando:
+  reaccionar es **prestarle la cara a tu bocha**. Cinco caras dibujadas (risa,
+  sorpresa, enojo, burla, llanto) en el mismo trazo `#241033` que la cara base, con la
+  lengua rosa y la lagrima celeste como unicos colores nuevos. El enojo le calienta el
+  cuerpo al violeta (rojo `#a8384f`). Es la respuesta de este juego a los emojis: la
+  expresividad ya vive en el personaje, no hace falta importar un glifo ajeno.
 
 ## Movimiento
 
@@ -85,7 +91,12 @@ avatar. El anillo se vacia parejo y **pulsa en rojo** cuando esta por explotar. 
 perder una vida la bomba **explota**: un golpe seco y calido (fogonazo + onda
 expansiva + esquirlas + sacudida de la bomba, ~700ms) y sigue el turno. La energia
 esta en el calor del centro y en el foco que salta de jugador en jugador; nada de
-rebotes elasticos.
+rebotes elasticos. Al **reaccionar**, el personaje cambia de cara y pega un **salto
+corto** (~380ms, con overshoot): el unico rebote elastico permitido, porque es la voz
+del jugador y tiene que verse desde el otro lado de la ronda. Y **se escucha**: cada
+cara trae su propia voz sintetizada (la risa en tres silabas, el gruñido grave del
+enojo), siempre por debajo de la mecha y la explosion — subraya el gesto, no compite
+con la partida.
 
 ## Que evitar
 
@@ -93,7 +104,8 @@ rebotes elasticos.
 - Fotos / avatares personalizados: siempre la bocha violeta generica (la identidad
   la da el nombre). Lo que cambia es la **cara** segun el estado, no la persona.
 - Una caja de input visible: se escribe directo, el texto vive bajo el avatar.
-- **Emojis** en cualquier lado (regla del repo): corazones/calavera van dibujados.
+- **Emojis** en cualquier lado (regla del repo): corazones, calavera y las caras de
+  reaccion van dibujados. Una reaccion se manda como **id** (`risa`), nunca como glifo.
 - Sobrecargar: las brasas, el resplandor y las fichas son **atmosfera** — nunca
   compiten con la bomba, el anillo ni el nombre del turno.
 

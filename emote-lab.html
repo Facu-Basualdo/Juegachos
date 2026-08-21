@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"/>
+<title>Probar reacciones</title>
+<!-- El style.css REAL del juego: las caras se ven exactamente como en la ronda. -->
+<link rel="stylesheet" href="/src/games/word-chain/style.css"/>
+<style>
+  body { background:#0d1620; color:#eef3f7; font-family:"Segoe UI",system-ui,sans-serif;
+         margin:0; padding:26px; overflow:auto; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  p.sub { color:#8fa3b8; margin:0 0 20px; font-size:.9rem; max-width:80ch; line-height:1.5; }
+  .grid { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; max-width:1100px; }
+  .cell { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1);
+          border-radius:14px; padding:14px 8px; text-align:center; }
+  /* El juego posiciona a los jugadores en circulo; aca los apilamos en una grilla. */
+  .cell .wc__player { position:static; transform:none; width:auto; }
+  .cell .wc__face { width:110px; height:128px; }
+  .cell .wc__avatar { height:140px; display:flex; align-items:center; justify-content:center; }
+  .label { position:relative; z-index:1; }
+  .label { font-weight:800; margin-top:8px; text-transform:capitalize; }
+  .key { font-size:.6rem; font-weight:900; padding:2px 6px; border-radius:6px;
+         color:#0d1620; background:#ffb347; }
+  .btns { display:flex; gap:5px; margin-top:10px; }
+  button { flex:1; font:inherit; font-size:.72rem; font-weight:700; padding:7px 2px;
+           border:1px solid rgba(255,255,255,.16); border-radius:999px; cursor:pointer;
+           background:rgba(255,255,255,.07); color:#eef3f7; }
+  button:hover { background:rgba(255,106,31,.3); }
+  .info { margin-top:8px; font-size:.66rem; color:#8fa3b8; font-variant-numeric:tabular-nums; }
+  .bar { display:flex; gap:14px; align-items:center; margin-bottom:20px; flex-wrap:wrap;
+         background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1);
+         border-radius:12px; padding:12px 16px; }
+  .bar output { font-weight:800; color:#ffb347; min-width:3em; }
+  input[type=range] { accent-color:#ff6a1f; width:200px; }
+  .big { font-size:.85rem; font-weight:700; padding:9px 18px; border-radius:999px;
+         background:#ff6a1f; color:#16100a; border:0; cursor:pointer; }
+</style></head><body>
+<h1>Probar reacciones</h1>
+<p class="sub">Caras y CSS tomados del juego real; sonidos, los mp3 de <code>public/sfx/emotes/</code>
+con el <code>SAMPLE_GAIN</code> de produccion. <b>Reaccionar</b> dispara cara + salto + audio, como en la ronda.
+<b>Spam x4</b> los apila para escuchar la superposicion. <b>Mesa llena</b> dispara las cinco a la vez:
+asi suena una ronda caotica.</p>
+
+<div class="bar">
+  <label>SAMPLE_GAIN</label>
+  <input type="range" id="gain" min="0" max="1" step="0.05" value="0.45"/>
+  <output id="gv">0.45</output>
+  <button class="big" id="all">Mesa llena (las 5 juntas)</button>
+  <span id="loaded" style="color:#8fa3b8;font-size:.8rem"></span>
+</div>
+
+<div class="grid">
+
+<div class="cell">
+  <div class="wc__player is-emote is-emote--risa" id="p-risa">
+    <div class="wc__avatar">
+      <svg class="wc__face" viewBox="0 0 64 76">
+        <path class="wc__face-body" d="M32 5C47 5 55 19 55 39 55 62 45 73 32 73 19 73 9 62 9 39 9 19 17 5 32 5Z"/>
+        <ellipse class="wc__face-hi" cx="24" cy="24" rx="9" ry="11"/>
+        <g class="wc__emote-face"><g class="wc__emo wc__emo--risa">
+    <circle class="wc__frog-skin" cx="20" cy="22" r="10"/>
+    <circle class="wc__frog-skin" cx="44" cy="22" r="10"/>
+    <circle class="wc__white" cx="20" cy="22" r="7"/>
+    <circle class="wc__white" cx="44" cy="22" r="7"/>
+    <circle class="wc__pupil wc__a-pupil" cx="20" cy="22" r="3.5"/>
+    <circle class="wc__pupil wc__a-pupil" cx="44" cy="22" r="3.5"/>
+    <path class="wc__fl wc__a-mouth" d="M12 44Q32 68 52 44Z"/>
+    <path class="wc__tongue wc__a-tongue" d="M20 52Q32 68 44 52Q32 48 20 52Z"/></g><g class="wc__emo wc__emo--sorpresa">
+    <path class="wc__ln" d="M17 21Q24 17 30 21"/>
+    <path class="wc__ln" d="M34 21Q40 17 47 21"/>
+    <ellipse class="wc__white" cx="24" cy="34" rx="8" ry="9"/>
+    <ellipse class="wc__white" cx="41" cy="34" rx="8" ry="9"/>
+    <circle class="wc__pupil wc__a-pupil" cx="24" cy="34" r="3"/>
+    <circle class="wc__pupil wc__a-pupil" cx="41" cy="34" r="3"/>
+    <ellipse class="wc__fl wc__a-mouth" cx="32" cy="55" rx="5.5" ry="7"/></g><g class="wc__emo wc__emo--enojo">
+    <path class="wc__ln wc__a-brow--l" d="M17 25 30 32"/>
+    <path class="wc__ln wc__a-brow--r" d="M47 25 34 32"/>
+    <ellipse class="wc__white" cx="24" cy="37" rx="6.5" ry="4.6"/>
+    <ellipse class="wc__white" cx="41" cy="37" rx="6.5" ry="4.6"/>
+    <circle class="wc__pupil" cx="24" cy="37" r="3"/>
+    <circle class="wc__pupil" cx="41" cy="37" r="3"/>
+    <path class="wc__ln wc__a-mouth" d="M25 55Q32 48 39 55"/></g><g class="wc__emo wc__emo--burla">
+    <ellipse class="wc__white wc__a-eye" cx="24" cy="34" rx="6.5" ry="7.5"/>
+    <circle class="wc__pupil wc__a-eye" cx="24" cy="35" r="3.2"/>
+    <path class="wc__ln" d="M35 35Q40.5 30 46 35"/>
+    <path class="wc__ln" d="M24 49Q32 55 40 49"/>
+    <path class="wc__tongue wc__a-tongue" d="M29 52Q31 63 36 54 33 51 29 52Z"/></g><g class="wc__emo wc__emo--llanto">
+    <path class="wc__ln" d="M17 29Q23 25 30 26"/>
+    <path class="wc__ln" d="M47 29Q41 25 34 26"/>
+    <path class="wc__ln" d="M18 33Q24 39 30 33"/>
+    <path class="wc__ln" d="M34 33Q40 39 46 33"/>
+    <path class="wc__tear wc__a-tear--l" d="M22 37C22 37 17 47 20.5 50.5 24 53 26 45 22 37Z"/>
+    <path class="wc__tear wc__a-tear--r" d="M42 37C42 37 47 47 43.5 50.5 40 53 38 45 42 37Z"/>
+    <path class="wc__ln wc__a-mouth" d="M26 57Q32 50 38 57"/></g></g>
+      </svg>
+    </div>
+  </div>
+  <div class="label">risa <span class="key">1</span></div>
+  <div class="btns">
+    <button data-id="risa" data-act="play">Reaccionar</button>
+    <button data-id="risa" data-act="spam">Spam x4</button>
+  </div>
+  <div class="info" id="i-risa">cargando...</div>
+</div>
+<div class="cell">
+  <div class="wc__player is-emote is-emote--sorpresa" id="p-sorpresa">
+    <div class="wc__avatar">
+      <svg class="wc__face" viewBox="0 0 64 76">
+        <path class="wc__face-body" d="M32 5C47 5 55 19 55 39 55 62 45 73 32 73 19 73 9 62 9 39 9 19 17 5 32 5Z"/>
+        <ellipse class="wc__face-hi" cx="24" cy="24" rx="9" ry="11"/>
+        <g class="wc__emote-face"><g class="wc__emo wc__emo--risa">
+    <circle class="wc__frog-skin" cx="20" cy="22" r="10"/>
+    <circle class="wc__frog-skin" cx="44" cy="22" r="10"/>
+    <circle class="wc__white" cx="20" cy="22" r="7"/>
+    <circle class="wc__white" cx="44" cy="22" r="7"/>
+    <circle class="wc__pupil wc__a-pupil" cx="20" cy="22" r="3.5"/>
+    <circle class="wc__pupil wc__a-pupil" cx="44" cy="22" r="3.5"/>
+    <path class="wc__fl wc__a-mouth" d="M12 44Q32 68 52 44Z"/>
+    <path class="wc__tongue wc__a-tongue" d="M20 52Q32 68 44 52Q32 48 20 52Z"/></g><g class="wc__emo wc__emo--sorpresa">
+    <path class="wc__ln" d="M17 21Q24 17 30 21"/>
+    <path class="wc__ln" d="M34 21Q40 17 47 21"/>
+    <ellipse class="wc__white" cx="24" cy="34" rx="8" ry="9"/>
+    <ellipse class="wc__white" cx="41" cy="34" rx="8" ry="9"/>
+    <circle class="wc__pupil wc__a-pupil" cx="24" cy="34" r="3"/>
+    <circle class="wc__pupil wc__a-pupil" cx="41" cy="34" r="3"/>
+    <ellipse class="wc__fl wc__a-mouth" cx="32" cy="55" rx="5.5" ry="7"/></g><g class="wc__emo wc__emo--enojo">
+    <path class="wc__ln wc__a-brow--l" d="M17 25 30 32"/>
+    <path class="wc__ln wc__a-brow--r" d="M47 25 34 32"/>
+    <ellipse class="wc__white" cx="24" cy="37" rx="6.5" ry="4.6"/>
+    <ellipse class="wc__white" cx="41" cy="37" rx="6.5" ry="4.6"/>
+    <circle class="wc__pupil" cx="24" cy="37" r="3"/>
+    <circle class="wc__pupil" cx="41" cy="37" r="3"/>
+    <path class="wc__ln wc__a-mouth" d="M25 55Q32 48 39 55"/></g><g class="wc__emo wc__emo--burla">
+    <ellipse class="wc__white wc__a-eye" cx="24" cy="34" rx="6.5" ry="7.5"/>
+    <circle class="wc__pupil wc__a-eye" cx="24" cy="35" r="3.2"/>
+    <path class="wc__ln" d="M35 35Q40.5 30 46 35"/>
+    <path class="wc__ln" d="M24 49Q32 55 40 49"/>
+    <path class="wc__tongue wc__a-tongue" d="M29 52Q31 63 36 54 33 51 29 52Z"/></g><g class="wc__emo wc__emo--llanto">
+    <path class="wc__ln" d="M17 29Q23 25 30 26"/>
+    <path class="wc__ln" d="M47 29Q41 25 34 26"/>
+    <path class="wc__ln" d="M18 33Q24 39 30 33"/>
+    <path class="wc__ln" d="M34 33Q40 39 46 33"/>
+    <path class="wc__tear wc__a-tear--l" d="M22 37C22 37 17 47 20.5 50.5 24 53 26 45 22 37Z"/>
+    <path class="wc__tear wc__a-tear--r" d="M42 37C42 37 47 47 43.5 50.5 40 53 38 45 42 37Z"/>
+    <path class="wc__ln wc__a-mouth" d="M26 57Q32 50 38 57"/></g></g>
+      </svg>
+    </div>
+  </div>
+  <div class="label">sorpresa <span class="key">2</span></div>
+  <div class="btns">
+    <button data-id="sorpresa" data-act="play">Reaccionar</button>
+    <button data-id="sorpresa" data-act="spam">Spam x4</button>
+  </div>
+  <div class="info" id="i-sorpresa">cargando...</div>
+</div>
+<div class="cell">
+  <div class="wc__player is-emote is-emote--enojo" id="p-enojo">
+    <div class="wc__avatar">
+      <svg class="wc__face" viewBox="0 0 64 76">
+        <path class="wc__face-body" d="M32 5C47 5 55 19 55 39 55 62 45 73 32 73 19 73 9 62 9 39 9 19 17 5 32 5Z"/>
+        <ellipse class="wc__face-hi" cx="24" cy="24" rx="9" ry="11"/>
+        <g class="wc__emote-face"><g class="wc__emo wc__emo--risa">
+    <circle class="wc__frog-skin" cx="20" cy="22" r="10"/>
+    <circle class="wc__frog-skin" cx="44" cy="22" r="10"/>
+    <circle class="wc__white" cx="20" cy="22" r="7"/>
+    <circle class="wc__white" cx="44" cy="22" r="7"/>
+    <circle class="wc__pupil wc__a-pupil" cx="20" cy="22" r="3.5"/>
+    <circle class="wc__pupil wc__a-pupil" cx="44" cy="22" r="3.5"/>
+    <path class="wc__fl wc__a-mouth" d="M12 44Q32 68 52 44Z"/>
+    <path class="wc__tongue wc__a-tongue" d="M20 52Q32 68 44 52Q32 48 20 52Z"/></g><g class="wc__emo wc__emo--sorpresa">
+    <path class="wc__ln" d="M17 21Q24 17 30 21"/>
+    <path class="wc__ln" d="M34 21Q40 17 47 21"/>
+    <ellipse class="wc__white" cx="24" cy="34" rx="8" ry="9"/>
+    <ellipse class="wc__white" cx="41" cy="34" rx="8" ry="9"/>
+    <circle class="wc__pupil wc__a-pupil" cx="24" cy="34" r="3"/>
+    <circle class="wc__pupil wc__a-pupil" cx="41" cy="34" r="3"/>
+    <ellipse class="wc__fl wc__a-mouth" cx="32" cy="55" rx="5.5" ry="7"/></g><g class="wc__emo wc__emo--enojo">
+    <path class="wc__ln wc__a-brow--l" d="M17 25 30 32"/>
+    <path class="wc__ln wc__a-brow--r" d="M47 25 34 32"/>
+    <ellipse class="wc__white" cx="24" cy="37" rx="6.5" ry="4.6"/>
+    <ellipse class="wc__white" cx="41" cy="37" rx="6.5" ry="4.6"/>
+    <circle class="wc__pupil" cx="24" cy="37" r="3"/>
+    <circle class="wc__pupil" cx="41" cy="37" r="3"/>
+    <path class="wc__ln wc__a-mouth" d="M25 55Q32 48 39 55"/></g><g class="wc__emo wc__emo--burla">
+    <ellipse class="wc__white wc__a-eye" cx="24" cy="34" rx="6.5" ry="7.5"/>
+    <circle class="wc__pupil wc__a-eye" cx="24" cy="35" r="3.2"/>
+    <path class="wc__ln" d="M35 35Q40.5 30 46 35"/>
+    <path class="wc__ln" d="M24 49Q32 55 40 49"/>
+    <path class="wc__tongue wc__a-tongue" d="M29 52Q31 63 36 54 33 51 29 52Z"/></g><g class="wc__emo wc__emo--llanto">
+    <path class="wc__ln" d="M17 29Q23 25 30 26"/>
+    <path class="wc__ln" d="M47 29Q41 25 34 26"/>
+    <path class="wc__ln" d="M18 33Q24 39 30 33"/>
+    <path class="wc__ln" d="M34 33Q40 39 46 33"/>
+    <path class="wc__tear wc__a-tear--l" d="M22 37C22 37 17 47 20.5 50.5 24 53 26 45 22 37Z"/>
+    <path class="wc__tear wc__a-tear--r" d="M42 37C42 37 47 47 43.5 50.5 40 53 38 45 42 37Z"/>
+    <path class="wc__ln wc__a-mouth" d="M26 57Q32 50 38 57"/></g></g>
+      </svg>
+    </div>
+  </div>
+  <div class="label">enojo <span class="key">3</span></div>
+  <div class="btns">
+    <button data-id="enojo" data-act="play">Reaccionar</button>
+    <button data-id="enojo" data-act="spam">Spam x4</button>
+  </div>
+  <div class="info" id="i-enojo">cargando...</div>
+</div>
+<div class="cell">
+  <div class="wc__player is-emote is-emote--burla" id="p-burla">
+    <div class="wc__avatar">
+      <svg class="wc__face" viewBox="0 0 64 76">
+        <path class="wc__face-body" d="M32 5C47 5 55 19 55 39 55 62 45 73 32 73 19 73 9 62 9 39 9 19 17 5 32 5Z"/>
+        <ellipse class="wc__face-hi" cx="24" cy="24" rx="9" ry="11"/>
+        <g class="wc__emote-face"><g class="wc__emo wc__emo--risa">
+    <circle class="wc__frog-skin" cx="20" cy="22" r="10"/>
+    <circle class="wc__frog-skin" cx="44" cy="22" r="10"/>
+    <circle class="wc__white" cx="20" cy="22" r="7"/>
+    <circle class="wc__white" cx="44" cy="22" r="7"/>
+    <circle class="wc__pupil wc__a-pupil" cx="20" cy="22" r="3.5"/>
+    <circle class="wc__pupil wc__a-pupil" cx="44" cy="22" r="3.5"/>
+    <path class="wc__fl wc__a-mouth" d="M12 44Q32 68 52 44Z"/>
+    <path class="wc__tongue wc__a-tongue" d="M20 52Q32 68 44 52Q32 48 20 52Z"/></g><g class="wc__emo wc__emo--sorpresa">
+    <path class="wc__ln" d="M17 21Q24 17 30 21"/>
+    <path class="wc__ln" d="M34 21Q40 17 47 21"/>
+    <ellipse class="wc__white" cx="24" cy="34" rx="8" ry="9"/>
+    <ellipse class="wc__white" cx="41" cy="34" rx="8" ry="9"/>
+    <circle class="wc__pupil wc__a-pupil" cx="24" cy="34" r="3"/>
+    <circle class="wc__pupil wc__a-pupil" cx="41" cy="34" r="3"/>
+    <ellipse class="wc__fl wc__a-mouth" cx="32" cy="55" rx="5.5" ry="7"/></g><g class="wc__emo wc__emo--enojo">
+    <path class="wc__ln wc__a-brow--l" d="M17 25 30 32"/>
+    <path class="wc__ln wc__a-brow--r" d="M47 25 34 32"/>
+    <ellipse class="wc__white" cx="24" cy="37" rx="6.5" ry="4.6"/>
+    <ellipse class="wc__white" cx="41" cy="37" rx="6.5" ry="4.6"/>
+    <circle class="wc__pupil" cx="24" cy="37" r="3"/>
+    <circle class="wc__pupil" cx="41" cy="37" r="3"/>
+    <path class="wc__ln wc__a-mouth" d="M25 55Q32 48 39 55"/></g><g class="wc__emo wc__emo--burla">
+    <ellipse class="wc__white wc__a-eye" cx="24" cy="34" rx="6.5" ry="7.5"/>
+    <circle class="wc__pupil wc__a-eye" cx="24" cy="35" r="3.2"/>
+    <path class="wc__ln" d="M35 35Q40.5 30 46 35"/>
+    <path class="wc__ln" d="M24 49Q32 55 40 49"/>
+    <path class="wc__tongue wc__a-tongue" d="M29 52Q31 63 36 54 33 51 29 52Z"/></g><g class="wc__emo wc__emo--llanto">
+    <path class="wc__ln" d="M17 29Q23 25 30 26"/>
+    <path class="wc__ln" d="M47 29Q41 25 34 26"/>
+    <path class="wc__ln" d="M18 33Q24 39 30 33"/>
+    <path class="wc__ln" d="M34 33Q40 39 46 33"/>
+    <path class="wc__tear wc__a-tear--l" d="M22 37C22 37 17 47 20.5 50.5 24 53 26 45 22 37Z"/>
+    <path class="wc__tear wc__a-tear--r" d="M42 37C42 37 47 47 43.5 50.5 40 53 38 45 42 37Z"/>
+    <path class="wc__ln wc__a-mouth" d="M26 57Q32 50 38 57"/></g></g>
+      </svg>
+    </div>
+  </div>
+  <div class="label">burla <span class="key">4</span></div>
+  <div class="btns">
+    <button data-id="burla" data-act="play">Reaccionar</button>
+    <button data-id="burla" data-act="spam">Spam x4</button>
+  </div>
+  <div class="info" id="i-burla">cargando...</div>
+</div>
+<div class="cell">
+  <div class="wc__player is-emote is-emote--llanto" id="p-llanto">
+    <div class="wc__avatar">
+      <svg class="wc__face" viewBox="0 0 64 76">
+        <path class="wc__face-body" d="M32 5C47 5 55 19 55 39 55 62 45 73 32 73 19 73 9 62 9 39 9 19 17 5 32 5Z"/>
+        <ellipse class="wc__face-hi" cx="24" cy="24" rx="9" ry="11"/>
+        <g class="wc__emote-face"><g class="wc__emo wc__emo--risa">
+    <circle class="wc__frog-skin" cx="20" cy="22" r="10"/>
+    <circle class="wc__frog-skin" cx="44" cy="22" r="10"/>
+    <circle class="wc__white" cx="20" cy="22" r="7"/>
+    <circle class="wc__white" cx="44" cy="22" r="7"/>
+    <circle class="wc__pupil wc__a-pupil" cx="20" cy="22" r="3.5"/>
+    <circle class="wc__pupil wc__a-pupil" cx="44" cy="22" r="3.5"/>
+    <path class="wc__fl wc__a-mouth" d="M12 44Q32 68 52 44Z"/>
+    <path class="wc__tongue wc__a-tongue" d="M20 52Q32 68 44 52Q32 48 20 52Z"/></g><g class="wc__emo wc__emo--sorpresa">
+    <path class="wc__ln" d="M17 21Q24 17 30 21"/>
+    <path class="wc__ln" d="M34 21Q40 17 47 21"/>
+    <ellipse class="wc__white" cx="24" cy="34" rx="8" ry="9"/>
+    <ellipse class="wc__white" cx="41" cy="34" rx="8" ry="9"/>
+    <circle class="wc__pupil wc__a-pupil" cx="24" cy="34" r="3"/>
+    <circle class="wc__pupil wc__a-pupil" cx="41" cy="34" r="3"/>
+    <ellipse class="wc__fl wc__a-mouth" cx="32" cy="55" rx="5.5" ry="7"/></g><g class="wc__emo wc__emo--enojo">
+    <path class="wc__ln wc__a-brow--l" d="M17 25 30 32"/>
+    <path class="wc__ln wc__a-brow--r" d="M47 25 34 32"/>
+    <ellipse class="wc__white" cx="24" cy="37" rx="6.5" ry="4.6"/>
+    <ellipse class="wc__white" cx="41" cy="37" rx="6.5" ry="4.6"/>
+    <circle class="wc__pupil" cx="24" cy="37" r="3"/>
+    <circle class="wc__pupil" cx="41" cy="37" r="3"/>
+    <path class="wc__ln wc__a-mouth" d="M25 55Q32 48 39 55"/></g><g class="wc__emo wc__emo--burla">
+    <ellipse class="wc__white wc__a-eye" cx="24" cy="34" rx="6.5" ry="7.5"/>
+    <circle class="wc__pupil wc__a-eye" cx="24" cy="35" r="3.2"/>
+    <path class="wc__ln" d="M35 35Q40.5 30 46 35"/>
+    <path class="wc__ln" d="M24 49Q32 55 40 49"/>
+    <path class="wc__tongue wc__a-tongue" d="M29 52Q31 63 36 54 33 51 29 52Z"/></g><g class="wc__emo wc__emo--llanto">
+    <path class="wc__ln" d="M17 29Q23 25 30 26"/>
+    <path class="wc__ln" d="M47 29Q41 25 34 26"/>
+    <path class="wc__ln" d="M18 33Q24 39 30 33"/>
+    <path class="wc__ln" d="M34 33Q40 39 46 33"/>
+    <path class="wc__tear wc__a-tear--l" d="M22 37C22 37 17 47 20.5 50.5 24 53 26 45 22 37Z"/>
+    <path class="wc__tear wc__a-tear--r" d="M42 37C42 37 47 47 43.5 50.5 40 53 38 45 42 37Z"/>
+    <path class="wc__ln wc__a-mouth" d="M26 57Q32 50 38 57"/></g></g>
+      </svg>
+    </div>
+  </div>
+  <div class="label">llanto <span class="key">5</span></div>
+  <div class="btns">
+    <button data-id="llanto" data-act="play">Reaccionar</button>
+    <button data-id="llanto" data-act="spam">Spam x4</button>
+  </div>
+  <div class="info" id="i-llanto">cargando...</div>
+</div>
+</div>
+
+<script type="module">
+const IDS = ["risa","sorpresa","enojo","burla","llanto"];
+const EMOTE_MS = 1800, POP_MS = 380;
+let GAIN = 0.45;
+const ctx = new AudioContext();
+const buffers = new Map();
+
+gain.oninput = () => { GAIN = +gain.value; gv.textContent = GAIN.toFixed(2); };
+
+// Mismo camino que EmoteAudio.ts: fetch -> decodeAudioData -> AudioBuffer en memoria.
+await Promise.all(IDS.map(async (id) => {
+  const el = document.getElementById("i-" + id);
+  try {
+    const res = await fetch("/sfx/emotes/" + id + ".mp3");
+    if (!res.ok) throw new Error(res.status);
+    const bytes = await res.arrayBuffer();
+    const kb = Math.round(bytes.byteLength / 1024); // decodeAudioData vacia el buffer
+    const buf = await ctx.decodeAudioData(bytes);
+    buffers.set(id, buf);
+    el.textContent = buf.duration.toFixed(2) + "s | " + kb + "KB";
+  } catch (e) {
+    el.textContent = "sin mp3 -> sintetizado";
+  }
+}));
+loaded.textContent = buffers.size + "/5 mp3 cargados";
+
+function playSound(id) {
+  const buf = buffers.get(id);
+  if (!buf) return;
+  if (ctx.state === "suspended") ctx.resume();
+  // Un BufferSource por reaccion: por eso se superponen (es deliberado).
+  const src = ctx.createBufferSource(), g = ctx.createGain();
+  src.buffer = buf; g.gain.value = GAIN;
+  src.connect(g); g.connect(ctx.destination);
+  src.start();
+}
+
+// Igual que Hud.showEmote: cara + salto, y la cara vuelve sola tras EMOTE_MS.
+function react(id) {
+  const p = document.getElementById("p-" + id);
+  p.classList.remove("is-emote-pop");
+  void p.offsetWidth;
+  p.classList.add("is-emote-pop");
+  setTimeout(() => p.classList.remove("is-emote-pop"), POP_MS);
+  playSound(id);
+}
+
+document.querySelectorAll("button[data-id]").forEach((b) => {
+  b.onclick = () => {
+    const { id, act } = b.dataset;
+    if (act === "play") return react(id);
+    for (let i = 0; i < 4; i++) setTimeout(() => react(id), i * 260);
+  };
+});
+all.onclick = () => IDS.forEach((id, i) => setTimeout(() => react(id), i * 130));
+
+window.addEventListener("keydown", (e) => {
+  const i = "12345".indexOf(e.key);
+  if (i >= 0) react(IDS[i]);
+});
+</script></body></html>

@@ -1,7 +1,7 @@
 import type { Server } from "socket.io";
 import { checkWord, randomFragment } from "../dictionary.js";
 import { GameRoom, registerGame, type RoomSim } from "../rooms.js";
-import type { WbGameover, WbPlayerView, WbState } from "../protocol.js";
+import type { WbEmoteId, WbGameover, WbPlayerView, WbState } from "../protocol.js";
 
 /**
  * Bomba Palabra: por turnos, aparece un fragmento (silaba/combo) y el jugador de
@@ -24,6 +24,21 @@ const FUSE_MIN_MS = 6000;
 /** Espera desde el primer jugador para que se conecten los del roster antes de
  * arrancar (los que falten quedan afuera y miran). */
 const START_GRACE_MS = 8000;
+/**
+ * Reacciones permitidas. Es un allowlist cerrado a proposito: el cliente manda un
+ * id, no un glifo, y cada id se dibuja como una cara del personaje. Debe coincidir
+ * con `EMOTES` en `src/games/word-bomb/game/constants.ts` (tipos duplicados por la
+ * regla de decoupling del repo).
+ */
+const EMOTES: ReadonlySet<string> = new Set<WbEmoteId>([
+  "risa",
+  "sorpresa",
+  "enojo",
+  "burla",
+  "llanto",
+]);
+/** Una reaccion por jugador cada tanto: sin esto la mesa se llena de spam. */
+const EMOTE_COOLDOWN_MS = 1000;
 
 interface Player {
   nickname: string;
@@ -51,6 +66,8 @@ class WordBombSim implements RoomSim {
   private acceptSeq = 0;
   private lastAccepted: WbState["lastAccepted"] = null;
   private readonly eliminationOrder: string[] = [];
+  /** Ultima reaccion aceptada por jugador (epoch ms), para el cooldown. */
+  private readonly lastEmoteAt = new Map<string, number>();
 
   constructor(private readonly room: GameRoom) {}
 
@@ -87,7 +104,25 @@ class WordBombSim implements RoomSim {
       if (text !== null && this.phase === "playing" && this.current()?.nickname === nickname) {
         this.room.broadcast("wb:typing", { player: nickname, text: text.slice(0, 40) });
       }
+    } else if (event === "wb:emote") {
+      const emote = readString(payload, "emote");
+      if (emote !== null) this.emote(nickname, emote);
     }
+  }
+
+  /**
+   * Reaccion: puro relay, no toca el estado de la partida ni entra en `wb:state`
+   * (es efimera: quien se reengancha no revive las de antes). Reacciona cualquiera
+   * y en cualquier momento — tambien el eliminado, que es medio la gracia — pero
+   * solo con un id del allowlist y respetando el cooldown.
+   */
+  private emote(nickname: string, emote: string): void {
+    if (!EMOTES.has(emote)) return;
+    const now = Date.now();
+    const last = this.lastEmoteAt.get(nickname) ?? 0;
+    if (now - last < EMOTE_COOLDOWN_MS) return;
+    this.lastEmoteAt.set(nickname, now);
+    this.room.broadcast("wb:emote", { player: nickname, emote });
   }
 
   dispose(): void {

@@ -1,10 +1,11 @@
 import {
   createMatchState,
+  CREATE_FALLBACK_MS,
   fetchMatchState,
   updateMatchState,
 } from "../../../shared/room/matchState";
 import type { RoomMode } from "../../../shared/room/roomMode";
-import { AFK_MOVE_MS, MATCH_POLL_MS } from "./constants";
+import { AFK_ABSENT_MOVE_MS, AFK_MOVE_MS, MATCH_POLL_MS } from "./constants";
 import type { Hud } from "./Hud";
 import {
   applyMove,
@@ -125,6 +126,7 @@ export class SharedMatch {
    * todos releen lo que quedo.
    */
   private async boot(): Promise<void> {
+    const since = Date.now();
     for (;;) {
       if (this.disposed || this.state) return;
       const row = await fetchMatchState<C4MatchState>(
@@ -138,8 +140,11 @@ export class SharedMatch {
         return;
       }
       // El espectador nunca crea el tablero (ya existe: lo hizo el host o los
-      // jugadores de esa pareja); solo espera a leerlo.
-      if (this.room.isHost() && !this.spectate) {
+      // jugadores de esa pareja); solo espera a leerlo. Si el host no aparece
+      // (se desconecto antes de cargar la ronda), pasado CREATE_FALLBACK_MS lo
+      // crea el propio jugador: si no, los dos de la pareja se quedaban en
+      // "Esperando un rival..." para siempre.
+      if ((this.room.isHost() || Date.now() - since > CREATE_FALLBACK_MS) && !this.spectate) {
         const init: C4MatchState = { ...createState(0), players: this.seats, seq: 0 };
         const ok = await createMatchState(this.room.code, this.room.round(), init, this.boardNo);
         if (ok) this.room.ping();
@@ -218,12 +223,31 @@ export class SharedMatch {
     this.checkFinish();
   }
 
-  /** Host: si el jugador de turno no mueve en AFK_MOVE_MS, juega por el (al azar). */
+  /**
+   * Destraba un turno parado jugando al azar por el jugador de turno.
+   *
+   * Lo hace el host (que administra todos los tableros) **y tambien el rival del
+   * jugador parado en su propio tablero**: si solo lo hiciera el host, un host
+   * caido dejaba el duelo congelado para siempre. Nadie destraba su propio turno
+   * por esta via salvo el host, que es el anti-AFK de siempre.
+   *
+   * Si el jugador de turno esta **desconectado** no se le reserva la ventana AFK
+   * completa: no va a mover nunca, asi que se juega por el enseguida.
+   */
   private async maybeMoveAfk(): Promise<void> {
     const state = this.state;
     if (this.disposed || this.spectate) return; // el espectador no administra el tablero
-    if (!state || this.finished || state.winner !== null || state.draw || !this.room.isHost()) return;
-    if (Date.now() - this.lastChangeAt < AFK_MOVE_MS) return;
+    if (!state || this.finished || state.winner !== null || state.draw) return;
+
+    const turnPlayer = state.players[state.turn];
+    const iAmSeat = !this.passive && state.players.includes(this.room.me);
+    if (!this.room.isHost() && !(iAmSeat && turnPlayer !== this.room.me)) return;
+
+    // Con la lista de presentes vacia (canal aun sin sincronizar) no se asume
+    // que se fueron todos: se usa la ventana AFK de siempre.
+    const present = this.room.presentPlayers();
+    const absent = present.length > 0 && !present.includes(turnPlayer);
+    if (Date.now() - this.lastChangeAt < (absent ? AFK_ABSENT_MOVE_MS : AFK_MOVE_MS)) return;
 
     const moves = legalMoves(state);
     if (moves.length === 0) return;

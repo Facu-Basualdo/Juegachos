@@ -1,0 +1,802 @@
+/*
+ * Impostor — estetica "sala de interrogatorio" (ver DESIGN.md).
+ * Fondo carbon con un foco cenital, tipografia condensada en mayusculas, acento rojo
+ * "sospecha". La palabra secreta se ilumina en ambar (lo que protegen); el impostor y el
+ * peligro van en rojo. Todo sintetico (sin assets ni fuentes externas).
+ */
+
+:root {
+  --im-bg: #0d0e12;
+  --im-panel: #16181f;
+  --im-panel-2: #1e212b;
+  --im-line: #2a2d38;
+  --im-ink: #ecebe4;
+  --im-dim: #8b8d97;
+  --im-red: #d23b45;
+  --im-red-deep: #8f2129;
+  --im-gold: #e4b64c;
+  --im-crew: #57b6d6;
+  --im-cond: "Bebas Neue", "Oswald", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--im-bg);
+  color: var(--im-ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overscroll-behavior: none;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+.im {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  /* Foco cenital sobre el carbon. */
+  background:
+    radial-gradient(120% 70% at 50% -8%, rgba(228, 182, 76, 0.1), transparent 55%),
+    radial-gradient(90% 60% at 50% 0%, rgba(255, 255, 255, 0.06), transparent 60%),
+    var(--im-bg);
+}
+
+/*
+ * El Hud prende y apaga la escena, el cartel y el countdown con el atributo `hidden`,
+ * y el `display: none` que el navegador le da a `[hidden]` lo pisa cualquier `display`
+ * propio (la escena es flex, el cartel y el countdown son grid). Sin esta regla el "YA"
+ * y el cartel de "esperando" quedan clavados arriba de la escena y tapan el juego (la
+ * partida corre atras, pero no se puede jugar). No sacar. Mismo caso que en Basta.
+ */
+.im [hidden] {
+  display: none !important;
+}
+
+/* ---------- Escena ---------- */
+
+.im__stage {
+  position: relative;
+  width: min(560px, 100%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  /*
+   * El padding de arriba deja pasar el strip de la sala (`.mg-room-strip`: fijo, pegado
+   * al borde superior y centrado, con el codigo / ronda / luces de jugadores). Sin esto
+   * el chrome de Impostor queda debajo y no se lee.
+   */
+  padding: 44px clamp(12px, 4vw, 24px) 18px;
+}
+
+/* ---------- Topbar ---------- */
+
+/*
+ * Dos filas: ronda + fase + roster arriba, y el reloj a lo ancho abajo. El reloj no puede
+ * ir en la fila de arriba: ahi lo tapa el strip de la sala (aun con el padding, el strip
+ * se come el centro del borde superior).
+ */
+.im__topbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.im__toprow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.im__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--im-cond);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 15px;
+}
+
+.im__round {
+  color: var(--im-dim);
+}
+
+.im__phase {
+  color: var(--im-gold);
+}
+
+.im__clock {
+  height: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.im__clock-bar {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: var(--im-gold);
+  border-radius: 6px;
+}
+
+.im__clock-bar.is-low {
+  background: var(--im-red);
+}
+
+.im__roster {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  align-items: center;
+}
+
+.im__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: var(--im-panel);
+  border: 1.5px solid var(--im-line);
+  font-size: 13px;
+  max-width: 44vw;
+}
+
+.im__chip.is-me {
+  border-color: var(--im-gold);
+  color: var(--im-ink);
+}
+
+.im__chip.is-off {
+  opacity: 0.38;
+}
+
+.im__chip.is-turn {
+  border-color: var(--im-red);
+  box-shadow: 0 0 0 2px rgba(210, 59, 69, 0.2);
+}
+
+.im__chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.im__chip-prog {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--im-gold);
+}
+
+.im__chip-mark {
+  color: var(--im-crew);
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* ---------- Panel ---------- */
+
+.im__panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Vista: reveal (rol) ---------- */
+
+.im__role {
+  margin: auto 0;
+  text-align: center;
+  padding: 30px 22px;
+  border-radius: 18px;
+  border: 2px solid var(--im-line);
+  background: linear-gradient(180deg, var(--im-panel-2), var(--im-panel));
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.im__role.is-crew {
+  border-color: rgba(228, 182, 76, 0.5);
+}
+
+.im__role.is-impostor {
+  border-color: rgba(210, 59, 69, 0.6);
+  box-shadow: 0 0 60px rgba(210, 59, 69, 0.18), 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.im__role-tag {
+  font-family: var(--im-cond);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  font-size: 14px;
+  color: var(--im-dim);
+  margin-bottom: 12px;
+}
+
+.im__role-word {
+  font-family: var(--im-cond);
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: clamp(38px, 12vw, 64px);
+  line-height: 1;
+  color: var(--im-gold);
+  text-shadow: 0 4px 24px rgba(228, 182, 76, 0.35);
+}
+
+.im__role.is-impostor .im__role-word {
+  color: var(--im-red);
+  text-shadow: 0 4px 26px rgba(210, 59, 69, 0.5);
+}
+
+.im__role-hint {
+  margin: 16px auto 0;
+  max-width: 30ch;
+  color: var(--im-dim);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.im__role-hint strong {
+  color: var(--im-ink);
+}
+
+.im__role-note {
+  margin: 12px 0 0;
+  color: var(--im-red);
+  font-size: 14px;
+}
+
+/* ---------- Vista: pistas ---------- */
+
+.im__cluewrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.im__cluehead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.im__cat {
+  font-family: var(--im-cond);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: clamp(20px, 6vw, 28px);
+  color: var(--im-ink);
+  padding: 4px 14px;
+  border: 1.5px solid var(--im-line);
+  border-radius: 10px;
+  background: var(--im-panel);
+}
+
+.im__mini {
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1.5px solid var(--im-line);
+  color: var(--im-dim);
+}
+
+.im__mini.is-crew strong {
+  color: var(--im-gold);
+}
+
+.im__mini.is-impostor {
+  border-color: rgba(210, 59, 69, 0.5);
+  color: var(--im-red);
+}
+
+.im__clues {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.im__clue {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--im-panel);
+  border: 1px solid var(--im-line);
+}
+
+.im__clue.is-mine {
+  border-color: rgba(228, 182, 76, 0.4);
+}
+
+/* La ultima pista entra iluminada: es la que la mesa tiene que alcanzar a leer. */
+.im__clue.is-new {
+  animation: im-clue-in 0.4s ease-out;
+}
+
+@keyframes im-clue-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+    border-color: rgba(228, 182, 76, 0.85);
+    background: var(--im-panel-2);
+  }
+  60% {
+    opacity: 1;
+    transform: none;
+    border-color: rgba(228, 182, 76, 0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.im__clue.is-empty {
+  justify-content: center;
+  color: var(--im-dim);
+  background: transparent;
+  border-style: dashed;
+}
+
+.im__clue-who {
+  font-size: 13px;
+  color: var(--im-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40%;
+}
+
+.im__clue-word {
+  font-family: var(--im-cond);
+  letter-spacing: 1px;
+  font-size: clamp(18px, 5vw, 24px);
+  color: var(--im-ink);
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+/* Barra de input (pista / adivinanza) */
+.im__cluebar {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.im__clue-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+  color: var(--im-ink);
+  background: var(--im-panel-2);
+  border: 1.5px solid var(--im-line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  outline: none;
+}
+
+.im__clue-input:focus {
+  border-color: var(--im-gold);
+}
+
+.im__clue-input:disabled {
+  opacity: 0.5;
+}
+
+.im__send {
+  font-family: var(--im-cond);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 18px;
+  color: #1a1206;
+  background: var(--im-gold);
+  border: none;
+  border-radius: 10px;
+  padding: 0 22px;
+  cursor: pointer;
+}
+
+.im__send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.im__turnwait {
+  margin-top: 14px;
+  text-align: center;
+  color: var(--im-dim);
+  padding: 14px;
+  border: 1px dashed var(--im-line);
+  border-radius: 10px;
+}
+
+.im__turnwait strong {
+  color: var(--im-red);
+}
+
+/* Pausa de lectura tras la ultima pista (CLUES_RECAP_MS en el server). */
+.im__turnwait.is-recap {
+  border-color: rgba(228, 182, 76, 0.45);
+  color: var(--im-gold);
+  font-family: var(--im-cond);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 18px;
+}
+
+/* ---------- Vista: votacion ---------- */
+
+.im__votewrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.im__votehead {
+  font-family: var(--im-cond);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: clamp(22px, 6vw, 30px);
+  color: var(--im-red);
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.im__suspects {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.im__suspect {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "name votes"
+    "clue votes";
+  align-items: center;
+  gap: 2px 10px;
+  text-align: left;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--im-panel);
+  border: 1.5px solid var(--im-line);
+  color: var(--im-ink);
+  cursor: pointer;
+  transition: border-color 0.1s ease, transform 0.05s ease;
+}
+
+.im__suspect:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.im__suspect.is-mine {
+  border-color: var(--im-red);
+  background: rgba(210, 59, 69, 0.12);
+}
+
+.im__suspect.is-self {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.im__suspect-name {
+  grid-area: name;
+  font-family: var(--im-cond);
+  letter-spacing: 1px;
+  font-size: 19px;
+}
+
+.im__suspect-clue {
+  grid-area: clue;
+  font-size: 13px;
+  color: var(--im-dim);
+  overflow-wrap: anywhere;
+}
+
+.im__suspect-votes {
+  grid-area: votes;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--im-red);
+  min-width: 22px;
+  text-align: center;
+}
+
+/* ---------- Vista: adivinanza ---------- */
+
+.im__guesswrap {
+  margin: auto 0;
+  text-align: center;
+  padding: 26px 20px;
+  border-radius: 16px;
+  border: 2px solid rgba(210, 59, 69, 0.5);
+  background: linear-gradient(180deg, var(--im-panel-2), var(--im-panel));
+  box-shadow: 0 0 60px rgba(210, 59, 69, 0.15);
+}
+
+.im__guesshead {
+  font-family: var(--im-cond);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: clamp(24px, 7vw, 34px);
+  color: var(--im-red);
+}
+
+.im__guesssub {
+  margin: 12px auto 0;
+  max-width: 32ch;
+  color: var(--im-dim);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.im__guesswrap .im__cluebar {
+  margin-top: 20px;
+}
+
+/* ---------- Vista: resultado ---------- */
+
+.im__result {
+  margin: auto 0;
+  text-align: center;
+  padding: 26px 20px;
+  border-radius: 18px;
+  border: 2px solid var(--im-line);
+  background: linear-gradient(180deg, var(--im-panel-2), var(--im-panel));
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.im__result.is-impostor {
+  border-color: rgba(210, 59, 69, 0.55);
+}
+
+.im__result.is-crew {
+  border-color: rgba(87, 182, 214, 0.5);
+}
+
+.im__result-title {
+  font-family: var(--im-cond);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: clamp(24px, 7vw, 34px);
+  color: var(--im-ink);
+  margin-bottom: 10px;
+}
+
+.im__result-word {
+  font-size: 17px;
+  color: var(--im-dim);
+}
+
+.im__result-word strong {
+  color: var(--im-gold);
+  font-size: 20px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.im__result-imp {
+  margin-top: 6px;
+  font-size: 15px;
+  color: var(--im-dim);
+}
+
+.im__result-imp strong {
+  color: var(--im-red);
+}
+
+.im__result-guess {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--im-dim);
+}
+
+.im__result-winner {
+  margin-top: 14px;
+  font-family: var(--im-cond);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 20px;
+}
+
+.im__result.is-impostor .im__result-winner {
+  color: var(--im-red);
+}
+
+.im__result.is-crew .im__result-winner {
+  color: var(--im-crew);
+}
+
+.im__scores {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.im__score {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--im-panel);
+  border: 1px solid var(--im-line);
+}
+
+.im__score.is-me {
+  border-color: var(--im-gold);
+}
+
+.im__score-role {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 2px 7px;
+  border-radius: 20px;
+}
+
+.im__score-role.is-impostor {
+  color: var(--im-red);
+  background: rgba(210, 59, 69, 0.14);
+}
+
+.im__score-role.is-crew {
+  color: var(--im-crew);
+  background: rgba(87, 182, 214, 0.12);
+}
+
+.im__score-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.im__score-pts {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--im-gold);
+}
+
+/* ---------- Overlay de mensajes ---------- */
+
+.im__overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 9, 12, 0.82);
+}
+
+.im__card {
+  background: linear-gradient(180deg, var(--im-panel-2), var(--im-panel));
+  border: 2px solid var(--im-line);
+  border-radius: 16px;
+  padding: 28px 30px;
+  max-width: 420px;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+}
+
+.im__card-title {
+  font-family: var(--im-cond);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--im-red);
+  margin: 0 0 12px;
+  font-size: 40px;
+}
+
+.im__card-body {
+  color: var(--im-dim);
+  line-height: 1.5;
+  font-size: 16px;
+}
+
+.im__card-btn {
+  margin-top: 20px;
+  font-family: var(--im-cond);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 18px;
+  color: #1a1206;
+  background: var(--im-gold);
+  border: none;
+  border-radius: 12px;
+  padding: 11px 28px;
+  cursor: pointer;
+}
+
+/* ---------- Countdown 3/2/1/YA ---------- */
+
+.im__countdown {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--im-cond);
+  font-weight: 700;
+  letter-spacing: 4px;
+  font-size: clamp(90px, 30vw, 200px);
+  color: var(--im-red);
+  pointer-events: none;
+  text-shadow: 0 0 40px rgba(210, 59, 69, 0.5);
+}
+
+.im__countdown.is-pop {
+  animation: im-countdown-pop 0.6s ease-out;
+}
+
+@keyframes im-countdown-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+}
+
+/* ---------- Back link (compartido) ---------- */
+
+.back-link {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  z-index: 20;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--im-ink);
+  text-decoration: none;
+  background: rgba(22, 24, 31, 0.85);
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1.5px solid var(--im-line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .im__countdown.is-pop,
+  .im__clue.is-new {
+    animation: none;
+  }
+}

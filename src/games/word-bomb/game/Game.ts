@@ -1,9 +1,11 @@
 import { initRoomMode, isRoomMode, type RoomMode } from "../../../shared/room/roomMode";
-import { COUNTDOWN_LABELS, COUNTDOWN_STEP, GAME_SERVER_URL } from "./constants";
+import { isGameServerConfigured, resolveGameServerUrl } from "../../../shared/server-status";
+import { COUNTDOWN_LABELS, COUNTDOWN_STEP } from "./constants";
+import { EmoteAudio } from "./EmoteAudio";
 import { Hud } from "./Hud";
 import { SocketTransport } from "./SocketTransport";
 import { SoundEffects } from "./SoundEffects";
-import type { WbGameover, WbRejectReason, WbState } from "./WordBombTransport";
+import type { WbEmoteId, WbGameover, WbRejectReason, WbState } from "./WordBombTransport";
 
 type State = "message" | "countdown" | "playing" | "over";
 
@@ -27,6 +29,8 @@ export class Game {
 
   private readonly room: RoomMode | null;
   private transport: SocketTransport | null = null;
+  /** Guarda contra doble conexion mientras `connect()` resuelve la URL. */
+  private connecting = false;
 
   private lastCountdownIndex = -1;
 
@@ -43,6 +47,7 @@ export class Game {
     this.hud = new Hud(root);
     this.hud.onSubmit((word) => this.onSubmitWord(word));
     this.hud.onType((text) => this.transport?.sendTyping(text));
+    this.hud.onEmote((id) => this.transport?.sendEmote(id));
 
     this.room = initRoomMode("word-bomb", {
       getScore: () => this.liveScore(),
@@ -66,13 +71,17 @@ export class Game {
       return;
     }
 
-    if (!GAME_SERVER_URL) {
+    if (!isGameServerConfigured()) {
       this.hud.showMessage(
         "No disponible",
         "Bomba Palabra necesita el game server y no est&aacute; configurado (VITE_GAME_SERVER_URL).",
       );
       return;
     }
+
+    // Los samples de las reacciones se bajan ya, mientras se espera la ronda (el
+    // briefing dura 10s): al primer emote tienen que estar decodificados.
+    EmoteAudio.preload();
 
     // En sala: RoomMode dispara onStart al pasar a "playing" y arranca el countdown.
     this.hud.showMessage("Bomba Palabra", "Esper&aacute; a que empiece la ronda...");
@@ -86,7 +95,7 @@ export class Game {
     this.lastCountdownIndex = -1;
     this.lastWords.clear();
     this.lastAcceptSeq = 0;
-    this.connect();
+    void this.connect();
 
     let i = 0;
     const step = () => {
@@ -109,15 +118,24 @@ export class Game {
   private startPlaying(): void {
     this.state = "playing";
     this.hud.showStage();
+    this.hud.setEmotesEnabled(true);
     if (this.latest) this.applyState(this.latest);
   }
 
   // ---------- Transporte ----------
 
-  private connect(): void {
-    if (this.transport || !this.room || !GAME_SERVER_URL) return;
+  /** Async porque resolver el server puede implicar un health check (ver
+   *  `shared/server-status.ts`); `connecting` cubre la ventana del await, en la
+   *  que `this.transport` todavia es null y una segunda llamada abriria un
+   *  socket de mas. */
+  private async connect(): Promise<void> {
+    if (this.transport || this.connecting || !this.room) return;
+    this.connecting = true;
+    const url = await resolveGameServerUrl();
+    this.connecting = false;
+    if (this.transport || !url) return;
     const transport = new SocketTransport(
-      GAME_SERVER_URL,
+      url,
       this.room.code,
       this.room.me,
       this.room.players(),
@@ -131,6 +149,7 @@ export class Game {
         this.hud.showTyping(player, text);
       }
     });
+    transport.onEmote((player, emote) => this.onEmote(player, emote));
     transport.onGameover((r) => this.onGameover(r));
     this.transport = transport;
     void transport.connect();
@@ -223,6 +242,18 @@ export class Game {
     if (this.prev.turn !== s.turn && s.phase === "playing") SoundEffects.playTurn();
   }
 
+  /**
+   * Reaccion de cualquier jugador — vivo, eliminado o el de turno. Es puramente
+   * cosmetica: le cambia la cara al personaje por un instante y no toca el estado de
+   * la partida. La propia tambien se pinta con el eco del server (no optimista), asi
+   * lo que ve uno es lo mismo que ven los demas y manda el cooldown del server.
+   */
+  private onEmote(player: string, emote: WbEmoteId): void {
+    if (this.state !== "playing") return;
+    SoundEffects.playEmote(emote);
+    this.hud.showEmote(player, emote);
+  }
+
   private onInvalid(reason: WbRejectReason): void {
     SoundEffects.playReject();
     this.hud.flashReject(REJECT_MESSAGES[reason]);
@@ -238,6 +269,7 @@ export class Game {
     if (this.state === "over") return;
     this.state = "over";
     this.hud.setInputEnabled(false);
+    this.hud.setEmotesEnabled(false);
     this.hud.clearFuse();
 
     const me = this.room?.me ?? "";

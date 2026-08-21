@@ -5,7 +5,7 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { getNickname } from "../../../shared/nickname";
 import { fetchRoomState, sanitizeCode } from "../../../shared/room/api";
-import { initRoomMode, type RoomMode } from "../../../shared/room/roomMode";
+import { initRoomMode, roomTimeLimitFor, type RoomMode } from "../../../shared/room/roomMode";
 import { RAPIER } from "./physics";
 import { Arena } from "./Arena";
 import { ArenaChannel, type BallPayload, type MatchEvent } from "./ArenaChannel";
@@ -275,7 +275,8 @@ export class Game {
     this.isHost = this.me === hostName;
     this.roomPlayers = players;
 
-    const limit = state?.room.settings.roundTimeLimitSec ?? MATCH_TIME;
+    // El tope de ronda lo declara el juego en su meta.ts; sin tope vale MATCH_TIME.
+    const limit = roomTimeLimitFor("rocket-arena") || MATCH_TIME;
     this.matchTime = Math.min(MATCH_TIME, Math.max(30, limit - 8));
 
     this.channel = new ArenaChannel(code, round);

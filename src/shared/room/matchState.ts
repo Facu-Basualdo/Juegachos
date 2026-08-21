@@ -12,6 +12,16 @@ import { getSupabase } from "../supabase";
  * mas el host para destrabar turnos AFK.
  */
 
+/**
+ * Cuanto espera un jugador a que el host cree el tablero de la ronda antes de
+ * crearlo el mismo. Normalmente lo crea el host apenas carga la pagina; si el
+ * host se desconecto antes de llegar, sin esta salida todos se quedaban mirando
+ * "Preparando el tablero..." hasta que la migracion de host (20s) apareciera.
+ * El insert es idempotente por PK: si dos lo crean a la vez gana el primero y el
+ * otro relee, que es la misma carrera ya contemplada en `createMatchState`.
+ */
+export const CREATE_FALLBACK_MS = 6000;
+
 export interface MatchStateRow<S> {
   state: S;
   version: number;

@@ -10,6 +10,10 @@ export const meta: GameEntry = {
   accent: "#ffca57",
   category: "Puzzle",
   order: 45,
+  added: "2026-07-09",
+  mobile: true,
+
+  roomTimeLimitSec: 120,
 };
 
 // Dos modos, cada uno con su ranking (mas digitos = mejor):

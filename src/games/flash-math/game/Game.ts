@@ -6,6 +6,7 @@ import {
   GAP_MS,
   FIRST_DELAY_MS,
   FEEDBACK_MS,
+  ANSWER_TIME_MS,
   ROOM_COUNT,
   ROOM_SHOW_MS,
   ROOM_MAX_VAL,
@@ -55,6 +56,9 @@ export class Game {
 
   // Feedback entre rondas
   private feedbackMs = 0;
+
+  /** Fin del tope para responder (performance.now()), valido en estado "input". */
+  private answerDeadline = 0;
 
   private lastTime = 0;
   private readonly containerEl: HTMLElement;
@@ -189,7 +193,16 @@ export class Game {
   private enterInput(): void {
     this.state = "input";
     this.answer = "";
+    this.answerDeadline = performance.now() + ANSWER_TIME_MS;
     this.hud.showInput();
+    this.hud.setAnswerTime(ANSWER_TIME_MS, ANSWER_TIME_MS);
+  }
+
+  /** Reloj de la respuesta. Al vencer se envia lo tipeado (aunque este vacio). */
+  private updateInput(): void {
+    const left = this.answerDeadline - performance.now();
+    this.hud.setAnswerTime(Math.max(0, left), ANSWER_TIME_MS);
+    if (left <= 0) this.submitAnswer();
   }
 
   private submitAnswer(): void {
@@ -255,6 +268,8 @@ export class Game {
       this.updateCountdown(dt);
     } else if (this.state === "showing") {
       this.updateShowing(dt);
+    } else if (this.state === "input") {
+      this.updateInput();
     } else if (this.state === "feedback") {
       this.feedbackMs += dt * 1000;
       if (this.feedbackMs >= FEEDBACK_MS) {

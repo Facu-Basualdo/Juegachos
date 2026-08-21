@@ -25,4 +25,6 @@ export const MAX_DT = 0.032;
  * server configurado, cada uno cae a un partido local contra la IA. En sala CON
  * server, el PvP lo arbitra el server (`/pong`). Ver el CLAUDE.md del juego.
  */
-export const GAME_SERVER_URL = import.meta.env.VITE_GAME_SERVER_URL as string | undefined;
+// La URL la resuelve `shared/server-status.ts` (principal, con caida al respaldo si
+// esta configurado): `Game.ts` usa `isGameServerConfigured()` para decidir el modo y
+// `resolveGameServerUrl()` al conectar.

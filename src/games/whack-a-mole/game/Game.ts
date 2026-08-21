@@ -79,6 +79,23 @@ export class Game {
     this.buildHoles();
 
     this.hud = new Hud(container, () => this.onPrimary());
+
+
+    // En movil no hay Enter: el toque tiene que poder arrancar desde cualquier
+
+    // parte de la pantalla, no solo desde el boton del cartel. Va sobre el
+
+    // container (el overlay de inicio tapa al canvas) y se ignoran los <button>,
+
+    // que ya tienen su propio handler, para no arrancar dos veces.
+
+    container.addEventListener("pointerdown", (e) => {
+
+      if ((e.target as HTMLElement).closest("button")) return;
+
+      this.onPrimary();
+
+    });
     this.hud.setBest(this.best);
     this.hud.showStart();
     this.hud.mountPopupCanvas(this.canvas);
@@ -159,9 +176,9 @@ export class Game {
     this.moles = [];
     this.elapsed = 0;
     this.spawnTimer = 0;
-    // Salas: el tope de tiempo de la ronda lo fija el anfitrion (ajuste fijo o
-    // votacion). Lo tomamos del deadline de la sala; "Sin límite" -> null (solo
-    // vidas). En solo no hay tope de tiempo.
+    // Salas: la ronda tiene el tope que declara el juego en su meta.ts
+    // (roomTimeLimitSec = 120). Lo tomamos del deadline que fijo la sala.
+    // En solo no hay tope de tiempo.
     this.roomDeadline = this.room ? this.room.deadline() : null;
     this.swing = null;
 
@@ -310,8 +327,8 @@ export class Game {
     if (this.state === "playing") {
       this.elapsed += dt;
 
-      // Salas con tope de tiempo del host: al vencer el deadline se corta la
-      // ronda (tope de seguridad ademas de las vidas). "Sin límite" -> sin corte.
+      // Salas: al vencer el deadline se corta la ronda (tope de seguridad ademas
+      // de las vidas).
       if (this.room && this.roomDeadline) {
         const rem = this.roomRemaining();
         this.hud.setTimer(rem);

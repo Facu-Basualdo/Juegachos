@@ -19,6 +19,11 @@ export type PongPhase = "countdown" | "playing" | "over";
 export interface PongMatchState {
   /** Lado de ESTE jugador: "p1" = paleta izquierda, "p2" = paleta derecha. */
   side: "p1" | "p2";
+  /** Reloj de la simulacion del server (ms) al que corresponde este estado; avanza
+   *  de a pasos fijos. Es la linea de tiempo de la interpolacion (ver `pushSnap`).
+   *  OPCIONAL solo por compatibilidad con un server viejo todavia no redeployado:
+   *  si falta, el cliente cae a la hora de llegada del paquete (peor, tiembla). */
+  t?: number;
   phase: PongPhase;
   ball: PongBall;
   p1Y: number;

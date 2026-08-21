@@ -34,6 +34,50 @@ create policy "scores_insert_public" on public.scores
   );
 
 -- ---------------------------------------------------------------------------
+-- Salon de la fama: lider (#1) de cada tablero, resuelto en la base.
+--
+-- El cliente manda la lista de tableros representativos que quiere consultar
+-- (`[{"game_id":"snake","variant":"","ascending":false}, ...]`, la direccion sale
+-- de GAME_SCORING en el front) y recibe una fila por tablero con su lider. Evita
+-- que la landing y /fame/ se bajen la tabla `scores` entera para calcularlo en el
+-- navegador: cada tablero resuelve con un limit 1 sobre scores_board_idx.
+--
+-- Desempate estable (mismo criterio que fetchTop en el cliente): a igual puntaje
+-- gana el que lo hizo primero (created_at, luego id).
+-- ---------------------------------------------------------------------------
+
+create or replace function public.game_leaders(boards jsonb)
+returns table (game_id text, variant text, player text, score double precision)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select b.game_id, b.variant, top.player, top.score
+  from jsonb_to_recordset(boards)
+    as b(game_id text, variant text, ascending boolean)
+  cross join lateral (
+    (
+      select s.player, s.score
+      from public.scores s
+      where s.game_id = b.game_id and s.variant = b.variant and b.ascending
+      order by s.score asc, s.created_at asc, s.id asc
+      limit 1
+    )
+    union all
+    (
+      select s.player, s.score
+      from public.scores s
+      where s.game_id = b.game_id and s.variant = b.variant and not b.ascending
+      order by s.score desc, s.created_at asc, s.id asc
+      limit 1
+    )
+  ) as top
+$$;
+
+grant execute on function public.game_leaders(jsonb) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
 -- Popularidad: contador de partidas por juego para ordenar la landing (mas
 -- jugados primero). Se incrementa al abrir un juego desde la landing.
 -- ---------------------------------------------------------------------------

@@ -3,26 +3,26 @@ import type { ModelSet } from "./Models";
 import { toonify, type EmissiveMaterial } from "./toon";
 import {
   CEILING_Y,
+  COYOTE_TIME,
   DASH_COOLDOWN,
   DASH_IFRAME_TIME,
   DASH_SPEED,
   DASH_TIME,
+  FALL_GRAVITY_MULT,
   FLOOR_Y,
   GRAVITY,
+  HURTBOX_HALF_WIDTH,
+  JUMP_BUFFER_TIME,
   JUMP_CUT,
   JUMP_VELOCITY,
   MAX_FALL_SPEED,
   PLAYER_ACCEL,
   PLAYER_AIR_ACCEL,
   PLAYER_FRICTION,
+  PLAYER_GRILLE_LIFT,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
   PLAYER_SPEED,
-  WALL_JUMP_LOCK,
-  WALL_JUMP_VX,
-  WALL_JUMP_VY,
-  WALL_SLIDE_SPEED,
-  WALL_STICK_MARGIN,
   WALL_X,
 } from "./constants";
 
@@ -35,17 +35,15 @@ export interface PlayerInput {
 
 export interface PlayerEvents {
   jumped: boolean;
-  wallJumped: boolean;
   dashed: boolean;
 }
 
 /**
  * The dodger: simple 2D platformer physics (gravity + friction) in the XY plane
- * with the three moves the boss fight needs — a variable-height jump, a wall
- * cling / wall jump to hang on the climbable side walls above the steam line,
- * and a short i-frame dash to slip through a last-moment jet. Modelled from
- * primitives as a brass boiler-suit diver. `x` is the horizontal centre, `y` is
- * the feet (bottom); the mesh group sits at the feet.
+ * with the two moves the boss fight needs — a variable-height jump (with coyote
+ * time + jump buffer) to reposition, and a short i-frame dash to slip through a
+ * last-moment jet. Modelled from primitives as a brass boiler-suit diver. `x` is
+ * the horizontal centre, `y` is the feet (bottom); the mesh group sits at the feet.
  */
 export class Player {
   readonly object = new THREE.Group();
@@ -55,14 +53,13 @@ export class Player {
   private vy = 0;
   private facing = 1;
   private grounded = true;
-  private wallDir = 0; // -1 left wall, +1 right wall, 0 none
-  private clinging = false;
   private dashTime = 0;
   private dashDir = 1;
   private invuln = 0;
   private dashCooldown = 0;
-  private wallLock = 0;
   private canCut = false;
+  private coyote = 0; // grace to still jump just after leaving the ground
+  private jumpBuffer = 0; // grace to jump if pressed just before landing
 
   /** Emissive materials pulsed brighter during the dash i-frames (the porthole). */
   private readonly glowMats: { mat: EmissiveMaterial; base: number }[] = [];
@@ -131,6 +128,18 @@ export class Player {
     return PLAYER_HALF_WIDTH;
   }
 
+  /** Narrow hurtbox for steam collision (forgiving; see HURTBOX_HALF_WIDTH). */
+  get hurtHalfWidth(): number {
+    return HURTBOX_HALF_WIDTH;
+  }
+
+  /** Visual foot height (logical `y` + the grille-standing lift). Use this, not
+   *  `y`, when positioning cosmetic effects (sparks, bursts) at the character's
+   *  feet — `y` itself stays the physics/collision value. */
+  get visualY(): number {
+    return this.y + PLAYER_GRILLE_LIFT;
+  }
+
   get invulnerable(): boolean {
     return this.invuln > 0;
   }
@@ -141,28 +150,24 @@ export class Player {
     this.vx = this.vy = 0;
     this.facing = 1;
     this.grounded = true;
-    this.wallDir = 0;
-    this.clinging = false;
-    this.dashTime = this.invuln = this.dashCooldown = this.wallLock = 0;
+    this.dashTime = this.invuln = this.dashCooldown = 0;
     this.canCut = false;
-    this.object.position.set(0, FLOOR_Y, 0);
+    this.coyote = this.jumpBuffer = 0;
+    this.object.position.set(0, FLOOR_Y + PLAYER_GRILLE_LIFT, 0);
     this.object.rotation.z = 0;
   }
 
   update(dt: number, input: PlayerInput): PlayerEvents {
-    const ev: PlayerEvents = { jumped: false, wallJumped: false, dashed: false };
+    const ev: PlayerEvents = { jumped: false, dashed: false };
 
     // --- Timers. ---
     if (this.dashCooldown > 0) this.dashCooldown -= dt;
     if (this.invuln > 0) this.invuln -= dt;
-    if (this.wallLock > 0) this.wallLock -= dt;
-
-    // --- Wall contact (only meaningful in the air). ---
-    const touchingLeft = this.x - PLAYER_HALF_WIDTH <= -WALL_X + WALL_STICK_MARGIN;
-    const touchingRight = this.x + PLAYER_HALF_WIDTH >= WALL_X - WALL_STICK_MARGIN;
-    this.wallDir = touchingLeft ? -1 : touchingRight ? 1 : 0;
-    this.clinging =
-      !this.grounded && this.wallDir !== 0 && input.moveDir === this.wallDir && this.dashTime <= 0;
+    // Coyote (still jumpable just after a ledge) and jump buffer (press remembered
+    // just before landing) — the two forgiveness windows that make the jump feel
+    // responsive instead of a commitment you regret.
+    this.coyote = this.grounded ? COYOTE_TIME : this.coyote - dt;
+    this.jumpBuffer = input.jumpPressed ? JUMP_BUFFER_TIME : this.jumpBuffer - dt;
 
     // --- Dash start. ---
     if (input.dashPressed && this.dashCooldown <= 0 && this.dashTime <= 0) {
@@ -178,8 +183,11 @@ export class Player {
     if (this.dashTime > 0) {
       this.vx = this.dashDir * DASH_SPEED;
       this.dashTime -= dt;
-    } else if (this.wallLock > 0) {
-      // Keep the wall-jump arc; ignore steering briefly.
+      // The instant the dash ends, cut the carried speed to a walk (or a stop) so
+      // the dash lands at a *predictable* spot instead of sliding on at 22 u/s.
+      if (this.dashTime <= 0) {
+        this.vx = input.moveDir === this.dashDir ? this.dashDir * PLAYER_SPEED : 0;
+      }
     } else {
       const target = input.moveDir * PLAYER_SPEED;
       if (input.moveDir !== 0) {
@@ -192,21 +200,14 @@ export class Player {
       }
     }
 
-    // --- Jump / wall jump. ---
-    if (input.jumpPressed) {
-      if (this.grounded) {
-        this.vy = JUMP_VELOCITY;
-        this.grounded = false;
-        this.canCut = true;
-        ev.jumped = true;
-      } else if (this.clinging) {
-        this.vy = WALL_JUMP_VY;
-        this.vx = -this.wallDir * WALL_JUMP_VX;
-        this.facing = -this.wallDir;
-        this.wallLock = WALL_JUMP_LOCK;
-        this.canCut = true;
-        ev.wallJumped = true;
-      }
+    // --- Jump (buffered press, honoured within the coyote window). ---
+    if (this.jumpBuffer > 0 && this.dashTime <= 0 && this.coyote > 0) {
+      this.vy = JUMP_VELOCITY;
+      this.grounded = false;
+      this.coyote = 0;
+      this.jumpBuffer = 0;
+      this.canCut = true;
+      ev.jumped = true;
     }
     // Variable height: releasing while still rising cuts the ascent.
     if (this.canCut && !input.jumpHeld && this.vy > 0) {
@@ -214,12 +215,12 @@ export class Player {
       this.canCut = false;
     }
 
-    // --- Gravity. ---
+    // --- Gravity (heavier on the way down for a snappy, low-commitment arc). ---
     if (this.dashTime > 0) {
       this.vy = 0; // dash floats horizontally
     } else {
-      this.vy -= GRAVITY * dt;
-      if (this.clinging && this.vy < -WALL_SLIDE_SPEED) this.vy = -WALL_SLIDE_SPEED;
+      const g = this.vy > 0 ? GRAVITY : GRAVITY * FALL_GRAVITY_MULT;
+      this.vy -= g * dt;
       if (this.vy < -MAX_FALL_SPEED) this.vy = -MAX_FALL_SPEED;
     }
 
@@ -252,9 +253,9 @@ export class Player {
     }
 
     // --- Visuals. ---
-    this.object.position.set(this.x, this.y, 0);
-    // Lean into a dash / wall cling, flash the goggle during i-frames.
-    const lean = this.dashTime > 0 ? 0.5 * this.dashDir : this.clinging ? 0.25 * this.wallDir : 0;
+    this.object.position.set(this.x, this.visualY, 0);
+    // Lean into a dash, flash the goggle during i-frames.
+    const lean = this.dashTime > 0 ? 0.5 * this.dashDir : 0;
     this.object.rotation.z = -lean;
     const flash = this.invulnerable ? 1.9 : 1;
     for (const g of this.glowMats) g.mat.emissiveIntensity = g.base * flash;
