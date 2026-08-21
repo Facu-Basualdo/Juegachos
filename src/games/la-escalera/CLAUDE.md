@@ -1,8 +1,8 @@
 # La Escalera
 
-Juego de reflejos en **Three.js**. Un obrero sube una escalera mecanica que baja
-hacia un pozo de puas. Un rack de pantallas colgado sobre el hueco pide una
-flecha por vez (izquierda / arriba / derecha / abajo): acertarla lo empuja un
+Juego de reflejos en **Three.js**. Un obrero **corre** escalera mecanica arriba
+mientras la escalera baja hacia un pozo de puas. Un cartel colgado sobre el hueco
+pide una flecha por vez (izquierda / arriba / derecha / abajo): acertarla lo empuja un
 escalon hacia arriba, errarla o dejarla vencer lo hace resbalar, y el **arrastre
 constante** de la cinta (que crece con el puntaje) lo lleva siempre hacia abajo.
 Si llega al pie, cae al pozo y se termina. Puntaje = escalones ganados
@@ -38,27 +38,42 @@ al muñeco justo cuando mejor venias jugando. El medidor del HUD se normaliza
 - `game/toon.ts` — cel-shading (`toonMat` / `glowMat`). Copiado de Pizza Express
   por la regla de decoupling, con la **rampa de tonos sesgada al oscuro**
   (`pow(t, 1.7)`) en vez del sesgo claro del original.
-- `game/Escalator.ts` — la maquina: cinta de escalones que baja y wrapea,
-  faldones / balaustrada / pasamanos, chapas de peine y el pozo de puas con su
-  luz rubi (`pulsePit` late mas fuerte cuanto mas cerca estas).
-- `game/Climber.ts` — el obrero. Animacion 100% procedural (ciclo de piernas,
-  envion por acierto, manotazo por error, tumbo al morir); sin skinning ni
-  assets. `update(dt, t, effort)` lo coloca y anima; `idle(t, elapsed)` es la
-  pose de menu / countdown.
-- `game/PromptRack.ts` — el rack de pantallas: una grande con la flecha actual,
-  cuatro chicas con las que vienen, barra de tiempo y luz propia que tiñe la boca
-  segun acierto (hueso) o error (rubi). El glifo se genera una vez como
+- `game/Escalator.ts` — la maquina: **escalera mecanica de local** (huellas de
+  chapa estriada con demarcacion amarilla al frente, contrahuella acanalada,
+  faldon de inoxidable con cepillo de seguridad, balaustrada de vidrio, zocalo
+  iluminado y pasamanos de goma que corre con la cinta), plataformas con peine
+  amarillo, y el pozo de puas con su luz rubi (`pulsePit` late mas fuerte cuanto
+  mas cerca estas). Las texturas (estriado, peine, bandas del pasamanos) se
+  generan a canvas en el mismo archivo; los materiales se comparten entre los
+  20+ escalones.
+- `game/Climber.ts` — el obrero. Animacion 100% procedural, sin skinning ni
+  assets: brazos y piernas tienen **codo y rodilla** (grupos anidados) porque un
+  ciclo de carrera con miembros rigidos lee como marcha de juguete. Siempre esta
+  **corriendo hacia arriba** (tambien en el menu y el countdown, donde corre en
+  el lugar mas tranquilo): la escalera baja, asi que correr es su estado normal.
+  Encima del ciclo se montan el envion del acierto y el manotazo del error.
+  `kill()` arranca el tumbo y `consumeImpale()` avisa **una sola vez** el frame
+  en que el cuerpo llega a las puas (es lo que dispara la sangre).
+- `game/PromptRack.ts` — el cartel: **una sola** pantalla con la flecha actual,
+  su barra de tiempo y luz propia. El acierto solo da un golpe de escala (sin
+  destello); el error tiñe pantalla y luz de rubi. El glifo se genera una vez como
   **matriz de puntos** (una flecha vectorial rasterizada a una grilla de 17x17 y
   redibujada como circulos) y se rota por direccion: una sola textura para las
   cuatro flechas.
 - `game/Environment.ts` — escenografia del hueco: muros de reja, vigas (solo por
   **detras** del rack), cadenas, lamparas ambar parpadeantes y polvo que cae.
 - `game/Particles.ts` — pool de chispas fire-and-forget (acierto, error, muerte).
+- `game/Blood.ts` — la sangre. Estallido de gotas con gravedad que al tocar el
+  fondo se convierten en calcos, chorro que sigue ~2 s, hilos escurriendo por los
+  hierros y un charco que crece hasta quedarse. Tope de `MAX_DECALS` calcos
+  (los viejos se descartan). Cosmetico puro: no toca estado ni colision.
 - `game/InputController.ts` — cuatro flechas (teclado o WASD) + accion
   (Enter / Espacio) y la **cruceta tactil** que se monta sobre el canvas y el CSS
   muestra solo en punteros gruesos.
 - `game/Hud.ts` — overlay DOM: puntaje (arriba a la **derecha**, el centro es del
-  rack), racha, medidor de altura, countdown, flash y start / game-over con
+  cartel), racha, medidor de altura, countdown, flash, la **salpicadura de sangre
+  sobre el lente** (`showBlood` / `clearBlood`, dibujada a canvas una sola vez y
+  sesgada a los bordes para no tapar el pozo) y start / game-over con
   `LeaderboardPanel`.
 - `game/SoundEffects.ts` — Web Audio sintetizado (tick de countdown, bota contra
   el hierro que sube de tono con la racha, campana de racha, chirrido de
@@ -102,20 +117,36 @@ recorrido, cuando el jugador se hundia cerca del pozo la camara bajaba lo
 suficiente como para sacar del cuadro la fila de flechas que vienen — justo
 cuando mas la necesita.
 
+**Las puas son la unica excepcion PBR.** `LatheGeometry` (brida, cuello y
+afilado concavo) con `MeshStandardMaterial` metalico medio, mientras toda la
+escena es `MeshToonMaterial`. Sin env map, metalness alto las dejaba casi negras:
+el punto dulce es metalness ~0.3 / roughness ~0.45, que da difuso frio mas un
+especular corrido a lo largo del filo. Cada pua varia en alto, giro e
+inclinacion sobre una geometria compartida. Documentado tambien en `DESIGN.md`.
+
 **Una sola textura de flecha para las cuatro direcciones.** El glifo se dibuja
 apuntando arriba y cada pantalla rota su plano (`DIR_ROTATION`). Como es matriz
 de puntos, la rotacion de 90 grados no se nota "torcida" y no hay que generar ni
 cargar cuatro imagenes.
 
-**`showVoting`-style idempotencia en el rack.** `PromptRack.setQueue` solo cambia
-rotaciones y visibilidad (no reconstruye meshes) porque se llama en cada flecha;
-`update` interpola el color de la actual entre el ambar base y el color del
-flash, asi el feedback de acierto / error es la misma pantalla cambiando de
-temperatura y no un cartel nuevo.
+**Sin fila de "las que vienen" y sin destello por acierto.** `PROMPT_VISIBLE` es
+1: hubo una version con cuatro pantallas chicas arriba y se llevaban la mirada
+justo cuando hay que reaccionar a la grande. Y el acierto ya no enciende la
+pantalla en blanco (lavaba la penumbra varias veces por segundo): solo el error
+tiñe de rubi. `setQueue` sigue siendo barato — cambia la rotacion del glifo, no
+reconstruye nada.
 
 **La cinta se ve mas rapida que el arrastre real.** `STEP_SCROLL_BASE +
 drift * STEP_SCROLL_PER_DRIFT`: la maquina tiene que leerse fuerte aunque el
 jugador este ganando terreno. Es feedback, no fisica.
+
+**La muerte se mira: el game over llega tarde a proposito.** `die()` **no**
+muestra el cartel; marca `overlayPending` y recien `GAMEOVER_DELAY` (1.6 s)
+despues `finishDeath()` saca el overlay, el ranking y el reporte a la sala. En
+ese hueco el cuerpo cae, se ensarta (`consumeImpale` -> `onImpale`) y revienta la
+sangre. Ademas la camara pasa a **encuadre de muerte** (offset fijo -1.3 en vez
+del seguimiento acotado) para que entre el pozo entero. El reinicio queda
+bloqueado mientras `overlayPending` este en true.
 
 **Enter-to-start countdown.** Desde start / game-over, la accion entra en
 `countdown` 3/2/1/YA (`COUNTDOWN_LABELS`, `COUNTDOWN_STEP`) con el tick de 750 Hz;

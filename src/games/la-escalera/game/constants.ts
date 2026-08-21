@@ -42,23 +42,29 @@ export const STEP_SCROLL_PER_DRIFT = 2.4; // cuanto suma el arrastre a esa veloc
 export const BEAT_START = 1.5; // segundos de ventana por flecha al empezar
 export const BEAT_MIN = 0.52;
 export const BEAT_PER_POINT = 0.012; // cuanto se acorta la ventana por punto
-export const PROMPT_VISIBLE = 5; // pantallas del rack (1 actual + 4 por venir)
+// Una sola pantalla: no hay fila de "las que vienen". Se probo y la fila de
+// flechas chicas arriba se llevaba la mirada justo cuando hay que reaccionar a
+// la grande, ademas de ensuciar el borde superior del cuadro.
+export const PROMPT_VISIBLE = 1;
 export const MAX_SAME_DIR = 2; // no repetir la misma flecha mas de esto seguido
 
 // --- Pozo de puas -----------------------------------------------------------
-export const SPIKE_ROWS = 3;
+export const SPIKE_ROWS = 4;
 export const SPIKE_PER_ROW = 9;
-export const SPIKE_LEN = 0.95;
-export const SPIKE_RADIUS = 0.24;
+export const SPIKE_LEN = 1.15; // largo de la pua tipo (cada una varia un poco)
+export const SPIKE_RADIUS = 0.19; // radio de la base del filo (sin la brida)
+/** Piso del pozo (cara superior). Deriva del pie de la rampa. */
+export const PIT_FLOOR_Y = RAMP_BOTTOM[1] - 1.45;
+/** Altura a la que el cuerpo queda ensartado: la punta de las puas. */
+export const SPIKE_TIP_Y = PIT_FLOOR_Y + SPIKE_LEN;
+/** Donde arranca el pozo (z): antes de esto todavia es la plataforma. */
+export const PIT_START_Z = RAMP_BOTTOM[2] + 1.0;
 
 // --- Rack de pantallas ------------------------------------------------------
 // El rack cuelga SOBRE el hueco, no al fondo: pegado al fondo la flecha quedaba
 // del tamaño de una moneda y detras de las vigas. Es la unica informacion del
 // juego, asi que se le da el tercio superior del cuadro entero.
-export const SCREEN_SIZE = 1.8; // lado de la pantalla actual (la grande del centro)
-export const SCREEN_SIZE_NEXT = 0.75; // lado de las que vienen (la fila de arriba)
-export const SCREEN_GAP = 0.95; // separacion entre las pantallas de la fila
-export const SCREEN_ROW_LIFT = 1.45; // cuanto por encima de la actual va la fila
+export const SCREEN_SIZE = 2.1; // lado de la pantalla
 export const SCREEN_Y = 8.7;
 export const SCREEN_Z = 2.0;
 
@@ -85,6 +91,11 @@ export const COLOR_SKIN = 0xb8794f;
 export const COLOR_SUIT = 0x2a3550; // mameluco del obrero (azul apagado)
 export const COLOR_SUIT_DARK = 0x18203a;
 export const COLOR_HELMET = 0xd8a12c; // casco: la unica nota saturada del muñeco
+export const COLOR_STEEL = 0x6b727e; // inoxidable de los faldones (brillo de local)
+export const COLOR_SAFETY = 0xb98b1e; // amarillo de seguridad: bordes de escalon y peines
+export const COLOR_GLASS = 0x5d7690; // balaustrada de vidrio (apenas azulada)
+export const COLOR_BLOOD = 0x8e0a16; // sangre fresca
+export const COLOR_BLOOD_DARK = 0x4a0209; // sangre encharcada / seca
 
 // Tinte ambiente: cada TINT_PERIOD puntos el hueco se pone un paso mas raro,
 // siempre dentro del registro casi-negro (nunca mas alegre).

@@ -8,6 +8,7 @@ import { Environment } from "./Environment";
 import { PromptRack } from "./PromptRack";
 import { Climber } from "./Climber";
 import { Particles } from "./Particles";
+import { Blood } from "./Blood";
 import { InputController } from "./InputController";
 import { Hud } from "./Hud";
 import { SoundEffects } from "./SoundEffects";
@@ -42,7 +43,6 @@ import {
   COLOR_VOID,
   COLOR_BONE,
   COLOR_EMBER,
-  COLOR_RUBY,
   COLOR_GOLD,
   COLOR_IRON_EDGE,
   TINT_CYCLE,
@@ -54,6 +54,8 @@ type GameState = "ready" | "countdown" | "playing" | "gameover";
 const COUNTDOWN_LABELS = ["3", "2", "1", "YA"];
 const COUNTDOWN_STEP = 0.75;
 const MAX_DT = 0.05;
+/** Segundos entre la caida y el cartel de game over (ver `die`). */
+const GAMEOVER_DELAY = 1.6;
 
 /**
  * La Escalera. Un obrero sube una escalera mecanica que baja: cada flecha que
@@ -78,6 +80,7 @@ export class Game {
   private readonly rack = new PromptRack();
   private readonly climber = new Climber();
   private readonly particles = new Particles();
+  private readonly blood = new Blood();
   private readonly hud: Hud;
   private readonly roomMode: RoomMode | null;
 
@@ -89,6 +92,7 @@ export class Game {
   private height = START_T;
   private stumbleTimer = 0;
   private deadFor = 0;
+  private overlayPending = false;
   private elapsed = 0;
 
   private queue: Direction[] = [];
@@ -166,6 +170,7 @@ export class Game {
       this.rack.object,
       this.climber.object,
       this.particles.object,
+      this.blood.object,
     );
 
     this.hud = new Hud(this.container, () => this.handleAction());
@@ -215,13 +220,15 @@ export class Game {
     this.rack.reset();
     this.climber.reset();
     this.particles.reset();
+    this.blood.reset();
+    this.hud.clearBlood();
     this.hud.setCombo(0);
     this.hud.setDanger(this.height / MAX_HEIGHT);
   }
 
   private handleAction(): void {
     if (this.state === "playing" || this.state === "countdown") return;
-    if (this.state === "gameover" && (this.roomMode || this.deadFor < 0.6)) return;
+    if (this.state === "gameover" && (this.roomMode || this.overlayPending)) return;
     this.beginCountdown();
   }
 
@@ -245,6 +252,7 @@ export class Game {
     if (this.state !== "playing") return;
     this.state = "gameover";
     this.deadFor = 0;
+    this.overlayPending = false;
     this.height = 0;
     this.hud.setDanger(0);
     this.climber.kill();
@@ -252,16 +260,22 @@ export class Game {
     this.hud.flashHit();
     this.screenShake = 0.45;
     rampPoint(0.02, this.tmp, 0.4);
-    this.particles.burst(this.tmp, COLOR_RUBY, 16, 5);
-    this.particles.burst(this.tmp, COLOR_IRON_EDGE, 8, 4);
+    this.particles.burst(this.tmp, COLOR_IRON_EDGE, 10, 4);
 
     if (this.score > this.best) {
       this.best = this.score;
       localStorage.setItem(BEST_SCORE_KEY, String(this.best));
       this.hud.setBest(this.best);
     }
-    this.hud.showGameOver(this.score, this.best);
+    // El cartel de game over NO sale todavia: taparia justo el empalamiento y
+    // el charco, que es la mitad del premio de perder. Sale en `finishDeath`.
+    this.overlayPending = true;
+  }
 
+  /** Cierra la muerte: cartel, ranking y reporte a la sala. */
+  private finishDeath(): void {
+    this.overlayPending = false;
+    this.hud.showGameOver(this.score, this.best);
     if (this.roomMode) this.roomMode.reportScore(this.score);
     else this.hud.showRanking("la-escalera", this.score);
   }
@@ -355,6 +369,7 @@ export class Game {
     else this.updateIdle(dt);
 
     this.particles.update(dt);
+    this.blood.update(dt);
     this.environment.update(dt, this.elapsed);
     this.rack.update(dt, this.elapsed);
     this.escalator.pulsePit(this.elapsed, 1 - Math.min(1, this.height / 0.45));
@@ -386,6 +401,8 @@ export class Game {
     if (this.state === "gameover") {
       this.deadFor += dt;
       this.climber.update(dt, this.height, 1);
+      if (this.climber.consumeImpale()) this.onImpale();
+      if (this.overlayPending && this.deadFor >= GAMEOVER_DELAY) this.finishDeath();
     } else {
       this.climber.idle(this.height, this.elapsed);
     }
@@ -418,6 +435,14 @@ export class Game {
     this.followClimber();
   }
 
+  /** El cuerpo llego a las puas: sangre, sacudon y golpe humedo. */
+  private onImpale(): void {
+    this.blood.burst(this.climber.object.position);
+    this.screenShake = 0.5;
+    SoundEffects.playImpale();
+    this.hud.showBlood();
+  }
+
   /** El farol del muñeco lo sigue, empujado hacia la camara. */
   private followClimber(): void {
     const p = this.climber.object.position;
@@ -438,7 +463,10 @@ export class Game {
     // superior: con mas recorrido, la fila de flechas que vienen se sale del
     // cuadro justo cuando el jugador esta hundido y mas la necesita.
     const focus = this.climber.object.position.y;
-    const offset = THREE.MathUtils.clamp((focus - 4.6) * 0.14, -0.55, 0.55);
+    const offset =
+      this.state === "gameover"
+        ? -1.3 // encuadre de muerte: se abre para que entre el pozo entero
+        : THREE.MathUtils.clamp((focus - 4.6) * 0.14, -0.55, 0.55);
     this.camTarget.y += (CAM_TARGET[1] + offset - this.camTarget.y) * Math.min(1, dt * 2.4);
 
     let shakeX = 0;

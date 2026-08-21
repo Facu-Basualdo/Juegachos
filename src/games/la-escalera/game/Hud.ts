@@ -1,6 +1,53 @@
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
 
 /**
+ * Salpicadura de sangre sobre el "lente", dibujada a canvas una sola vez: gotas
+ * gordas contra los bordes (el centro queda limpio para que se siga leyendo el
+ * pozo) y unos chorreados verticales que arrancan de las mas grandes.
+ */
+function bloodSplatterDataUrl(): string {
+  const w = 1024;
+  const h = 640;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+
+  const blob = (x: number, y: number, r: number, alpha: number): void => {
+    ctx.fillStyle = `rgba(86, 4, 11, ${alpha})`;
+    ctx.beginPath();
+    for (let i = 0; i <= 26; i++) {
+      const a = (i / 26) * Math.PI * 2;
+      const rr = r * (0.72 + Math.sin(a * 3 + x) * 0.14 + Math.random() * 0.16);
+      const px = x + Math.cos(a) * rr;
+      const py = y + Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  };
+
+  for (let i = 0; i < 46; i++) {
+    // Sesgado a los bordes: el centro del cuadro queda jugable / legible.
+    const edge = Math.random();
+    const x = edge < 0.5 ? Math.random() * w * 0.3 : w - Math.random() * w * 0.3;
+    const y = Math.random() * h;
+    const r = 6 + Math.random() * 38;
+    blob(x, y, r, 0.55 + Math.random() * 0.4);
+    if (r > 24) {
+      ctx.fillStyle = `rgba(66, 3, 9, ${0.5 + Math.random() * 0.3})`;
+      ctx.fillRect(x - r * 0.16, y, r * 0.32, r * (1.5 + Math.random() * 3));
+    }
+  }
+  for (let i = 0; i < 90; i++) {
+    blob(Math.random() * w, Math.random() * h, 2 + Math.random() * 9, 0.35 + Math.random() * 0.5);
+  }
+
+  return canvas.toDataURL("image/png");
+}
+
+/**
  * Overlay DOM del juego: puntaje, racha, el medidor de peligro (que tan cerca
  * estas del pozo), el countdown compartido, el flash rojo y la pantalla de
  * start / game-over con el ranking global.
@@ -18,6 +65,7 @@ export class Hud {
   private readonly hintEl: HTMLDivElement;
   private readonly countdownEl: HTMLDivElement;
   private readonly flashEl: HTMLDivElement;
+  private readonly bloodEl: HTMLDivElement;
   private readonly leaderboard = new LeaderboardPanel();
 
   constructor(container: HTMLElement, onActivate: () => void) {
@@ -49,6 +97,11 @@ export class Hud {
     this.flashEl = document.createElement("div");
     this.flashEl.className = "flash";
 
+    // Salpicadura sobre la camara: se pinta una sola vez y se reusa.
+    this.bloodEl = document.createElement("div");
+    this.bloodEl.className = "blood";
+    this.bloodEl.style.backgroundImage = `url(${bloodSplatterDataUrl()})`;
+
     this.overlayEl = document.createElement("div");
     this.overlayEl.className = "overlay";
 
@@ -73,7 +126,7 @@ export class Hud {
     this.countdownEl = document.createElement("div");
     this.countdownEl.className = "countdown";
 
-    container.append(hud, this.gaugeEl, this.flashEl, this.overlayEl, this.countdownEl);
+    container.append(hud, this.gaugeEl, this.flashEl, this.bloodEl, this.overlayEl, this.countdownEl);
 
     const activate = (e: Event): void => {
       e.preventDefault();
@@ -110,6 +163,15 @@ export class Hud {
     this.bestEl.style.opacity = visible ? "0.85" : "0";
     this.comboEl.style.opacity = visible ? "1" : "0";
     this.gaugeEl.style.opacity = visible ? "1" : "0";
+  }
+
+  /** Sangre en el objetivo, al empalarse. Queda hasta la proxima partida. */
+  showBlood(): void {
+    this.bloodEl.classList.add("is-shown");
+  }
+
+  clearBlood(): void {
+    this.bloodEl.classList.remove("is-shown");
   }
 
   flashHit(): void {

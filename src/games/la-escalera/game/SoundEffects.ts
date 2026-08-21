@@ -91,6 +91,13 @@ export class SoundEffects {
     ping("square", 180, 120, 0.14, 0.07, "lin");
   }
 
+  /** El cuerpo llega a las puas: crujido humedo y hierro entrando. */
+  static playImpale(): void {
+    noise(0.3, 500, 90, 0.26);
+    ping("sawtooth", 180, 44, 0.35, 0.16, "lin");
+    ping("square", 90, 50, 0.5, 0.12, "lin");
+  }
+
   /** Muerte: caida al pozo y golpe metalico contra las puas. */
   static playDeath(): void {
     ping("sawtooth", 700, 90, 0.4, 0.12, "lin");

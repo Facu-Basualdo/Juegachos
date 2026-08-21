@@ -72,6 +72,22 @@ canvas {
 
 /* El puntaje va arriba a la derecha: el centro del cuadro es del rack de
    pantallas, que es lo unico que el jugador tiene que leer. */
+/* Sangre pegada al "lente" tras el empalamiento */
+.blood {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 26;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 0.18s ease-out;
+}
+
+.blood.is-shown {
+  opacity: 0.92;
+}
+
 .hud {
   position: absolute;
   inset: 0;
