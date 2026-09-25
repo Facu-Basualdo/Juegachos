@@ -1,0 +1,451 @@
+/*
+ * Marea de Lava. Ver DESIGN.md ("Ascenso de Basalto"): letra en negrita con sombra
+ * dura desplazada, paneles negros traslucidos de bordes rectos, nada redondeado
+ * salvo lo que es informacion.
+ */
+
+:root {
+  color-scheme: dark;
+  --sky: #0a0c18;
+  --panel: rgba(0, 0, 0, 0.55);
+  --text: #ffffff;
+  --shadow: #3a3a3a;
+  --danger: #d8463b;
+  --good: #f2c230;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--sky);
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  color: var(--text);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+.game-canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.back-link {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 40;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.8);
+  text-shadow: 2px 2px 0 var(--shadow);
+  text-decoration: none;
+}
+
+.ml {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  font-weight: 700;
+  text-shadow: 2px 2px 0 var(--shadow);
+}
+
+/* ---------- Marcador ---------- */
+
+.ml__top {
+  position: absolute;
+  /* Debajo de la barra de la sala (RoomOverlay), que va arriba de todo. */
+  top: 38px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 18px;
+  padding: 8px 16px;
+  background: var(--panel);
+}
+
+.ml--playing .ml__top {
+  display: flex;
+}
+
+.ml__alive {
+  font-size: 16px;
+  letter-spacing: 2px;
+  white-space: nowrap;
+}
+
+.ml__clock {
+  font-size: 26px;
+  letter-spacing: 2px;
+  font-variant-numeric: tabular-nums;
+  min-width: 70px;
+  text-align: right;
+}
+
+.ml__decay {
+  position: absolute;
+  top: 92px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  background: var(--panel);
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+
+.ml__lava--near {
+  background: var(--danger);
+  animation: ml-blink 0.5s steps(2, end) infinite;
+}
+
+@keyframes ml-blink {
+  50% { opacity: 0.45; }
+}
+
+.ml__players {
+  position: absolute;
+  top: 38px;
+  right: 12px;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  min-width: 150px;
+}
+
+.ml--playing .ml__players {
+  display: flex;
+}
+
+.ml__player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.ml__player--mine {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: -2px;
+}
+
+.ml__player--out {
+  opacity: 0.5;
+}
+
+.ml__player--out .ml__player-name {
+  text-decoration: line-through;
+}
+
+.ml__player--offline .ml__player-name {
+  font-style: italic;
+}
+
+.ml__player-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  box-shadow: 2px 2px 0 var(--shadow);
+}
+
+.ml__player-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+.ml__player-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+/* ---------- Avisos ---------- */
+
+.ml__feed {
+  position: absolute;
+  left: 12px;
+  top: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ml__feed-item {
+  padding: 4px 10px;
+  background: var(--panel);
+  font-size: 14px;
+  transition: opacity 0.4s;
+}
+
+.ml__feed-item span {
+  opacity: 0.75;
+  font-size: 12px;
+}
+
+.ml__feed-item.is-gone {
+  opacity: 0;
+}
+
+.ml__banner {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  text-align: center;
+  padding: 12px 26px;
+  background: var(--panel);
+  max-width: 92vw;
+}
+
+.ml__banner-title {
+  font-size: 34px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.ml__banner--bad .ml__banner-title {
+  color: #ff8a6b;
+}
+
+.ml__banner--good .ml__banner-title {
+  color: var(--good);
+}
+
+.ml__banner-sub {
+  margin-top: 4px;
+  font-size: 15px;
+}
+
+/* ---------- Controles tactiles ---------- */
+
+.ml-controls {
+  position: absolute;
+  right: 22px;
+  bottom: 26px;
+  display: none;
+  pointer-events: auto;
+}
+
+/* El boton solo existe en pantallas tactiles; en la compu se salta con ESPACIO. */
+@media (pointer: coarse) {
+  .ml--playing:not(.ml--spectating) .ml-controls {
+    display: block;
+  }
+}
+
+.ml-controls__jump {
+  width: 96px;
+  height: 96px;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: 1px;
+  text-shadow: 2px 2px 0 var(--shadow);
+  touch-action: none;
+}
+
+.ml-controls__jump:active {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.ml-stick {
+  position: absolute;
+  left: -52px;
+  top: -52px;
+  width: 104px;
+  height: 104px;
+  border: 3px solid rgba(255, 255, 255, 0.55);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.ml-stick__knob {
+  position: absolute;
+  left: 32px;
+  top: 32px;
+  width: 34px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* ---------- Countdown ---------- */
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 25;
+  font-size: 150px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  color: #ffffff;
+  text-shadow: 8px 8px 0 var(--shadow);
+  opacity: 0;
+}
+
+.countdown.is-shown {
+  animation: countdown-pop 0.75s ease-out;
+}
+
+@keyframes countdown-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  20% { opacity: 1; transform: scale(1.12); }
+  40% { transform: scale(1); }
+  80% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+/* ---------- Carteles ---------- */
+
+.ml__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  pointer-events: auto;
+  z-index: 30;
+}
+
+.ml__overlay[hidden] {
+  display: none;
+}
+
+.ml__card {
+  width: min(420px, 100%);
+  padding: 22px 24px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  text-align: center;
+}
+
+.ml__card-title {
+  font-size: 30px;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+}
+
+.ml__card-body {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.ml__card-btn {
+  margin-top: 16px;
+  padding: 10px 20px;
+  border: 3px solid #ffffff;
+  background: var(--danger);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-shadow: 2px 2px 0 var(--shadow);
+  cursor: pointer;
+}
+
+.ml__results {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.ml__result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.07);
+  font-weight: 700;
+}
+
+.ml__result--mine {
+  outline: 2px solid var(--good);
+  outline-offset: -2px;
+}
+
+.ml__result-pos {
+  width: 18px;
+}
+
+.ml__result-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ml__result-value {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .ml__top {
+    gap: 10px;
+    padding: 6px 10px;
+  }
+
+  .ml__alive {
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+
+  .ml__clock {
+    font-size: 20px;
+    min-width: 52px;
+  }
+
+  .countdown {
+    font-size: 108px;
+  }
+
+  .ml__banner-title {
+    font-size: 24px;
+  }
+
+  .ml__players {
+    min-width: 0;
+  }
+
+  .ml__player-name {
+    max-width: 70px;
+  }
+
+  .ml__feed {
+    top: 84px;
+  }
+
+  .ml__decay {
+    top: 84px;
+    font-size: 11px;
+  }
+}
