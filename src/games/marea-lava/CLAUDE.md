@@ -81,6 +81,9 @@ verificacion** (el criterio de `valid()` asume ese salto).
 - **Puntaje (`higher`):** la mejor altura en metros; el que llega a la cima suma
   `100 + segundos que le sobraron`, asi cualquiera que llego le gana a cualquiera
   que no. El `format` del `meta.ts` lo muestra como "cima (+X s)" o "N m".
+  La partida terminada entra al ranking global de mejor altura (la registra `RoomMode`,
+  ver "Global rankings" en el CLAUDE.md raiz); los ceros de "sin conexion" y del que
+  no tiene asiento se reportan con `{ ranked: false }` para no ensuciar el historial.
 
 ## Probar sin Supabase (`devRoom.ts`)
 

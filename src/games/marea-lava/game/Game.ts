@@ -200,7 +200,7 @@ export class Game {
     this.hud.banner(null);
     this.hud.showCountdown(null);
     this.hud.showMessage("Sin conexi&oacute;n", "No se pudo conectar al game server. La ronda sigue con los dem&aacute;s.");
-    this.report(0);
+    this.report(0, false);
   }
 
   // ---------- Mensajes ----------
@@ -353,7 +353,7 @@ export class Game {
       const st = s.status[this.mySeat];
       this.report(st === "top" ? 100 + (MATCH_MS - s.topT[this.mySeat]) / 1000 : s.best[this.mySeat]);
     } else {
-      this.report(0);
+      this.report(0, false);
     }
     this.hud.showCountdown(null);
     this.hud.banner(null);
@@ -363,11 +363,15 @@ export class Game {
     window.setTimeout(() => this.hud.showResults(this.rows(), s.topT), 800);
   }
 
-  private report(score: number): void {
+  /**
+   * `ranked` = false para los ceros que no son una partida jugada (sin conexion,
+   * o sin asiento por entrar tarde): la ronda los necesita, el ranking global no.
+   */
+  private report(score: number, ranked = true): void {
     if (this.reported) return;
     this.reported = true;
     if (this.confirmTimer !== null) window.clearTimeout(this.confirmTimer);
-    this.room?.reportScore(Math.round(Math.max(0, score) * 10) / 10);
+    this.room?.reportScore(Math.round(Math.max(0, score) * 10) / 10, { ranked });
   }
 
   private currentScore(): number {
