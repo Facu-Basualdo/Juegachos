@@ -1,0 +1,735 @@
+@import url("https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Archivo:wght@500;700;800&display=swap");
+
+/* Papa Caliente — "Estudio de TV" (ver DESIGN.md): set de un programa de concursos
+   de los 70, fondo petroleo con un foco en el centro, marquesina de bombitas arriba
+   y abajo, atriles de concursantes en circulo y la papa volando entre ellos. */
+
+:root {
+  --studio: #1c4a50;
+  --studio-deep: #0e2a2e;
+  --cream: #f4e7c9;
+  --paper: #fbf3df;
+  --ink: #2a1a12;
+  --tomato: #d9442b;
+  --mustard: #e9b233;
+  --bulb: #fff1b0;
+  --potato: #c98a3c;
+  --potato-deep: #8f5a22;
+  --muted: #9fb8b6;
+  --flight: 160ms;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(255, 236, 180, 0.2) 0%, rgba(255, 236, 180, 0.05) 32%, transparent 58%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.08) 0 2px, transparent 2px 46px),
+    radial-gradient(circle at 50% 45%, var(--studio) 0%, var(--studio-deep) 80%);
+  color: var(--cream);
+  font-family: "Archivo", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  touch-action: manipulation;
+}
+
+#app {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.back-link {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 60;
+  color: var(--cream);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 6px 12px;
+  border: 2px solid rgba(244, 231, 201, 0.4);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.back-link:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.hp {
+  height: 100%;
+  position: relative;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ---------- Marquesina ---------- */
+
+.hp__bulbs {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 10px;
+  display: flex;
+  justify-content: space-around;
+  pointer-events: none;
+  z-index: 1;
+}
+.hp__bulbs--top {
+  top: 4px;
+}
+.hp__bulbs--bottom {
+  bottom: 4px;
+}
+.hp__bulbs i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bulb);
+  box-shadow: 0 0 6px 1px rgba(255, 225, 140, 0.7);
+  animation: hp-chase 1.6s steps(1) infinite;
+  animation-delay: calc(var(--i) * -0.2s);
+}
+@keyframes hp-chase {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* ---------- Escena ---------- */
+
+.hp__stage {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  position: relative;
+  padding: 18px 16px;
+}
+.hp__stage[hidden] {
+  display: none;
+}
+.hp__stage.is-boom {
+  animation: hp-quake 0.45s ease-out;
+}
+
+.hp__arena {
+  position: relative;
+  width: min(94vw, 80vh, 640px);
+  aspect-ratio: 1;
+}
+
+/* Centro: termometro + cartel + secuencia. */
+.hp__center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.hp__meter {
+  width: 62%;
+  overflow: visible;
+}
+.hp__meter-band {
+  fill: none;
+  stroke-width: 9;
+}
+.hp__meter-band--cool {
+  stroke: var(--cream);
+}
+.hp__meter-band--warm {
+  stroke: var(--mustard);
+}
+.hp__meter-band--hot {
+  stroke: var(--tomato);
+}
+.hp__needle {
+  transform-box: view-box;
+  transform-origin: 60px 62px;
+  transform: rotate(-90deg);
+}
+.hp__needle path {
+  stroke: var(--ink);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+}
+.hp__needle circle {
+  fill: var(--ink);
+  stroke: var(--cream);
+  stroke-width: 2;
+}
+
+.hp__big {
+  font-family: "Alfa Slab One", Georgia, serif;
+  font-size: clamp(1.3rem, 5.4vmin, 2.4rem);
+  line-height: 1.05;
+  color: var(--cream);
+  text-transform: uppercase;
+  text-shadow: 0 3px 0 var(--ink);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hp__stage.is-mine .hp__big {
+  color: var(--mustard);
+}
+.hp__small {
+  font-size: clamp(0.72rem, 2.4vmin, 0.95rem);
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  min-height: 1.2em;
+}
+
+/* Secuencia de flechas del que tiene la papa. */
+.hp__seq {
+  display: flex;
+  gap: clamp(3px, 1vmin, 6px);
+  margin-top: 6px;
+  min-height: clamp(30px, 7.5vmin, 46px);
+}
+.hp__seq.is-wrong {
+  animation: hp-shake 0.3s ease-out;
+}
+.hp__tile {
+  width: clamp(30px, 7.5vmin, 46px);
+  height: clamp(30px, 7.5vmin, 46px);
+  border-radius: 8px;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  box-shadow: 0 3px 0 var(--ink);
+  display: grid;
+  place-items: center;
+}
+.hp__tile svg,
+.hp__key svg {
+  width: 70%;
+  height: 70%;
+  transform: rotate(var(--rot, 0deg));
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.hp__tile.is-next {
+  background: var(--mustard);
+  transform: translateY(-3px);
+}
+.hp__tile.is-done {
+  background: var(--studio-deep);
+  border-color: var(--studio-deep);
+  box-shadow: none;
+}
+.hp__tile.is-done svg {
+  stroke: var(--muted);
+}
+
+.hp__note {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--tomato);
+  background: var(--paper);
+  border-radius: 999px;
+  padding: 2px 10px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.hp__note.is-on {
+  opacity: 1;
+}
+
+/* ---------- Concursantes ---------- */
+
+.hp__player {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: clamp(76px, 20vmin, 124px);
+  cursor: default;
+  transition: opacity 0.2s, filter 0.2s;
+}
+.hp__player.is-targetable {
+  cursor: pointer;
+}
+.hp__head {
+  width: clamp(34px, 9vmin, 54px);
+  height: clamp(34px, 9vmin, 54px);
+}
+.hp__head svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.hp__head circle:not(.hp__head-skin),
+.hp__mouth--panic {
+  fill: var(--ink);
+}
+.hp__head-skin {
+  fill: var(--seat);
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+.hp__mouth--ok {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.hp__mouth--panic {
+  display: none;
+}
+.hp__player.is-holder .hp__mouth--ok {
+  display: none;
+}
+.hp__player.is-holder .hp__mouth--panic {
+  display: inline;
+}
+
+/* El atril: cartel crema con el nombre sobre una franja del color del asiento. */
+.hp__plate {
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  border-bottom: 7px solid var(--seat);
+  box-shadow: 0 3px 0 var(--ink);
+  font-weight: 800;
+  font-size: clamp(0.66rem, 2.3vmin, 0.9rem);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hp__player.is-me .hp__plate {
+  background: var(--mustard);
+}
+.hp__player.is-holder .hp__plate {
+  box-shadow: 0 0 0 3px var(--bulb), 0 0 18px 4px rgba(255, 225, 140, 0.55);
+}
+.hp__player.is-off {
+  opacity: 0.55;
+}
+
+.hp__aim,
+.hp__stamp {
+  position: absolute;
+  left: 50%;
+  font-weight: 800;
+  text-transform: uppercase;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.hp__aim {
+  top: -16px;
+  transform: translateX(-50%);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+  background: var(--mustard);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 1px 8px;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.hp__player.is-target .hp__aim {
+  opacity: 1;
+}
+.hp__stamp {
+  top: 42%;
+  transform: translate(-50%, -50%) rotate(-12deg);
+  font-family: "Alfa Slab One", Georgia, serif;
+  font-size: clamp(0.8rem, 3vmin, 1.1rem);
+  color: var(--tomato);
+  border: 3px solid var(--tomato);
+  border-radius: 6px;
+  padding: 0 6px;
+  background: rgba(251, 243, 223, 0.9);
+  display: none;
+}
+.hp__player.is-out .hp__stamp {
+  display: block;
+}
+.hp__player.is-out .hp__head,
+.hp__player.is-out .hp__plate {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+.hp__player.is-boom {
+  animation: hp-shake 0.35s ease-out 2;
+}
+
+/* ---------- La papa ---------- */
+
+.hp__potato {
+  --heat: 0;
+  position: absolute;
+  width: clamp(48px, 13vmin, 78px);
+  height: clamp(48px, 13vmin, 78px);
+  transform: translate(-50%, -50%);
+  transition:
+    left var(--flight) cubic-bezier(0.3, 0.7, 0.4, 1),
+    top var(--flight) cubic-bezier(0.3, 0.7, 0.4, 1),
+    opacity 0.12s;
+  pointer-events: none;
+  z-index: 5;
+  filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.35));
+}
+.hp__potato.no-flight {
+  transition: none;
+}
+.hp__potato.is-hidden {
+  opacity: 0;
+}
+.hp__potato-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  animation: hp-jiggle 0.5s ease-in-out infinite;
+}
+.hp__stage.is-hot .hp__potato-svg {
+  animation-duration: 0.14s;
+}
+.hp__potato-body {
+  fill: var(--potato);
+  stroke: var(--ink);
+  stroke-width: 3.5;
+}
+.hp__potato-hot {
+  fill: var(--tomato);
+  opacity: calc(var(--heat) * 0.85);
+}
+.hp__potato-hi {
+  fill: #f1c27d;
+  opacity: 0.6;
+}
+.hp__potato-spot {
+  fill: var(--potato-deep);
+}
+.hp__potato-eye {
+  fill: var(--ink);
+}
+.hp__potato-ln {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.hp__steam path {
+  fill: none;
+  stroke: var(--cream);
+  stroke-width: 3;
+  stroke-linecap: round;
+  opacity: calc(0.25 + var(--heat) * 0.75);
+  animation: hp-steam 1.1s ease-in-out infinite;
+}
+.hp__steam path:nth-child(2) {
+  animation-delay: -0.35s;
+}
+.hp__steam path:nth-child(3) {
+  animation-delay: -0.7s;
+}
+
+/* Cartel de BOOM: estrella de historieta sobre el atril del que exploto. */
+.hp__burst {
+  position: absolute;
+  width: clamp(110px, 28vmin, 170px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%) scale(0);
+  display: grid;
+  place-items: center;
+  background: var(--mustard);
+  clip-path: polygon(50% 0, 61% 30%, 93% 18%, 72% 44%, 100% 58%, 68% 64%, 78% 96%, 50% 74%, 22% 96%, 32% 64%, 0 58%, 28% 44%, 7% 18%, 39% 30%);
+  pointer-events: none;
+  z-index: 6;
+  opacity: 0;
+}
+.hp__burst span {
+  font-family: "Alfa Slab One", Georgia, serif;
+  font-size: clamp(1rem, 4.4vmin, 1.6rem);
+  color: var(--tomato);
+  transform: rotate(-8deg);
+}
+.hp__burst.is-boom {
+  animation: hp-burst 0.9s ease-out forwards;
+}
+
+/* ---------- Cruceta (solo con dedo) ---------- */
+
+.hp__pad {
+  display: none;
+  grid-template-columns: repeat(3, clamp(58px, 17vw, 76px));
+  grid-template-rows: repeat(2, clamp(58px, 17vw, 76px));
+  gap: 8px;
+  grid-template-areas:
+    ". u ."
+    "l d r";
+  opacity: 0.45;
+  transition: opacity 0.1s;
+}
+.hp__pad.is-live {
+  opacity: 1;
+}
+@media (hover: none), (pointer: coarse) {
+  .hp__pad {
+    display: grid;
+  }
+  .hp__arena {
+    width: min(94vw, 58vh, 640px);
+  }
+}
+.hp__key {
+  border-radius: 14px;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  box-shadow: 0 5px 0 var(--ink);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.hp__key--U {
+  grid-area: u;
+}
+.hp__key--L {
+  grid-area: l;
+  --rot: 270deg;
+}
+.hp__key--D {
+  grid-area: d;
+  --rot: 180deg;
+}
+.hp__key--R {
+  grid-area: r;
+  --rot: 90deg;
+}
+.hp__key.is-pressed {
+  animation: hp-press 0.12s ease-out;
+}
+
+.hp__ping {
+  position: absolute;
+  right: 14px;
+  bottom: 18px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+/* ---------- Carteles ---------- */
+
+.hp__overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 20;
+}
+.hp__overlay[hidden] {
+  display: none;
+}
+.hp__card {
+  width: min(440px, 100%);
+  background: var(--paper);
+  color: var(--ink);
+  border: 4px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 0 8px 0 var(--ink);
+  padding: 22px 22px 24px;
+  text-align: center;
+}
+.hp__card-kicker {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: var(--tomato);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.hp__title {
+  font-family: "Alfa Slab One", Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(1.7rem, 7vw, 2.4rem);
+  color: var(--tomato);
+  margin: 10px 0 8px;
+}
+.hp__body {
+  font-size: 0.98rem;
+  line-height: 1.45;
+}
+.hp__btn {
+  margin-top: 16px;
+  font: inherit;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--mustard);
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 0 4px 0 var(--ink);
+  padding: 8px 20px;
+  cursor: pointer;
+}
+
+.hp__countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+  font-family: "Alfa Slab One", Georgia, serif;
+  font-size: clamp(5rem, 22vw, 12rem);
+  color: var(--mustard);
+  text-shadow: 0 8px 0 var(--ink);
+  pointer-events: none;
+}
+.hp__countdown[hidden] {
+  display: none;
+}
+.hp__countdown.is-pop {
+  animation: countdown-pop 700ms ease-out;
+}
+
+/* ---------- Animaciones ---------- */
+
+@keyframes countdown-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  30% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+}
+@keyframes hp-jiggle {
+  0%,
+  100% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+}
+@keyframes hp-steam {
+  0% {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+}
+@keyframes hp-shake {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  25% {
+    translate: -6px 0;
+  }
+  75% {
+    translate: 6px 0;
+  }
+}
+@keyframes hp-quake {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  20% {
+    translate: -8px 4px;
+  }
+  40% {
+    translate: 7px -5px;
+  }
+  60% {
+    translate: -4px 3px;
+  }
+  80% {
+    translate: 3px -2px;
+  }
+}
+@keyframes hp-burst {
+  0% {
+    transform: translate(-50%, -50%) scale(0) rotate(-20deg);
+    opacity: 1;
+  }
+  25% {
+    transform: translate(-50%, -50%) scale(1.15) rotate(4deg);
+    opacity: 1;
+  }
+  70% {
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+    opacity: 0;
+  }
+}
+@keyframes hp-press {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(4px);
+    box-shadow: 0 1px 0 var(--ink);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hp__bulbs i,
+  .hp__potato-svg,
+  .hp__steam path {
+    animation: none;
+  }
+}
