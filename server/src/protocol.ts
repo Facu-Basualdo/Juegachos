@@ -722,3 +722,98 @@ export interface PtServerToClient {
   /** Un salpicon se disparo (para el sonido y la animacion; no viaja en el state). */
   "pt:splat": (msg: { i: number; x: number; y: number }) => void;
 }
+
+// ---------------------------------------------------------------------------
+// Imitame (mt:*). Espejado en src/games/imitame/game/ImitameTransport.ts.
+// ---------------------------------------------------------------------------
+
+export type MtPhase =
+  | "waiting"
+  | "intro"
+  | "listen"
+  | "ready"
+  | "record"
+  | "upload"
+  | "playback"
+  | "wheel"
+  | "over";
+
+export type MtEffectId =
+  | "doble"
+  | "mas"
+  | "eco"
+  | "saturado"
+  | "helio"
+  | "cortado"
+  | "pedo"
+  | "salvado";
+
+export interface MtPlayerView {
+  nickname: string;
+  connected: boolean;
+  total: number;
+  submitted: boolean;
+  /** Lo que le toco en la ruleta anterior: pesa sobre su toma de ESTA ronda. */
+  effect: MtEffectId | null;
+}
+
+export interface MtResult {
+  nickname: string;
+  hasTake: boolean;
+  /** Puntaje crudo 0-100 que calculo el cliente (spoofeable, como el resto de las salas). */
+  raw: number;
+  mult: number;
+  points: number;
+  attacks: number;
+  rhythm: number;
+  melody: number;
+}
+
+export interface MtWheel {
+  outcome: MtEffectId;
+  target: string;
+  /** 0..1: donde frena la aguja dentro de la porcion (igual para todos). */
+  jitter: number;
+}
+
+export interface MtState {
+  phase: MtPhase;
+  round: number;
+  totalRounds: number;
+  soundId: string | null;
+  clockMs: number | null;
+  clockTotalMs: number | null;
+  players: MtPlayerView[];
+  playOrder: string[] | null;
+  playIndex: number;
+  /** playback: resultados hasta `playIndex` inclusive; wheel: todos. */
+  results: MtResult[] | null;
+  wheel: MtWheel | null;
+}
+
+export interface MtGameover {
+  ranking: { nickname: string; place: number; total: number }[];
+}
+
+/** Cliente -> Server. */
+export interface MtClientToServer {
+  "mt:join": (msg: { code: string; nickname: string; roster: string[] }) => void;
+  /** La toma (mu-law, 1 byte por muestra) + el puntaje que calculo el cliente. */
+  "mt:take": (msg: {
+    round: number;
+    rate: number;
+    audio: ArrayBuffer | null;
+    raw: number;
+    attacks: number;
+    rhythm: number;
+    melody: number;
+  }) => void;
+}
+
+/** Server -> Cliente. */
+export interface MtServerToClient {
+  "mt:state": (state: MtState) => void;
+  /** Una toma, reenviada a todos al abrir la reproduccion (y al que reconecta en ella). */
+  "mt:take": (msg: { round: number; nickname: string; rate: number; audio: Buffer }) => void;
+  "mt:gameover": (msg: MtGameover) => void;
+}

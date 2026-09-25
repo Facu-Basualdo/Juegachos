@@ -1,0 +1,436 @@
+/*
+ * Imitame — estetica "Garganta de Feria" (ver DESIGN.md).
+ * Noche violeta de escenario, colores de caramelo, contorno de tinta grueso y sombra
+ * dura desplazada: todo parece un sticker pegado sobre el telon. Sin assets ni fuentes
+ * externas.
+ */
+
+:root {
+  --mt-night: #1b1033;
+  --mt-stage: #2b1a52;
+  --mt-line: #120a24;
+  --mt-cream: #fff4e0;
+  --mt-pink: #ff4f9a;
+  --mt-yellow: #ffd23f;
+  --mt-cyan: #35d6e8;
+  --mt-lime: #8be04e;
+  --mt-font: "Arial Rounded MT Bold", "Nunito", "Trebuchet MS", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--mt-night);
+  color: var(--mt-cream);
+  font-family: var(--mt-font);
+  overscroll-behavior: none;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+.mt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  /* Telon: franjas verticales apenas marcadas + foco de luz arriba. */
+  background:
+    radial-gradient(ellipse 70% 45% at 50% 0%, rgba(255, 210, 63, 0.18), transparent 70%),
+    repeating-linear-gradient(90deg, var(--mt-night) 0 38px, #221440 38px 76px);
+}
+
+/* El Hud prende y apaga piezas con `hidden`; sin esto su `display` propio lo pisa. */
+.mt [hidden] {
+  display: none !important;
+}
+
+.mt__stage {
+  position: relative;
+  width: min(560px, 100%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 16px 24px;
+  overflow-y: auto;
+}
+
+/* ---------- Topbar ---------- */
+
+.mt__top {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mt__round {
+  flex: none;
+  font-weight: 900;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  color: var(--mt-yellow);
+  text-transform: uppercase;
+}
+
+.mt__clock {
+  flex: 1;
+  height: 14px;
+  border: 3px solid var(--mt-line);
+  border-radius: 999px;
+  background: var(--mt-stage);
+  overflow: hidden;
+}
+
+.mt__clock-bar {
+  height: 100%;
+  background: var(--mt-lime);
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
+.mt__clock-bar.is-low {
+  background: var(--mt-pink);
+}
+
+/* ---------- Roster ---------- */
+
+.mt__roster {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.mt__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 3px solid var(--mt-line);
+  border-radius: 999px;
+  background: var(--mt-stage);
+  box-shadow: 3px 3px 0 var(--mt-line);
+  font-size: 13px;
+  font-weight: 800;
+  transition: transform 0.15s;
+}
+
+.mt__chip.is-me {
+  background: #3d2670;
+}
+
+.mt__chip.is-off {
+  opacity: 0.4;
+}
+
+.mt__chip.is-done {
+  background: var(--mt-lime);
+  color: var(--mt-line);
+}
+
+.mt__chip.is-playing {
+  background: var(--mt-yellow);
+  color: var(--mt-line);
+  transform: translateY(-3px) rotate(-2deg);
+}
+
+.mt__chip-pts {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.mt__chip-fx {
+  padding: 1px 6px;
+  border: 2px solid var(--mt-line);
+  border-radius: 6px;
+  background: var(--fx);
+  color: var(--mt-line);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+
+/* ---------- Carteles ---------- */
+
+.mt__head {
+  text-align: center;
+  min-height: 92px;
+}
+
+.mt__kicker {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mt-cyan);
+}
+
+.mt__title {
+  font-size: clamp(30px, 8vw, 44px);
+  font-weight: 900;
+  line-height: 1.05;
+  color: var(--mt-cream);
+  text-shadow:
+    3px 3px 0 var(--mt-line),
+    -1px -1px 0 var(--mt-line);
+}
+
+.mt__stage[data-phase="record"] .mt__title {
+  color: var(--mt-pink);
+}
+
+.mt__sub {
+  margin-top: 4px;
+  font-size: 15px;
+  opacity: 0.85;
+}
+
+/* ---------- Boca + ruleta ---------- */
+
+.mt__show {
+  width: min(260px, 62vw);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+}
+
+.mt__face {
+  width: 100%;
+  height: 100%;
+}
+
+.mt__wheel {
+  width: 100%;
+  height: 100%;
+}
+
+/* En la ruleta no hay melodia que mostrar: la ruleta crece y el trazo se va. */
+.mt__stage[data-phase="wheel"] .mt__show {
+  width: min(330px, 84vw);
+}
+
+.mt__stage[data-phase="wheel"] .mt__trace {
+  display: none;
+}
+
+.mt__trace {
+  width: 100%;
+  aspect-ratio: 1040 / 240;
+  border: 4px solid var(--mt-line);
+  border-radius: 18px;
+  background: var(--mt-stage);
+  box-shadow: 5px 5px 0 var(--mt-line);
+}
+
+/* ---------- Tarjeta de puntaje ---------- */
+
+.mt__card {
+  width: 100%;
+  padding: 12px 16px 14px;
+  border: 4px solid var(--mt-line);
+  border-radius: 18px;
+  background: var(--mt-cream);
+  color: var(--mt-line);
+  box-shadow: 6px 6px 0 var(--mt-line);
+}
+
+.mt__card.is-in {
+  animation: mt-card-in 0.35s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+@keyframes mt-card-in {
+  from {
+    transform: scale(0.7) rotate(-3deg);
+    opacity: 0;
+  }
+}
+
+.mt__card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.mt__card-who {
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.mt__card-raw {
+  font-size: 40px;
+  font-weight: 900;
+  color: var(--mt-pink);
+  text-shadow: 2px 2px 0 var(--mt-line);
+  font-variant-numeric: tabular-nums;
+}
+
+.mt__bar {
+  display: grid;
+  grid-template-columns: 72px 1fr 34px;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mt__bar-track {
+  height: 14px;
+  border: 3px solid var(--mt-line);
+  border-radius: 999px;
+  background: #e8dcc6;
+  overflow: hidden;
+}
+
+.mt__bar-fill {
+  display: block;
+  height: 100%;
+  width: var(--v);
+  background: var(--c);
+  animation: mt-bar 0.6s ease-out;
+}
+
+@keyframes mt-bar {
+  from {
+    width: 0;
+  }
+}
+
+.mt__bar-val {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.mt__card-mult {
+  margin-top: 6px;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.mt__card-empty {
+  font-weight: 800;
+  opacity: 0.7;
+}
+
+/* ---------- Boton de audio bloqueado ---------- */
+
+.mt__audio {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  padding: 14px 22px;
+  border: 4px solid var(--mt-line);
+  border-radius: 999px;
+  background: var(--mt-yellow);
+  color: var(--mt-line);
+  box-shadow: 5px 5px 0 var(--mt-line);
+  font: 900 16px var(--mt-font);
+  cursor: pointer;
+  z-index: 5;
+  animation: mt-wiggle 1.2s ease-in-out infinite;
+}
+
+@keyframes mt-wiggle {
+  50% {
+    transform: translateX(-50%) rotate(-3deg) scale(1.04);
+  }
+}
+
+/* ---------- Mensaje / countdown ---------- */
+
+.mt__overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.mt__msg {
+  width: min(420px, 100%);
+  padding: 24px;
+  border: 4px solid var(--mt-line);
+  border-radius: 22px;
+  background: var(--mt-cream);
+  color: var(--mt-line);
+  box-shadow: 8px 8px 0 var(--mt-line);
+  text-align: center;
+}
+
+.mt__msg-title {
+  margin: 0 0 8px;
+  font-size: 34px;
+  font-weight: 900;
+  color: var(--mt-pink);
+  text-shadow: 2px 2px 0 var(--mt-line);
+}
+
+.mt__msg-body {
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.mt__msg-btn {
+  margin-top: 16px;
+  padding: 12px 22px;
+  border: 4px solid var(--mt-line);
+  border-radius: 999px;
+  background: var(--mt-yellow);
+  color: var(--mt-line);
+  box-shadow: 4px 4px 0 var(--mt-line);
+  font: 900 16px var(--mt-font);
+  cursor: pointer;
+}
+
+.mt__countdown {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  font-size: clamp(90px, 28vw, 180px);
+  font-weight: 900;
+  color: var(--mt-yellow);
+  text-shadow:
+    6px 6px 0 var(--mt-line),
+    -2px -2px 0 var(--mt-line);
+  z-index: 10;
+}
+
+.mt__countdown.is-pop {
+  animation: countdown-pop 0.6s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+@keyframes countdown-pop {
+  from {
+    transform: scale(0.4) rotate(-8deg);
+    opacity: 0;
+  }
+}
+
+.back-link {
+  position: fixed;
+  top: 10px;
+  left: 12px;
+  z-index: 20;
+  color: var(--mt-cream);
+  font: 800 13px var(--mt-font);
+  text-decoration: none;
+  opacity: 0.7;
+}
