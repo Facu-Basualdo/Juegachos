@@ -39,6 +39,33 @@ export const MAX_DT = 0.05;
 export const INPUT_INTERVAL = 0.033;
 
 /**
+ * Un cambio de direccion no espera al proximo envio periodico: sale en el mismo
+ * cuadro. Esperar hasta 33 ms era retraso puro en cada giro, y ademas la prediccion
+ * (que usaba la direccion ACTUAL) se desfasaba del replay de `reconcile` (que usa la
+ * ENVIADA), asi que cada giro terminaba en una correccion.
+ *
+ * `INPUT_TURN_EPS` es cuanto tiene que moverse el vector normalizado (suma de
+ * diferencias absolutas) para contar como giro; el joystick es analogico y sin
+ * umbral mandaria un mensaje por cuadro. `INPUT_MIN_GAP` (s) topea la cadencia en
+ * pantallas de 120/144 Hz.
+ */
+export const INPUT_TURN_EPS = 0.15;
+export const INPUT_MIN_GAP = 0.016;
+
+/**
+ * Trazo humedo propio. La pintura confirmada del pincel propio tarda una vuelta
+ * de red (mas la espera al proximo snapshot) en aparecer, y con ~150 ms de RTT eso
+ * dejaba un hueco de ~40 px entre el pincel y su rastro, mas largo que el disco
+ * humedo: el trazo parecia arrastrarse detras. Ahora se dibuja el recorrido
+ * predicho de los ultimos `rtt + TRAIL_EXTRA_MS`, sin tocar la grilla, y el
+ * pigmento confirmado lo va tapando. Si el server no lo confirma (un aturdimiento
+ * que llego tarde) el trazo se seca solo al vencer la ventana.
+ */
+export const TRAIL_EXTRA_MS = 100;
+/** RTT supuesto hasta tener la primera medicion (ms). */
+export const DEFAULT_RTT = 150;
+
+/**
  * Retraso de la interpolacion de los rivales (ms), aplicado sobre la LINEA DE
  * TIEMPO DEL SERVER (`pt:state.t`), no sobre la hora de llegada del paquete. Por
  * eso no tiene que cubrir la latencia (esa la absorbe el offset de reloj), solo

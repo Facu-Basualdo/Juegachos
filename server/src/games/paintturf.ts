@@ -17,8 +17,8 @@ import type { PtPhase, PtPlayerView, PtState } from "../protocol.js";
  * hace la paleta de PONG dejaria teletransportarse y pintar todo el tablero con
  * las devtools abiertas.
  *
- * Presupuesto: 8 jugadores x 20 broadcasts/s = ~160 emits/s por sala, un tercio
- * de lo que ya mueve PONG. La grilla entera (~800 celdas) viaja SOLO en el
+ * Presupuesto: 8 jugadores x 25 broadcasts/s = ~200 emits/s por sala, menos de
+ * la mitad de lo que ya mueve PONG. La grilla entera (~800 celdas) viaja SOLO en el
  * `pt:init` del join/reconexion; los snapshots llevan nada mas que las celdas
  * cambiadas desde el anterior.
  *
@@ -72,7 +72,6 @@ const PREROLL_MS = 3000;
 const START_GRACE_MS = 8000;
 /** Paso fijo de la simulacion (50 Hz). */
 const TICK_MS = 20;
-const STEP_DT = TICK_MS / 1000;
 /**
  * Cada cuanto TIEMPO DE SIMULACION se difunde un snapshot: 40 ms, o sea 25 Hz.
  *
@@ -100,6 +99,32 @@ const BROADCAST_MS = 40;
  * descarta el excedente en vez de simular cien pasos de golpe.
  */
 const MAX_CATCHUP_MS = 150;
+/**
+ * Buffer de jitter de los inputs (ms). Cada `pt:input` viene fechado con el reloj
+ * del cliente (`t`) y se aplica en `t + offset + INPUT_BUFFER_MS`, donde `offset`
+ * es la latencia de subida MINIMA vista. Asi todos los inputs de un jugador rigen
+ * con el mismo retraso y cada uno dura en el server exactamente lo que duro en el
+ * cliente, que es lo que reproduce su `reconcile`.
+ *
+ * Aplicarlos al llegar (como antes) metia el jitter de subida en la duracion de
+ * cada input: un paquete 20 ms mas lento alarga 20 ms el tramo anterior, el
+ * snapshot trae ~4 px de diferencia y el pincel propio tiembla corrigiendose. El
+ * costo son estos 30 ms extra, que el propio jugador no ve (su pincel es predicho)
+ * y los rivales casi tampoco.
+ */
+const INPUT_BUFFER_MS = 30;
+/** Correccion hacia arriba del offset por input (fraccion del error): acompana la
+ *  deriva entre relojes y una subida sostenida de la latencia. */
+const INPUT_OFFSET_DRIFT = 0.005;
+
+interface QueuedInput {
+  /** simTime en que rige. */
+  at: number;
+  dx: number;
+  dy: number;
+  seq: number;
+  splat: boolean;
+}
 
 class Brush {
   x = 0;
@@ -115,8 +140,27 @@ class Brush {
   /** Numero del ultimo `pt:input` aplicado, que vuelve en el snapshot para que el
    *  cliente sepa hasta donde lo escucho el server (ver `reconcile` del cliente). */
   lastSeq = 0;
+  /** simTime desde el que rige `lastSeq`. Viaja como `a` (= t - lastSeqAt). */
+  lastSeqAt = 0;
+  /** Inputs recibidos que todavia no rigen (ver INPUT_BUFFER_MS). */
+  queue: QueuedInput[] = [];
+  /** simTime estimado menos reloj del cliente, o null sin muestras todavia. */
+  clockOffset: number | null = null;
 
   constructor(readonly seat: number) {}
+
+  /**
+   * Se suelta el control: nadie lo esta manejando (se fue) o lo agarra una pagina
+   * nueva (F5), cuyo contador de inputs y cuyo reloj arrancan de cero.
+   */
+  release(simTime: number): void {
+    this.dx = 0;
+    this.dy = 0;
+    this.queue = [];
+    this.lastSeq = 0;
+    this.lastSeqAt = simTime;
+    this.clockOffset = null;
+  }
 }
 
 export class PaintTurfSim implements RoomSim {
@@ -165,6 +209,9 @@ export class PaintTurfSim implements RoomSim {
     // Al que llega tarde o vuelve de un F5 se le manda el tablero completo: sin
     // esto se quedaria con la grilla en blanco hasta que alguien la repinte.
     this.emitInitTo(nickname);
+    // Una pagina nueva numera sus inputs desde 1: con el `lastSeq` viejo el server
+    // no le acusaria ninguno y el cliente no podria reconciliar en toda la partida.
+    this.brushes.get(nickname)?.release(this.simTime);
 
     if (this.phase !== "waiting") return;
     if (this.startTimer === null) {
@@ -176,10 +223,12 @@ export class PaintTurfSim implements RoomSim {
     }
   }
 
-  leave(_nickname: string): void {
+  leave(nickname: string): void {
     // El pincel NO se saca: su territorio sigue contando y, si vuelve (una recarga
-    // de pagina), retoma el control donde lo dejo. Quieto no pinta, que ya es
-    // penalizacion suficiente.
+    // de pagina), retoma el control donde lo dejo. Pero se frena: quieto no pinta,
+    // que ya es penalizacion suficiente, y sin nadie manejandolo no puede seguir
+    // pintando en la ultima direccion que tenia.
+    this.brushes.get(nickname)?.release(this.simTime);
   }
 
   message(nickname: string, event: string, payload: unknown): void {
@@ -187,26 +236,46 @@ export class PaintTurfSim implements RoomSim {
     const brush = this.brushes.get(nickname);
     if (!brush || this.phase !== "playing") return;
 
-    const dx = readNumber(payload, "dx") ?? 0;
-    const dy = readNumber(payload, "dy") ?? 0;
-    // Se normaliza aca: el cliente no decide su velocidad, solo hacia donde va.
-    const len = Math.hypot(dx, dy);
-    if (len > 0.001) {
-      brush.dx = dx / len;
-      brush.dy = dy / len;
-    } else {
-      brush.dx = 0;
-      brush.dy = 0;
-    }
-
-    if (payload && typeof payload === "object" && (payload as { s?: unknown }).s === true) {
-      brush.wantsSplat = true;
-    }
-
     const seq = readInt(payload, "n");
     // Solo hacia adelante: un mensaje que llega fuera de orden no puede hacer que el
     // cliente reconcilie contra un input que ya quedo viejo.
-    if (seq !== null && seq > brush.lastSeq) brush.lastSeq = seq;
+    if (seq !== null && seq <= brush.lastSeq) return;
+    const last = brush.queue[brush.queue.length - 1];
+    if (seq !== null && last && seq <= last.seq) return;
+
+    const rawX = readNumber(payload, "dx") ?? 0;
+    const rawY = readNumber(payload, "dy") ?? 0;
+    // Se normaliza aca: el cliente no decide su velocidad, solo hacia donde va.
+    const len = Math.hypot(rawX, rawY);
+    const dx = len > 0.001 ? rawX / len : 0;
+    const dy = len > 0.001 ? rawY / len : 0;
+    const splat =
+      !!payload && typeof payload === "object" && (payload as { s?: unknown }).s === true;
+
+    const now = this.nowSim();
+    let at = now;
+    const sentAt = readNumber(payload, "t");
+    if (sentAt !== null) {
+      const sample = now - sentAt;
+      if (brush.clockOffset === null || sample < brush.clockOffset) brush.clockOffset = sample;
+      else brush.clockOffset += (sample - brush.clockOffset) * INPUT_OFFSET_DRIFT;
+      // Nunca en el pasado (un paquete que llego mas tarde que el buffer rige ya)
+      // ni antes que el input anterior. Tampoco mas lejos que el buffer: el reloj lo
+      // manda el cliente y no puede usarlo para cargar inputs a futuro.
+      at = clamp(sentAt + brush.clockOffset + INPUT_BUFFER_MS, now, now + INPUT_BUFFER_MS);
+    }
+    // Cliente viejo, sin `t`: rige al llegar, como antes.
+    if (last) at = Math.max(at, last.at);
+    brush.queue.push({ at, dx, dy, seq: seq ?? brush.lastSeq, splat });
+  }
+
+  /**
+   * El instante actual en la linea de tiempo de la simulacion, con el resto de
+   * tiempo real que todavia no se simulo. Es contra lo que se fecha un input que
+   * llega entre dos despertares del timer.
+   */
+  private nowSim(): number {
+    return this.simTime + this.acc + (Date.now() - this.lastTick);
   }
 
   dispose(): void {
@@ -314,8 +383,22 @@ export class PaintTurfSim implements RoomSim {
     if (stunned) brush.stun = Math.max(0, brush.stun - TICK_MS);
 
     const speed = SPEED * (stunned ? STUN_SPEED_FACTOR : 1);
-    brush.x = clamp(brush.x + brush.dx * speed * STEP_DT, 0, VIEW_WIDTH);
-    brush.y = clamp(brush.y + brush.dy * speed * STEP_DT, 0, VIEW_HEIGHT);
+    // El paso cubre (simTime - TICK_MS, simTime]. Un input que rige a mitad del
+    // paso lo parte ahi: redondearlo al borde del paso le cambiaria la duracion
+    // hasta 20 ms respecto de la del cliente, que es justo lo que el buffer evita.
+    let from = this.simTime - TICK_MS;
+    while (brush.queue.length > 0 && brush.queue[0].at <= this.simTime) {
+      const input = brush.queue.shift()!;
+      const at = Math.max(input.at, from);
+      this.moveBrush(brush, speed, at - from);
+      from = at;
+      brush.dx = input.dx;
+      brush.dy = input.dy;
+      if (input.splat) brush.wantsSplat = true;
+      brush.lastSeq = input.seq;
+      brush.lastSeqAt = at;
+    }
+    this.moveBrush(brush, speed, this.simTime - from);
 
     // Aturdido no pinta: es lo que hace que valga la pena perseguir a alguien.
     if (!stunned) this.paint(brush.x, brush.y, BRUSH_RADIUS, brush.seat);
@@ -324,6 +407,12 @@ export class PaintTurfSim implements RoomSim {
     brush.wantsSplat = false;
     if (stunned || brush.cooldown > 0) return;
     this.splat(brush);
+  }
+
+  private moveBrush(brush: Brush, speed: number, ms: number): void {
+    if (ms <= 0) return;
+    brush.x = clamp(brush.x + brush.dx * speed * (ms / 1000), 0, VIEW_WIDTH);
+    brush.y = clamp(brush.y + brush.dy * speed * (ms / 1000), 0, VIEW_HEIGHT);
   }
 
   private splat(brush: Brush): void {
@@ -384,13 +473,15 @@ export class PaintTurfSim implements RoomSim {
     for (const [nickname, brush] of this.brushes) {
       players.push({
         i: brush.seat,
-        // Redondeado: dos snapshots identicos comparan iguales y el payload es la mitad.
-        x: Math.round(brush.x),
-        y: Math.round(brush.y),
+        // A un decimal: a pixel entero el error de redondeo (+-0.5 px cada 40 ms)
+        // se lee en el rival interpolado como un tironeo de +-12 px/s.
+        x: round1(brush.x),
+        y: round1(brush.y),
         st: Math.round(brush.stun),
         cd: Math.round(brush.cooldown),
         on: this.room.isConnected(nickname),
         n: brush.lastSeq,
+        a: Math.round(this.simTime - brush.lastSeqAt),
       });
     }
 
@@ -425,6 +516,10 @@ function encodeGrid(grid: Int8Array): string {
     out += owner < 0 ? "." : String(owner);
   }
   return out;
+}
+
+function round1(v: number): number {
+  return Math.round(v * 10) / 10;
 }
 
 function clamp(v: number, min: number, max: number): number {

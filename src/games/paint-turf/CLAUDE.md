@@ -15,9 +15,9 @@ reparto:
 - **Server** (`server/src/games/paintturf.ts`, namespace `/paintturf`): duenio de
   la grilla, de las posiciones, del aturdimiento y del puntaje. Simulacion con
   paso fijo a 50 Hz, broadcast cada 40 ms exactos de tiempo de simulacion.
-- **Cliente** (`game/Game.ts`): manda su direccion numerada, predice su propio
-  pincel, reconcilia reproduciendo los inputs que el server todavia no acuso, e
-  interpola a los rivales sobre el reloj del server.
+- **Cliente** (`game/Game.ts`): manda su direccion numerada y fechada, predice su
+  propio pincel, reconcilia reproduciendo los inputs que el server todavia no
+  acuso, e interpola a los rivales sobre el reloj del server.
 - **Supabase / RoomMode**: lobby, marcador, rejoin y el reporte del puntaje, como
   en todas las salas. El server no toca la DB.
 
@@ -38,20 +38,38 @@ posicion declarada por el cliente dejaria teletransportarse y pintar todo el tab
 desde las devtools. El puntaje spoofeable es un nivel de confianza que el repo ya
 acepta; arruinarle la partida a los otros mientras se juega, no.
 
-### El cliente NO pinta de forma predictiva
+### El cliente NO pinta de forma predictiva (pero dibuja el trazo humedo)
 
 Podria pintar la celda apenas la pisa, sin esperar el snapshot. No lo hace: cuando
 el server **no** confirma esa pintura — el caso tipico es un aturdimiento que llego
 un snapshot tarde — la celda queda pintada de este lado y de nadie del otro, para
-siempre, porque el protocolo no tiene "despintar". El hueco de un snapshot detras
-del pincel se tapa con el **disco de pigmento fresco** que dibuja el Renderer
-(`BrushView.wet`), que es gratis y no puede desincronizar nada.
+siempre, porque el protocolo no tiene "despintar".
+
+Lo que hace es **dibujar** el recorrido propio sin confirmar como un trazo humedo
+del ancho del pincel (`BrushView.trail`), sin tocar la grilla. La pintura
+confirmada tarda una vuelta de red en aparecer: con ~150 ms eran ~40 px de hueco
+entre el pincel y su rastro, mas largos que el disco humedo, y se leia como que la
+pintura se arrastraba detras. La ventana del trazo es `rtt + TRAIL_EXTRA_MS`, con
+el RTT medido con los acuses de input; si el server no confirma, el trazo se seca
+solo al vencer.
+
+### La pintura de los rivales se aplica sincronizada con su pincel
+
+Los rivales se dibujan `INTERP_DELAY` en el pasado. Aplicar sus celdas al llegar el
+snapshot ponia su manchon ~20 px **por delante** de su pincel. Ahora las celdas
+ajenas esperan en `pendingCells` hasta que la interpolacion llega al instante de su
+snapshot (`flushCells`); las propias se aplican al llegar. Como las dos van a
+destiempo, cada celda lleva el numero del snapshot que la escribio (`cellStamp`) y
+una celda vieja que sale de la cola no pisa una mas nueva. Fuera de `playing` y en
+`finish` se vacia la cola entera: el tablero final es exactamente el del server. El
+salpicon de un rival tambien se muestra con ese retraso; el propio se muestra al
+apretar (solo el efecto: la pintura la decide el server).
 
 ### Trafico
 
 8 jugadores x 25 broadcasts/s = **~200 emits/s por sala**, menos de la mitad de lo
-que ya mueve PONG (60 Hz x 8). De subida son otros 240/s (30 Hz de input), que para
-el server no es nada. La grilla completa (805 celdas, un caracter por celda)
+que ya mueve PONG (60 Hz x 8). De subida son otros 240/s (30 Hz de input, mas un
+mensaje extra por cada giro), que para el server no es nada. La grilla completa (805 celdas, un caracter por celda)
 viaja **solo** en el `pt:init` del join / reconexion; los snapshots llevan
 unicamente las celdas cambiadas desde el anterior (`c`, aplanado
 `[indice, asiento, ...]`).
@@ -73,8 +91,10 @@ dos lados.**
 | `START_BLOB_RADIUS` | 46 | ~12 celdas (1.5%) para no largar en blanco |
 | `MATCH_MS` / `PREROLL_MS` | 90000 / 3000 | el preroll cubre el 3/2/1/YA |
 | `TICK_MS` / `BROADCAST_MS` | 20 / 40 | 50 Hz de simulacion, 25 Hz de red |
-| `INPUT_INTERVAL` (cliente) | 33 ms | 30 Hz de subida |
+| `INPUT_INTERVAL` (cliente) | 33 ms | 30 Hz de subida; los giros salen en el acto (`INPUT_TURN_EPS`) |
+| `INPUT_BUFFER_MS` (server) | 30 ms | buffer de jitter de los inputs, ver abajo |
 | `INTERP_DELAY` (cliente) | 110 ms | ~2.75 espaciados de snapshot |
+| `TRAIL_EXTRA_MS` (cliente) | 100 ms | margen del trazo humedo sobre el RTT |
 
 **`BRUSH_RADIUS` no baja de 21.** Yendo en diagonal, los centros de las celdas
 vecinas a la trayectoria caen a `CELL / raiz(2)` = **16.97 px** de ella. Con radio
@@ -133,10 +153,51 @@ el banco de pruebas**, porque la latencia emulada por CDP es constante y sin jit
 (y su `packetLoss` no alcanzo a generarlo sobre TCP). Lo verificado es la causa —el
 espaciado— y el margen, no el sintoma.
 
+### "El pincel propio tiembla" (segunda ronda)
+
+Con el acuse de input el pincel ya respondia bien, pero seguia temblando unos px en
+cada snapshot. Tres causas, todas del mismo tipo — la prediccion y el replay de
+`reconcile` contaban el tiempo distinto:
+
+1. **El replay no sabia cuanto del input acusado ya habia aplicado el server.** Lo
+   reproducia entero desde que se mando y sumaba dos veces un tramo: un serrucho de
+   0 a ~6 px por snapshot. El snapshot trae ahora `a` (ms que el server ya aplico
+   del input `n`) y el replay arranca desde ahi.
+2. **El server aplicaba cada input al llegar**, asi que el jitter de subida
+   cambiaba cuanto duraba cada input alla respecto de aca. Ahora cada `pt:input`
+   lleva el reloj del cliente (`t`) y el server lo agenda en `t + offset +
+   INPUT_BUFFER_MS` (offset = latencia de subida minima vista, por jugador), y
+   **parte el paso de simulacion** en ese instante: redondearlo al paso de 20 ms
+   volveria a cambiar la duracion. Un paquete mas lento que el buffer rige al
+   llegar. El `t` se topea a `now + INPUT_BUFFER_MS` para que nadie cargue inputs a
+   futuro.
+3. **La prediccion usaba la direccion del teclado de ESTE cuadro y el replay la
+   ENVIADA**, y ademas topeaba el cuadro con `MAX_DT` mientras el replay no. Ahora la
+   prediccion usa `sentDir` y el tiempo real, los inputs se fechan con el reloj del
+   cuadro (el de `requestAnimationFrame`, no `performance.now()`), y un giro se manda
+   en el mismo cuadro en vez de esperar al envio periodico. La interpolacion de los
+   rivales tambien usa el reloj del cuadro.
+
+**Medido** con dos Chromium contra el server local, uno detras de un proxy TCP con
+75 ms por tramo y 0-25 ms de jitter, leyendo las posiciones dibujadas (enganchado a
+`ctx.arc`): desvio de la velocidad cuadro a cuadro del pincel propio en tramos
+rectos de **33-61 px/s** a **1.3-5.6 px/s** (esperado 195), con o sin jitter. El
+proxy si reproduce el jitter, a diferencia de la emulacion de CDP. El banco usaba
+stubs de `roomMode.ts` y `server-status.ts` servidos con `page.route`, asi no
+necesita Supabase.
+
 ## Gotchas
 
 - **No reintroducir un lerp hacia la posicion del snapshot.** Es la correccion que
   parece obvia y es exactamente la que se siente como lag (ver arriba).
+- **La prediccion y el replay tienen que contar el tiempo igual.** Mismo vector
+  (`sentDir`), mismo reloj (el del cuadro), sin `MAX_DT`. Cualquier diferencia entre
+  las dos cuentas vuelve como temblor en cada snapshot.
+- **Al (re)conectar y al desconectarse, el server suelta el pincel** (`release`):
+  lo frena, vacia la cola y pone `lastSeq` en 0. Una pagina nueva numera sus inputs
+  desde 1; con el `lastSeq` viejo no se le acusaba ninguno y el cliente no podia
+  reconciliar en toda la partida. Y desconectado ya no sigue pintando en la ultima
+  direccion.
 - **El estado del server esta scopeado por RONDA.** El `round` viaja en el
   `pt:join` y una ronda mas nueva tira el tablero anterior. Entre rondas los
   clientes navegan de una pagina a la otra y no todos a la vez, asi que el

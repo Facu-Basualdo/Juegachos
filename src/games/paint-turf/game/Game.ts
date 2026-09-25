@@ -8,10 +8,13 @@ import {
   COLS,
   COUNTDOWN_LABELS,
   COUNTDOWN_STEP,
+  DEFAULT_RTT,
   ERROR_FADE_RATE,
   EXTRAPOLATE_MS,
   HISTORY_MS,
   INPUT_INTERVAL,
+  INPUT_MIN_GAP,
+  INPUT_TURN_EPS,
   INTERP_DELAY,
   MATCH_MS,
   MAX_DT,
@@ -20,6 +23,7 @@ import {
   SPEED,
   SPLAT_COOLDOWN_MS,
   STUN_SPEED_FACTOR,
+  TRAIL_EXTRA_MS,
   VIEW_HEIGHT,
   VIEW_WIDTH,
 } from "./constants";
@@ -27,7 +31,7 @@ import { Hud, type ScoreRow } from "./Hud";
 import { InputController } from "./InputController";
 import { PaintTurfSocket } from "./PaintTurfSocket";
 import type { PtInit, PtPlayerView, PtState } from "./PaintTurfProtocol";
-import { Renderer, type BrushView } from "./Renderer";
+import { Renderer, type BrushView, type TrailPoint } from "./Renderer";
 import { SoundEffects } from "./SoundEffects";
 
 type State = "waiting" | "countdown" | "playing" | "over";
@@ -81,6 +85,16 @@ export class Game {
 
   /** Duenio de cada celda. La misma instancia la lee el Renderer para repintar. */
   private readonly grid = new Int8Array(CELL_COUNT).fill(-1);
+  /** Numero de snapshot que escribio cada celda por ultima vez (ver `applyCell`). */
+  private readonly cellStamp = new Int32Array(CELL_COUNT);
+  private snapSeq = 0;
+  /**
+   * Celdas pintadas por los RIVALES, retenidas hasta que la interpolacion llega al
+   * instante del snapshot que las trajo. El rival se dibuja INTERP_DELAY en el
+   * pasado; aplicar su pintura al llegar la ponia ~20 px por DELANTE de su pincel,
+   * como si el rastro lo arrastrara a el.
+   */
+  private pendingCells: { t: number; seq: number; c: number[] }[] = [];
   private seats: string[] = [];
   private mySeat = -1;
   private scores: number[] = [];
@@ -99,6 +113,15 @@ export class Game {
   private inputs: { n: number; t: number; dx: number; dy: number }[] = [];
   /** Numero del proximo `pt:input`. */
   private inputSeq = 0;
+  /** Direccion del ultimo `pt:input`: es la que usa la prediccion, igual que el
+   *  replay de `reconcile`, asi las dos cuentas dan lo mismo. */
+  private sentDir = { x: 0, y: 0 };
+  /** Ida y vuelta estimada con los acuses de input (ms). */
+  private rtt = DEFAULT_RTT;
+  /** Recorrido propio reciente, en pantalla: el trazo humedo sin confirmar. */
+  private trail: (TrailPoint & { t: number })[] = [];
+  /** Salpicon propio ya mostrado sin esperar al server (para no mostrarlo dos veces). */
+  private lastLocalSplatAt = -Infinity;
   /** Resto visual de la ultima correccion, que se disuelve en pantalla. */
   private visX = 0;
   private visY = 0;
@@ -209,8 +232,19 @@ export class Game {
     socket.onInit((init) => this.onInit(init));
     socket.onState((state) => this.onState(state));
     socket.onSplat((splat) => {
-      this.renderer.addSplat(splat.i, splat.x, splat.y);
-      SoundEffects.playSplat(splat.i === this.mySeat);
+      if (splat.i === this.mySeat) {
+        // Ya se mostro al apretar (ver `sendInput`); este es el eco del server.
+        if (performance.now() - this.lastLocalSplatAt < 1000) return;
+        this.renderer.addSplat(splat.i, splat.x, splat.y);
+        SoundEffects.playSplat(true);
+        return;
+      }
+      // El rival se dibuja INTERP_DELAY en el pasado: su salpicon tambien, o
+      // revienta donde el pincel todavia no llego.
+      window.setTimeout(() => {
+        this.renderer.addSplat(splat.i, splat.x, splat.y);
+        SoundEffects.playSplat(false);
+      }, INTERP_DELAY);
     });
     this.socket = socket;
     void socket.connect();
@@ -254,6 +288,9 @@ export class Game {
       // "." (46) = sin pintar; "0".."7" = asiento.
       this.grid[i] = ch === 46 ? -1 : ch - 48;
     }
+    // La grilla completa pisa todo lo pendiente: esos deltas son mas viejos.
+    this.pendingCells.length = 0;
+    this.cellStamp.fill(this.snapSeq);
     this.renderer.setGrid(this.grid);
   }
 
@@ -261,15 +298,23 @@ export class Game {
     this.latest = state;
     this.scores = state.scores;
 
+    const t = this.pushSnap(state);
+
+    // La pintura propia se aplica ya (el pincel propio no se dibuja en el pasado);
+    // la de los rivales espera a que la interpolacion llegue a este snapshot.
+    const seq = ++this.snapSeq;
+    const rival: number[] = [];
     for (let i = 0; i < state.c.length; i += 2) {
       const idx = state.c[i];
       const seat = state.c[i + 1];
       if (idx < 0 || idx >= CELL_COUNT) continue;
-      this.grid[idx] = seat;
-      this.renderer.setCell(idx, seat);
+      if (seat === this.mySeat) this.applyCell(idx, seat, seq);
+      else rival.push(idx, seat);
     }
-
-    this.pushSnap(state);
+    if (rival.length > 0) this.pendingCells.push({ t, seq, c: rival });
+    // Fuera de juego no hay rival que sincronizar: el tablero tiene que ser ya el
+    // que confirmo el server (congelado inicial, resultado final).
+    if (state.phase !== "playing") this.flushCells(Infinity);
 
     const mine = state.players.find((p) => p.i === this.mySeat);
     if (mine) {
@@ -296,7 +341,7 @@ export class Game {
    * pegados describen un tick entero de movimiento en 2 ms, asi que los rivales se
    * dibujan pegando saltos (ver el CLAUDE.md raiz).
    */
-  private pushSnap(state: PtState): void {
+  private pushSnap(state: PtState): number {
     const now = performance.now();
     const sample = now - state.t;
     if (this.clockOffset === null || sample < this.clockOffset) this.clockOffset = sample;
@@ -305,7 +350,7 @@ export class Game {
 
     const tail = this.snaps[this.snaps.length - 1];
     // Fuera de orden (llego despues que uno mas nuevo): se descarta.
-    if (tail && t <= tail.t) return;
+    if (tail && t <= tail.t) return t;
 
     const pos = new Map<number, { x: number; y: number }>();
     for (const player of state.players) pos.set(player.i, { x: player.x, y: player.y });
@@ -313,6 +358,27 @@ export class Game {
 
     const cutoff = now - 600;
     while (this.snaps.length > 2 && this.snaps[0].t < cutoff) this.snaps.shift();
+    return t;
+  }
+
+  /**
+   * Escribe una celda salvo que ya la haya escrito un snapshot MAS NUEVO. Hace
+   * falta porque la pintura propia se aplica al llegar y la ajena se retiene: sin
+   * el sello, una celda ajena vieja que sale de la cola pisaria la propia nueva.
+   */
+  private applyCell(idx: number, seat: number, seq: number): void {
+    if (this.cellStamp[idx] > seq) return;
+    this.cellStamp[idx] = seq;
+    this.grid[idx] = seat;
+    this.renderer.setCell(idx, seat);
+  }
+
+  /** Aplica, en orden, la pintura ajena de los snapshots que la interpolacion ya alcanzo. */
+  private flushCells(until: number): void {
+    while (this.pendingCells.length > 0 && this.pendingCells[0].t <= until) {
+      const { seq, c } = this.pendingCells.shift()!;
+      for (let i = 0; i < c.length; i += 2) this.applyCell(c[i], c[i + 1], seq);
+    }
   }
 
   private startPlaying(): void {
@@ -324,12 +390,18 @@ export class Game {
       this.myY = mine.y;
     }
     this.inputs.length = 0;
+    this.sentDir = { x: 0, y: 0 };
+    // Que el primer cuadro de juego mande la direccion sin esperar.
+    this.inputTimer = INPUT_INTERVAL;
+    this.trail.length = 0;
     this.visX = 0;
     this.visY = 0;
   }
 
   private finish(): void {
     this.state = "over";
+    this.flushCells(Infinity);
+    this.trail.length = 0;
     this.hud.showCountdown(null);
     this.hud.showHud(false);
     SoundEffects.playEnd();
@@ -340,17 +412,19 @@ export class Game {
   // ---------- Bucle ----------
 
   private tick = (now: number): void => {
-    const dt = Math.min((now - this.lastTime) / 1000, MAX_DT);
+    const rawDt = Math.max(0, (now - this.lastTime) / 1000);
+    const dt = Math.min(rawDt, MAX_DT);
     this.lastTime = now;
 
-    this.update(dt, now);
+    this.update(dt, now, rawDt);
     this.render(now / 1000);
 
     requestAnimationFrame(this.tick);
   };
 
-  private update(dt: number, now: number): void {
+  private update(dt: number, now: number, rawDt: number): void {
     this.renderer.update(dt);
+    this.flushCells(now - INTERP_DELAY);
 
     if (this.state === "countdown") {
       this.updateCountdown(dt);
@@ -363,8 +437,13 @@ export class Game {
     }
     if (this.state !== "playing") return;
 
-    this.updateMyBrush(dt);
-    this.sendInput(dt);
+    // Primero se avanza con la direccion vigente y recien despues se manda la
+    // nueva, fechada en este cuadro: exactamente el tramo que reproduce `reconcile`.
+    // El pincel propio con el tiempo REAL, sin el tope de MAX_DT: el server lo movio
+    // ese tiempo entero y `reconcile` lo reproduce entero. Con el tope, cada cuadro
+    // lento (un celular a menos de 20 fps) terminaba en una correccion.
+    this.updateMyBrush(rawDt, now);
+    this.sendInput(dt, now);
     this.updateHud();
   }
 
@@ -396,19 +475,20 @@ export class Game {
   }
 
   /** Prediccion local del pincel propio, para que el control no espere a la red. */
-  private updateMyBrush(dt: number): void {
+  private updateMyBrush(dt: number, now: number): void {
     if (this.mySeat < 0) return;
 
     const stunned = this.myStun > 0;
     this.myStun = Math.max(0, this.myStun - dt * 1000);
     this.myCooldown = Math.max(0, this.myCooldown - dt * 1000);
 
-    const dir = this.worldDir();
-    const len = Math.hypot(dir.x, dir.y);
-    if (len > 0.001) {
+    // Con la direccion ENVIADA, no con la del teclado de este cuadro: es la que
+    // el server esta aplicando y la que reproduce `reconcile`.
+    const dir = this.sentDir;
+    if (dir.x !== 0 || dir.y !== 0) {
       const speed = SPEED * (stunned ? STUN_SPEED_FACTOR : 1);
-      this.myX = clamp(this.myX + (dir.x / len) * speed * dt, 0, VIEW_WIDTH);
-      this.myY = clamp(this.myY + (dir.y / len) * speed * dt, 0, VIEW_HEIGHT);
+      this.myX = clamp(this.myX + dir.x * speed * dt, 0, VIEW_WIDTH);
+      this.myY = clamp(this.myY + dir.y * speed * dt, 0, VIEW_HEIGHT);
     }
 
     // La correccion ya se aplico a la posicion logica; lo que queda es disolver el
@@ -416,6 +496,12 @@ export class Game {
     const decay = Math.exp(-ERROR_FADE_RATE * dt);
     this.visX *= decay;
     this.visY *= decay;
+
+    // El trazo humedo sigue al pincel DIBUJADO, asi no se despega de el mientras
+    // se disuelve una correccion. Aturdido no pinta, asi que tampoco deja trazo.
+    this.trail.push({ t: now, x: this.myX + this.visX, y: this.myY + this.visY, paint: !stunned });
+    const keepFrom = now - (this.rtt + TRAIL_EXTRA_MS);
+    while (this.trail.length > 0 && this.trail[0].t < keepFrom) this.trail.shift();
   }
 
   /**
@@ -451,7 +537,21 @@ export class Game {
     // Todo lo anterior al acuse ya no hace falta.
     if (from > 0) this.inputs.splice(0, from);
 
-    const now = performance.now();
+    // Lo que el server ya aplico del input acusado. Sin esto se reproducia entero
+    // desde que se mando, sumando dos veces un tramo que el server ya habia
+    // recorrido: el pincel saltaba entre 0 y ~6 px hacia adelante en cada snapshot.
+    const applied = typeof mine.a === "number" ? mine.a : 0;
+    const rttSample = performance.now() - this.inputs[0].t - applied;
+    if (rttSample > 0 && rttSample < HISTORY_MS) {
+      // Sube rapido y baja lento: quedarse corto deja ver el hueco del trazo.
+      const k = rttSample > this.rtt ? 0.3 : 0.05;
+      this.rtt += (rttSample - this.rtt) * k;
+    }
+
+    // Hasta el ultimo cuadro, no hasta `performance.now()`: la prediccion va por
+    // cuadros y el proximo integra desde `lastTime`; pasarse contaria dos veces el
+    // tramo entre el cuadro y la llegada del snapshot.
+    const now = this.lastTime;
     // El aturdimiento se aplica entero al tramo: dura mas que el tramo reproducido,
     // asi que partirlo no cambiaria nada apreciable.
     const speed = SPEED * (mine.st > 0 ? STUN_SPEED_FACTOR : 1);
@@ -459,8 +559,9 @@ export class Game {
     let y = mine.y;
     for (let i = 0; i < this.inputs.length; i++) {
       const input = this.inputs[i];
+      const start = i === 0 ? input.t + applied : input.t;
       const until = i + 1 < this.inputs.length ? this.inputs[i + 1].t : now;
-      const dt = (until - input.t) / 1000;
+      const dt = (until - start) / 1000;
       if (dt <= 0) continue;
       x = clamp(x + input.dx * speed * dt, 0, VIEW_WIDTH);
       y = clamp(y + input.dy * speed * dt, 0, VIEW_HEIGHT);
@@ -483,30 +584,46 @@ export class Game {
     this.visY -= dy;
   }
 
-  private sendInput(dt: number): void {
+  private sendInput(dt: number, now: number): void {
     const splat = this.input.consumeSplat();
     this.inputTimer += dt;
-    if (!splat && this.inputTimer < INPUT_INTERVAL) return;
-    this.inputTimer = 0;
+
     const dir = this.worldDir();
     // Normalizado igual que en el server, para que la reproduccion de `reconcile`
     // use exactamente el mismo vector que el server va a aplicar.
     const len = Math.hypot(dir.x, dir.y);
     const dx = len > 0.001 ? dir.x / len : 0;
     const dy = len > 0.001 ? dir.y / len : 0;
+    const turned =
+      Math.abs(dx - this.sentDir.x) + Math.abs(dy - this.sentDir.y) > INPUT_TURN_EPS;
+
+    // El salpicon y los giros no esperan al proximo envio periodico: son acciones
+    // de reflejos y esperar se siente como que el control no responde.
+    if (!splat && this.inputTimer < INPUT_INTERVAL && !(turned && this.inputTimer >= INPUT_MIN_GAP)) {
+      return;
+    }
+    this.inputTimer = 0;
+    this.sentDir = { x: dx, y: dy };
 
     const n = ++this.inputSeq;
-    this.inputs.push({ n, t: performance.now(), dx, dy });
+    // Fechado con el cuadro, no con `performance.now()`: la prediccion avanza por
+    // cuadros y el replay tiene que cortar los tramos en los mismos instantes.
+    this.inputs.push({ n, t: now, dx, dy });
     // Red de seguridad: si el acuse del server no llega (server viejo, o el input
     // se perdio), la lista no puede crecer para siempre.
-    while (this.inputs.length > 2 && this.inputs[0].t < performance.now() - HISTORY_MS) {
+    while (this.inputs.length > 2 && this.inputs[0].t < now - HISTORY_MS) {
       this.inputs.shift();
     }
 
-    // El salpicon no espera al proximo tick de envio: es una accion de reflejos y
-    // esperar el envio siguiente se siente como que el boton no responde.
-    this.socket?.sendInput(dx, dy, splat, n);
-    if (splat && this.myCooldown === 0) this.myCooldown = SPLAT_COOLDOWN_MS;
+    this.socket?.sendInput(dx, dy, splat, n, now);
+    if (splat && this.myCooldown === 0 && this.myStun === 0) {
+      // El salpicon propio se ve y se escucha al apretar, sin esperar la vuelta del
+      // server. Es solo el efecto: la pintura la sigue decidiendo el server.
+      this.myCooldown = SPLAT_COOLDOWN_MS;
+      this.lastLocalSplatAt = performance.now();
+      this.renderer.addSplat(this.mySeat, this.myX + this.visX, this.myY + this.visY);
+      SoundEffects.playSplat(true);
+    }
   }
 
   private updateHud(): void {
@@ -558,7 +675,10 @@ export class Game {
   private brushViews(): BrushView[] {
     const state = this.latest;
     if (!state) return [];
-    const rt = performance.now() - INTERP_DELAY;
+    // Con la hora del CUADRO (la de requestAnimationFrame, alineada al refresco), no
+    // con `performance.now()`: esa depende de cuanto tardo el JS de este cuadro en
+    // llegar hasta aca, y esa variacion se dibujaba como tironeo del rival.
+    const rt = this.lastTime - INTERP_DELAY;
 
     let a = this.snaps[0];
     let b = this.snaps[this.snaps.length - 1];
@@ -614,6 +734,7 @@ export class Game {
         // El pigmento fresco solo se dibuja en juego: en el congelado inicial y al
         // terminar, el tablero es exactamente el que confirmo el server.
         wet: this.state === "playing" ? BRUSH_RADIUS : 0,
+        trail: mine && this.state === "playing" ? this.trail : undefined,
       });
     }
     return views;
