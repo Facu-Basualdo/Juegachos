@@ -20,6 +20,9 @@ export interface PtPlayerView {
   /** Ultimo `pt:input` propio que el server tenia aplicado al tomar el snapshot
    *  (ver `reconcile` en Game.ts). Ausente contra un server viejo. */
   n?: number;
+  /** Ms de simulacion que el server ya aplico del input `n` al tomar el snapshot:
+   *  el replay de `reconcile` arranca desde ahi. Ausente contra un server viejo. */
+  a?: number;
 }
 
 export type PtPhase = "waiting" | "preroll" | "playing" | "over";

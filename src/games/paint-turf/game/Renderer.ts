@@ -49,6 +49,19 @@ export interface BrushView {
    * confirma).
    */
   wet: number;
+  /**
+   * Recorrido reciente todavia sin confirmar (solo el pincel propio): se dibuja
+   * como un trazo humedo del ancho del pincel, del mas viejo al mas nuevo. Los
+   * rivales no lo necesitan: su pintura se aplica sincronizada con su pincel.
+   */
+  trail?: TrailPoint[];
+}
+
+export interface TrailPoint {
+  x: number;
+  y: number;
+  /** false mientras estaba aturdido: ahi el server no pinta, asi que el trazo se corta. */
+  paint: boolean;
 }
 
 interface SplatFx {
@@ -248,14 +261,7 @@ export class Renderer {
     ctx.save();
 
     // Pigmento recien soltado, todavia sin confirmar por el server.
-    if (brush.wet > 0 && !brush.stunned) {
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(x, y, brush.wet, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
+    if (brush.wet > 0) this.drawWet(ctx, brush, color, x, y);
 
     // Sombra: la hoja esta abajo y el pincel apoya sobre ella.
     ctx.globalAlpha = 0.16;
@@ -321,6 +327,51 @@ export class Renderer {
     ctx.globalAlpha = brush.offline ? 0.4 : 0.85;
     ctx.fillText(brush.name, x, y - 15);
 
+    ctx.restore();
+  }
+
+  /**
+   * Pigmento humedo: el disco bajo la punta y, para el pincel propio, el trazo sin
+   * confirmar que lleva hasta ahi. Va todo en UN solo trazo para que los tramos que
+   * se pisan no se oscurezcan entre si (con alpha, dos pasadas se notarian).
+   */
+  private drawWet(
+    ctx: CanvasRenderingContext2D,
+    brush: BrushView,
+    color: string,
+    x: number,
+    y: number,
+  ): void {
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = brush.wet * 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    ctx.beginPath();
+    let run = 0;
+    for (const p of brush.trail ?? []) {
+      if (!p.paint) {
+        run = 0;
+        continue;
+      }
+      if (run === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+      run++;
+    }
+    // La punta se engancha al ultimo tramo; aturdido no larga pigmento.
+    if (!brush.stunned && run > 0) ctx.lineTo(x, y);
+    ctx.stroke();
+
+    // Sin tramo al que engancharse (rivales, o recien salido del aturdimiento) la
+    // punta es el disco de siempre.
+    if (!brush.stunned && run === 0) {
+      ctx.beginPath();
+      ctx.arc(x, y, brush.wet, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
 }

@@ -80,13 +80,17 @@ export class PaintTurfSocket {
   }
 
   /**
-   * Direccion deseada, salpicon y numero de secuencia. El `n` vuelve en el snapshot
-   * (`PtPlayerView.n`) y es lo que le permite al cliente reconciliar sabiendo hasta
-   * donde lo escucho el server, sin tener que adivinar la latencia.
+   * Direccion deseada, salpicon, numero de secuencia y reloj local. El `n` vuelve en
+   * el snapshot (`PtPlayerView.n`) y es lo que le permite al cliente reconciliar
+   * sabiendo hasta donde lo escucho el server, sin tener que adivinar la latencia.
+   * El `t` es para el buffer de jitter del server: con el, cada input dura alla lo
+   * mismo que duro aca aunque los paquetes lleguen desparejos.
    */
-  sendInput(dx: number, dy: number, splat: boolean, n: number): void {
-    if (splat) this.socket?.emit("pt:input", { dx, dy, n, s: true });
-    else this.socket?.emit("pt:input", { dx, dy, n });
+  sendInput(dx: number, dy: number, splat: boolean, n: number, t: number): void {
+    // Redondeado a 0.1 ms: el reloj de alta resolucion trae decimales de sobra.
+    const time = Math.round(t * 10) / 10;
+    if (splat) this.socket?.emit("pt:input", { dx, dy, n, t: time, s: true });
+    else this.socket?.emit("pt:input", { dx, dy, n, t: time });
   }
 
   dispose(): void {

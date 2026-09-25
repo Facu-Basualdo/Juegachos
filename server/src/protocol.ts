@@ -663,6 +663,13 @@ export interface PtPlayerView {
    * Opcional solo por compatibilidad con un server todavia no redeployado.
    */
   n?: number;
+  /**
+   * Ms de simulacion que el server ya aplico del input `n` al tomar el snapshot. Sin
+   * esto el cliente reproduce el input `n` entero desde que lo mando, y como el server
+   * ya lo venia aplicando, el pincel propio salta entre 0 y un intervalo de envio
+   * hacia adelante en cada snapshot (un serrucho de ~6 px). Opcional por lo mismo.
+   */
+  a?: number;
 }
 
 export type PtPhase = "waiting" | "preroll" | "playing" | "over";
@@ -710,9 +717,11 @@ export interface PtState {
 export interface PtClientToServer {
   /** `round` scopea la partida: una ronda nueva descarta el tablero de la anterior. */
   "pt:join": (msg: { code: string; nickname: string; roster: string[]; round: number }) => void;
-  /** Direccion deseada (se normaliza en el server), pedido de salpicon y numero
-   *  de secuencia (`n`), que vuelve en el snapshot para reconciliar. */
-  "pt:input": (msg: { dx: number; dy: number; s?: boolean; n?: number }) => void;
+  /** Direccion deseada (se normaliza en el server), pedido de salpicon, numero
+   *  de secuencia (`n`), que vuelve en el snapshot para reconciliar, y el reloj del
+   *  cliente al mandarlo (`t`, ms), con el que el server lo agenda en su buffer de
+   *  jitter (ver INPUT_BUFFER_MS en el sim). */
+  "pt:input": (msg: { dx: number; dy: number; s?: boolean; n?: number; t?: number }) => void;
 }
 
 /** Server -> Cliente. */
