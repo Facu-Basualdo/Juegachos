@@ -48,11 +48,27 @@ export const SERVER_GRACE_MS = 12_000;
 export const CONFIRM_MS = 3000;
 export const REMOTE_EASE = 14;
 
-// ---- Camara (fija, de frente a la pared) ----
+// ---- Camara ----
+/**
+ * Mientras se trepa: tercera persona detras del muñeco, como Minecraft. El giro lo
+ * maneja el jugador (mouse / dedo / Q-E) y W va hacia donde mira: de frente a la
+ * pared no se podia medir la profundidad de los saltos.
+ */
+export const CAM_DIST = 5.6;
+export const CAM_DIST_PORTRAIT = 6.8;
+/** Altura del punto al que mira la camara, sobre los pies. */
+export const CAM_TARGET_H = 1.5;
+/** Inclinacion inicial y limites (rad): 0 = a la altura, positivo = desde arriba. */
+export const CAM_PITCH = 0.38;
+export const CAM_PITCH_MIN = -0.25;
+export const CAM_PITCH_MAX = 1.15;
+export const CAM_YAW_SPEED = 2.4;
+/** La camara nunca queda mas cerca que esto (si una plataforma la tapa, se acerca). */
+export const CAM_MIN_DIST = 2.5;
+/** Espectador (resuelto): de frente a la pared, siguiendo al que va mas alto. */
 export const CAM_BACK = 14;
-/** En vertical se aleja: si no, la pared no entra a lo ancho. */
 export const CAM_BACK_PORTRAIT = 22;
-export const CAM_FOV = 60;
+export const CAM_FOV = 62;
 
 // ---- Countdown ----
 export const COUNTDOWN_LABELS = ["3", "2", "1", "YA"] as const;

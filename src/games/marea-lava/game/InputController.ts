@@ -1,13 +1,12 @@
 /**
- * Input de Marea de Lava (copiado del de Derrumbe).
+ * Input de Marea de Lava (salio del de Derrumbe, con camara en tercera persona).
  *
- * - Compu: WASD / flechas para correr, ESPACIO para saltar.
- * - Celu: un dedo en cualquier lado es un joystick flotante (aparece donde apoyas)
- *   y el boton SALTAR va abajo a la derecha (lo maneja el Hud y llama a
- *   `requestJump`).
- *
- * La camara es fija (ver constants.ts), asi que no hay input de camara: la
- * direccion de pantalla es la direccion del mundo.
+ * - Compu: WASD / flechas para correr (relativo a donde mira la camara), ESPACIO
+ *   para saltar y el MOUSE para mirar: un clic lo captura (pointer lock, como en
+ *   Minecraft; ESC lo suelta). Sin captura tambien se mira arrastrando, y con Q / E.
+ * - Celu: el primer dedo en la mitad izquierda es un joystick flotante, un dedo en la
+ *   mitad derecha gira la camara, y el boton SALTAR va abajo a la derecha (lo maneja
+ *   el Hud y llama a `requestJump`).
  *
  * Los listeners de puntero cuelgan del `container`, nunca del canvas: los carteles
  * del juego son overlays que lo tapan (el bug documentado en el CLAUDE.md raiz).
@@ -15,6 +14,12 @@
 
 const JOYSTICK_RANGE = 52;
 const JOYSTICK_DEAD = 8;
+/** Radianes de giro por pixel de mouse (capturado o arrastrando). */
+const MOUSE_LOOK = 0.0032;
+/** Radianes de giro por pixel de dedo (la pantalla es chica: gira mas). */
+const TOUCH_LOOK = 0.007;
+/** Fraccion del ancho de pantalla que ocupa la zona del joystick en el celu. */
+const JOYSTICK_ZONE = 0.5;
 
 export interface JoystickView {
   originX: number;
@@ -26,6 +31,12 @@ export interface JoystickView {
 export class InputController {
   private readonly keys = new Set<string>();
   private jumpPending = false;
+  /** Giro acumulado de camara desde la ultima lectura (rad). */
+  private yawDelta = 0;
+  private pitchDelta = 0;
+  private lookId: number | null = null;
+  private lookX = 0;
+  private lookY = 0;
 
   private stickId: number | null = null;
   private originX = 0;
@@ -44,9 +55,11 @@ export class InputController {
     target.addEventListener("pointermove", this.onPointerMove);
     target.addEventListener("pointerup", this.onPointerUp);
     target.addEventListener("pointercancel", this.onPointerUp);
+    document.addEventListener("mousemove", this.onMouseMove);
   }
 
   dispose(): void {
+    document.removeEventListener("mousemove", this.onMouseMove);
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("blur", this.onBlur);
@@ -84,6 +97,24 @@ export class InputController {
     return { originX: this.originX, originY: this.originY, x: this.curX, y: this.curY };
   }
 
+  /** Giro de camara acumulado (mouse / dedo) desde la ultima llamada. */
+  consumeLook(): { yaw: number; pitch: number } {
+    const look = { yaw: this.yawDelta, pitch: this.pitchDelta };
+    this.yawDelta = 0;
+    this.pitchDelta = 0;
+    return look;
+  }
+
+  /** Giro continuo con Q / E (-1, 0 o 1). */
+  get keyYaw(): number {
+    return (this.keys.has("KeyE") ? 1 : 0) - (this.keys.has("KeyQ") ? 1 : 0);
+  }
+
+  /** Suelta el mouse capturado (al quedar afuera: ya no hay nada que mirar). */
+  releaseMouse(): void {
+    if (document.pointerLockElement === this.target) document.exitPointerLock?.();
+  }
+
   consumeJump(): boolean {
     if (!this.jumpPending) return false;
     this.jumpPending = false;
@@ -108,26 +139,59 @@ export class InputController {
   private onBlur = (): void => {
     this.keys.clear();
     this.stickId = null;
+    this.lookId = null;
+  };
+
+  /** Con el mouse capturado, cada movimiento gira la camara. */
+  private onMouseMove = (e: MouseEvent): void => {
+    if (document.pointerLockElement !== this.target) return;
+    this.yawDelta -= e.movementX * MOUSE_LOOK;
+    this.pitchDelta += e.movementY * MOUSE_LOOK;
   };
 
   private onPointerDown = (e: PointerEvent): void => {
     const el = e.target as HTMLElement | null;
     if (el?.closest(".ml-controls, .ml__card, .leaderboard")) return;
 
-    // En la compu se corre con el teclado: el mouse no hace nada.
-    if (e.pointerType === "mouse" || this.stickId !== null) return;
-    this.stickId = e.pointerId;
-    this.originX = this.curX = e.clientX;
-    this.originY = this.curY = e.clientY;
+    if (e.pointerType === "mouse") {
+      // Un clic captura el mouse para mirar; mientras tanto se puede arrastrar.
+      if (document.pointerLockElement !== this.target) this.target.requestPointerLock?.();
+      this.lookId = e.pointerId;
+      this.lookX = e.clientX;
+      this.lookY = e.clientY;
+      return;
+    }
+    if (this.stickId === null && e.clientX < window.innerWidth * JOYSTICK_ZONE) {
+      this.stickId = e.pointerId;
+      this.originX = this.curX = e.clientX;
+      this.originY = this.curY = e.clientY;
+      return;
+    }
+    if (this.lookId === null) {
+      this.lookId = e.pointerId;
+      this.lookX = e.clientX;
+      this.lookY = e.clientY;
+    }
   };
 
   private onPointerMove = (e: PointerEvent): void => {
-    if (e.pointerId !== this.stickId) return;
-    this.curX = e.clientX;
-    this.curY = e.clientY;
+    if (e.pointerId === this.stickId) {
+      this.curX = e.clientX;
+      this.curY = e.clientY;
+      return;
+    }
+    if (e.pointerId !== this.lookId) return;
+    // Con el mouse capturado ya mira `onMouseMove`: no sumar dos veces.
+    if (e.pointerType === "mouse" && document.pointerLockElement === this.target) return;
+    const k = e.pointerType === "mouse" ? MOUSE_LOOK : TOUCH_LOOK;
+    this.yawDelta -= (e.clientX - this.lookX) * k;
+    this.pitchDelta += (e.clientY - this.lookY) * k;
+    this.lookX = e.clientX;
+    this.lookY = e.clientY;
   };
 
   private onPointerUp = (e: PointerEvent): void => {
     if (e.pointerId === this.stickId) this.stickId = null;
+    if (e.pointerId === this.lookId) this.lookId = null;
   };
 }
