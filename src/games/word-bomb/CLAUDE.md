@@ -215,7 +215,7 @@ server en Railway** tras editar.
 
 ## Tuning (server, `server/src/games/wordbomb.ts`)
 
-- `STARTING_LIVES` (3), mecha `FUSE_BASE_MS` (13s) que se acorta `FUSE_STEP_MS`
+- `STARTING_LIVES` (2; eran 3 y las partidas se estiraban), mecha `FUSE_BASE_MS` (13s) que se acorta `FUSE_STEP_MS`
   (150ms) por palabra aceptada con piso `FUSE_MIN_MS` (6s), `START_GRACE_MS` (8s).
 - Desconexion = NO elimina: la mecha castiga el turno del ausente como a un AFK y,
   si vuelve (recarga de pagina), se reengancha. Solo se elimina al quedarse sin

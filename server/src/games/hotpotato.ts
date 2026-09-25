@@ -39,11 +39,12 @@ const FUSE_MAX_MS = 20000;
  * el jugador pierde `RTT - 250` ms. La gracia no se percibe (la mecha es secreta).
  */
 const LAG_COMP_MS = 250;
-/** Secuencia: arranca en SEQ_BASE flechas y suma una cada SEQ_STEP pases de la
- *  misma papa, hasta SEQ_MAX (la papa "se calienta"). */
-const SEQ_BASE = 4;
-const SEQ_STEP = 5;
-const SEQ_MAX = 7;
+/**
+ * Secuencia: SIEMPRE 4 flechas. Antes sumaba una cada 5 pases hasta 7, y con la papa
+ * ya caliente los pases se volvian lentos justo cuando tenia que ir y venir rapido.
+ * Fija, la papa cambia de mano rapido y lo que decide es el reflejo, no la memoria.
+ */
+const SEQ_LEN = 4;
 /** Un holder desconectado la suelta sola pasado este tiempo (asi carga con un
  *  riesgo parecido al de un jugador lento, en vez de trabar la papa). */
 const ABSENT_PASS_MS = 2500;
@@ -200,7 +201,7 @@ class HotPotatoSim implements RoomSim {
     this.from = null;
     this.n += 1;
     this.burnPasses = 0;
-    this.seq = makeSeq(SEQ_BASE);
+    this.seq = makeSeq(SEQ_LEN);
     this.burnStart = now;
     this.nextBurnAt = null;
     this.heldSince = now;
@@ -276,7 +277,7 @@ class HotPotatoSim implements RoomSim {
     this.heldSince = effective;
     this.n += 1;
     this.burnPasses += 1;
-    this.seq = makeSeq(Math.min(SEQ_MAX, SEQ_BASE + Math.floor(this.burnPasses / SEQ_STEP)));
+    this.seq = makeSeq(SEQ_LEN);
     this.lastPass = { from, to, n: this.n };
     if (!this.room.isConnected(to)) this.armAbsent();
     this.broadcastState();
@@ -354,6 +355,7 @@ class HotPotatoSim implements RoomSim {
       seq: this.seq,
       n: this.n,
       burnStart: this.burnStart,
+      fuseMinMs: FUSE_MIN_MS,
       fuseMaxMs: FUSE_MAX_MS,
       nextBurnAt: this.nextBurnAt,
       players,

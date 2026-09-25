@@ -12,6 +12,12 @@ export const COUNTDOWN_STEP = 700;
  */
 export const RECORD_MS = 4500;
 
+/** "3 / 2 / 1" antes de grabar: la fase `ready` del server dura esto x3. Espeja `READY_MS`. */
+export const READY_STEP_MS = 1000;
+
+/** Antes de cada toma, el micro vuela a la cara del que le toca. Espeja `PRE_SLOT_MS` del server. */
+export const PRE_SLOT_MS = 1500;
+
 /** Tasa a la que se baja la toma antes de analizarla y mandarla (voz: sobra). */
 export const TAKE_TARGET_RATE = 11025;
 

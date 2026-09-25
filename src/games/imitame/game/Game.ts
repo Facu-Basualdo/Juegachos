@@ -8,19 +8,48 @@ import {
   type Features,
 } from "./analysis";
 import { audioRunning, installUnlock, outputLevel } from "./audio";
-import { COUNTDOWN_LABELS, COUNTDOWN_STEP, EFFECTS, MAX_TAKE_BYTES, RECORD_MS } from "./constants";
+import { clipsEnabled, fetchClipIndex, loadClip } from "./clips";
+import {
+  COUNTDOWN_LABELS,
+  COUNTDOWN_STEP,
+  EFFECTS,
+  MAX_TAKE_BYTES,
+  PRE_SLOT_MS,
+  READY_STEP_MS,
+  RECORD_MS,
+} from "./constants";
 import { Hud } from "./Hud";
 import type { MtGameover, MtPhase, MtState, MtTake } from "./ImitameTransport";
+import { Library } from "./Library";
 import { MicRecorder, muLawDecode, muLawEncode, normalizeGain, trimSilence } from "./recorder";
 import { SocketTransport } from "./SocketTransport";
 import { SoundEffects } from "./SoundEffects";
-import { soundById, type Sound } from "./sounds";
-import { playSound, playTake, playbackDuration, takeToBuffer } from "./synth";
+import { soundById } from "./sounds";
+import { playBuffer, playSound, playTake, playbackDuration, takeToBuffer } from "./synth";
+import { VoiceChat, type Signal } from "./VoiceChat";
 
 type State = "message" | "countdown" | "playing" | "over";
 
-/** Los "3 / 2 / 1" antes de grabar (la fase `ready` del server dura esto x3). */
-const READY_STEP_MS = 700;
+/** Los audios de la comunidad vienen mas fuertes que los sintetizados. */
+const CLIP_GAIN = 0.8;
+/** Prefijo con el que el server manda un audio de la biblioteca como `soundId`. */
+const CLIP_PREFIX = "clip:";
+/** Tope para leer la biblioteca antes de conectar: sin ella la sala juega igual. */
+const CLIP_INDEX_TIMEOUT_MS = 3000;
+/** Cuando aparece el "+N" en la tarjeta (espeja la demora de `.mt__card-sum` en el CSS). */
+const CARD_SUM_DELAY_MS = 3300;
+
+/** Fases en las que la mesa habla. En el resto suena algo que hay que escuchar o se graba. */
+const CHAT_OPEN_PHASES: MtPhase[] = ["waiting", "intro", "upload", "summary", "wheel", "over"];
+
+/** Lo que se imita en la ronda: un sintetizado o un audio de la biblioteca. */
+interface RoundSound {
+  id: string;
+  pack: string;
+  name: string;
+  /** id en `imitame_clips` (solo los de la biblioteca). */
+  clipId: string | null;
+}
 
 interface LoadedTake {
   buffer: AudioBuffer;
@@ -29,14 +58,18 @@ interface LoadedTake {
   features: Features | null;
 }
 
+/** Que mueve la boca de los muñecos ahora. */
+type MouthMode = { kind: "none" } | { kind: "me-rec" } | { kind: "playing"; nick: string };
+
 /**
  * Imitame: juego SOLO de sala, clon simplificado de Mimic Party. Suena un sonido una
  * vez, todos lo imitan a la vez con la voz, cada navegador puntua su toma (melodia,
- * ritmo, golpes), despues las tomas suenan una por una para toda la sala y una
- * ruleta reparte bonus y sabotajes para la ronda siguiente.
+ * ritmo, golpes), despues las tomas suenan una por una para toda la sala, se ve el
+ * resumen de la ronda y una ruleta reparte bonus y sabotajes para la siguiente.
  *
- * Supabase maneja lobby / marcador / rejoin (via RoomMode); las fases, el relay de
- * las tomas y la ruleta los maneja el game server por socket.io (`/imitame`).
+ * Supabase maneja lobby / marcador / rejoin (via RoomMode) y la biblioteca de audios de
+ * la comunidad; las fases, el relay de las tomas, la ruleta y la senalizacion del chat de
+ * voz los maneja el game server por socket.io (`/imitame`).
  */
 export class Game {
   private readonly hud: Hud;
@@ -49,14 +82,19 @@ export class Game {
   private readonly recorder = new MicRecorder();
   private micReady: Promise<boolean> | null = null;
   private micOk = false;
+  private voice: VoiceChat | null = null;
+  /** En la reproduccion, la mesa se abre mientras el jurado muestra el puntaje. */
+  private revealOpen = false;
 
   private lastCountdownIndex = -1;
   private latest: MtState | null = null;
   private prevPhase: MtPhase | null = null;
   private prevRound = -1;
   private prevPlayKey = "";
+  private playedSlot = "";
+  private mouth: MouthMode = { kind: "none" };
 
-  private sound: Sound | null = null;
+  private sound: RoundSound | null = null;
   private ref: Features | null = null;
   private listenedRound = -1;
   private recordedRound = -1;
@@ -66,6 +104,12 @@ export class Game {
   constructor(root: HTMLElement) {
     this.hud = new Hud(root);
     this.hud.onAudioUnlock(() => this.refreshAudioBlocked());
+    this.hud.onMuteToggle(() => {
+      this.voice?.toggleMute();
+      this.refreshVoice();
+    });
+    this.hud.setMouthLevel((nick) => this.mouthLevel(nick));
+    this.hud.setTalkLevel((nick) => this.voice?.level(nick) ?? 0);
     installUnlock(() => this.refreshAudioBlocked());
 
     this.room = initRoomMode("imitame", {
@@ -76,6 +120,9 @@ export class Game {
     if (!this.room) {
       if (isRoomMode()) {
         this.hud.showMessage("No disponible", "Imitame necesita las credenciales de la sala y no estan configuradas.");
+      } else if (clipsEnabled()) {
+        // Fuera de una sala la pagina es la biblioteca: se escuchan y se suben audios.
+        new Library(root);
       } else {
         this.hud.showMessage(
           "Solo en salas",
@@ -94,9 +141,18 @@ export class Game {
       return;
     }
 
-    // El permiso del micro se pide ya: el cartel del navegador sale mientras se lee
-    // el briefing, y no en el medio de la primera ronda.
-    this.micReady = this.recorder.init().then((ok) => (this.micOk = ok));
+    // El permiso del micro se pide ya: el cartel del navegador sale mientras se lee el
+    // briefing y no en el medio de la primera ronda. Primero la grabadora y despues el
+    // chat, en serie: con el permiso ya dado, el segundo pedido no vuelve a preguntar.
+    const voice = new VoiceChat(this.room.me, (to, data) => this.transport?.sendRtc(to, data));
+    this.voice = voice;
+    this.micReady = this.recorder.init().then(async (ok) => {
+      this.micOk = ok;
+      await voice.start();
+      this.refreshVoice();
+      if (this.latest) this.syncVoice(this.latest);
+      return ok;
+    });
     this.hud.showMessage("Imitame", "Permit&iacute; el micr&oacute;fono y esper&aacute; a que empiece la ronda...");
   }
 
@@ -142,19 +198,29 @@ export class Game {
   private async connect(): Promise<void> {
     if (this.transport || this.connecting || !this.room) return;
     this.connecting = true;
-    const url = await resolveGameServerUrl();
+    const [url, clips] = await Promise.all([resolveGameServerUrl(), this.clipIds()]);
     this.connecting = false;
     if (this.transport || !url) return;
-    const transport = new SocketTransport(url, this.room.code, this.room.me, this.room.players());
+    const transport = new SocketTransport(url, this.room.code, this.room.me, this.room.players(), clips);
     transport.onState((s) => this.onState(s));
     transport.onTake((t) => this.onTake(t));
     transport.onGameover((r) => this.onGameover(r));
+    transport.onRtc((from, data) => void this.voice?.onSignal(from, data as Signal));
     this.transport = transport;
     void transport.connect();
   }
 
+  /** Los ids de la biblioteca, para que el server los sume al sorteo. */
+  private async clipIds(): Promise<string[]> {
+    const timeout = new Promise<string[]>((r) => window.setTimeout(() => r([]), CLIP_INDEX_TIMEOUT_MS));
+    const index = fetchClipIndex().then((list) => list.map((c) => c.id));
+    return Promise.race([index, timeout]);
+  }
+
   private onState(s: MtState): void {
     this.latest = s;
+    // El chat anda desde que hay conexion, aunque todavia corra el countdown.
+    this.syncVoice(s);
     if (this.state === "playing") this.applyState(s);
   }
 
@@ -167,11 +233,11 @@ export class Game {
   }
 
   private applyState(s: MtState): void {
-    if (s.soundId !== this.sound?.id) {
-      this.sound = soundById(s.soundId);
-      this.ref = this.sound ? featuresFromSound(this.sound) : null;
-    }
-    this.hud.renderChrome(s, this.me);
+    if (s.soundId !== this.sound?.id) this.setSound(s.soundId);
+    this.hud.setPhase(s.phase);
+    this.hud.setRound(s.phase === "waiting" ? "" : `Ronda ${Math.min(s.round + 1, s.totalRounds)}/${s.totalRounds}`);
+    this.hud.setClock(s.clockMs, s.clockTotalMs);
+    this.hud.setPlayers(s.players, this.me);
 
     if (this.prevPhase !== s.phase || this.prevRound !== s.round) {
       this.prevPhase = s.phase;
@@ -185,20 +251,105 @@ export class Game {
         this.playSlot(s);
       }
     }
-    if (s.phase === "upload") this.hud.setUploadProgress(s);
+    if (s.phase === "upload") {
+      const done = s.players.filter((p) => p.submitted).length;
+      this.hud.setText(`Tomas recibidas ${done}/${s.players.length}`, "Esperando las tomas", "Ya pueden hablar.");
+    }
+    this.syncVoice(s);
   }
+
+  // ---------- Chat de voz ----------
+
+  private syncVoice(s: MtState): void {
+    if (!this.voice) return;
+    this.voice.syncPeers(s.players.filter((p) => p.connected).map((p) => p.nickname));
+    const open = CHAT_OPEN_PHASES.includes(s.phase) || (s.phase === "playback" && this.revealOpen);
+    this.voice.setOpen(open);
+    this.refreshVoice();
+  }
+
+  private refreshVoice(): void {
+    const v = this.voice;
+    const open = this.latest
+      ? CHAT_OPEN_PHASES.includes(this.latest.phase) || (this.latest.phase === "playback" && this.revealOpen)
+      : true;
+    this.hud.setVoice(!!v?.hasMic, v?.isMuted ?? false, open);
+  }
+
+  private setRevealOpen(open: boolean): void {
+    this.revealOpen = open;
+    if (this.latest) this.syncVoice(this.latest);
+  }
+
+  private mouthLevel(nick: string): number {
+    const m = this.mouth;
+    if (m.kind === "me-rec") return nick === this.me ? this.recorder.level : 0;
+    if (m.kind === "playing") return nick === m.nick ? outputLevel() : 0;
+    return 0;
+  }
+
+  // ---------- Sonido de la ronda ----------
+
+  /**
+   * Los sintetizados traen su referencia en la definicion; la de un audio de la
+   * biblioteca sale de analizar el audio, que se baja al entrar la ronda (el `intro` le
+   * da 5s de margen). Recien ahi se sabe su nombre.
+   */
+  private setSound(soundId: string | null): void {
+    this.ref = null;
+    if (!soundId) {
+      this.sound = null;
+      return;
+    }
+    if (!soundId.startsWith(CLIP_PREFIX)) {
+      const synth = soundById(soundId);
+      this.sound = synth ? { id: synth.id, pack: synth.pack, name: synth.name, clipId: null } : null;
+      this.ref = synth ? featuresFromSound(synth) : null;
+      return;
+    }
+    const clipId = soundId.slice(CLIP_PREFIX.length);
+    const sound: RoundSound = { id: soundId, pack: "Comunidad", name: "...", clipId };
+    this.sound = sound;
+    void loadClip(clipId).then((clip) => {
+      if (this.sound !== sound) return;
+      if (!clip) {
+        sound.name = "Audio no disponible";
+        return;
+      }
+      sound.name = clip.meta.name;
+      sound.pack = `Comunidad / subido por ${clip.meta.uploader}`;
+      this.ref = clip.features;
+      if (this.latest?.phase === "intro") this.onPhaseChange(this.latest);
+    });
+  }
+
+  private playReference(sound: RoundSound, round: number): void {
+    if (!sound.clipId) {
+      const synth = soundById(sound.id);
+      if (synth) this.hud.traceListen(this.ref, playSound(synth));
+      return;
+    }
+    void loadClip(sound.clipId).then((clip) => {
+      if (this.latest?.phase !== "listen" || this.latest.round !== round) return;
+      if (!clip) {
+        this.hud.setText("Audio no disponible", sound.name, "No se pudo bajar el audio. Esta ronda no suma.");
+        return;
+      }
+      this.hud.traceListen(clip.features, playBuffer(clip.buffer, CLIP_GAIN));
+    });
+  }
+
+  // ---------- Fases ----------
 
   private onPhaseChange(s: MtState): void {
     const sound = this.sound;
     switch (s.phase) {
       case "waiting":
         this.hud.setText("Imitame", "Esperando a la sala...", "");
-        this.hud.setMode("idle");
         break;
       case "intro": {
         this.clearTimers();
-        this.hud.clearCard();
-        this.hud.setMode("idle");
+        this.resetStage();
         const mine = s.players.find((p) => p.nickname === this.me)?.effect ?? null;
         const effectLine = mine
           ? `La ruleta te dejo: ${EFFECTS[mine].label} (x${EFFECTS[mine].mult}) en esta toma.`
@@ -210,33 +361,49 @@ export class Game {
         if (!sound || this.listenedRound === s.round) break;
         this.listenedRound = s.round;
         this.hud.setText("Escucha", sound.name, "Una sola vez. Presta atencion.");
-        this.hud.setMode("listen", outputLevel);
-        this.hud.traceListen(this.ref, playSound(sound));
+        this.playReference(sound, s.round);
         break;
       case "ready":
         this.hud.setText("Preparate", sound?.name ?? "", "Cuando diga YA, imitalo.");
-        this.hud.setMode("idle");
+        this.hud.setMic("all");
         this.readyCountdown(s);
         break;
       case "record":
         this.hud.showCountdown("YA");
-        this.later(() => this.hud.showCountdown(null), 600);
+        this.later(() => this.hud.showCountdown(null), 700);
         this.startRecording(s);
         break;
       case "upload":
-        this.hud.setMode("idle");
+        this.mouth = { kind: "none" };
+        this.hud.setMic(null);
         break;
       case "playback":
-        this.hud.setText("A escuchar", "Las tomas de todos", "");
+        break;
+      case "summary":
+        this.resetStage();
+        this.hud.setText("Resumen de la ronda", "Cuanto sumo cada uno", "");
+        this.hud.showSummary(s.results ?? [], s.players, this.me);
         break;
       case "wheel":
+        this.resetStage();
         this.spinWheel(s);
         break;
       case "over":
+        this.resetStage();
         this.hud.setText("Fin", "Se termino el show", "");
-        this.hud.setMode("idle");
         break;
     }
+  }
+
+  /** Limpia todo lo de la fase anterior: tarjeta, resumen, ruleta, micro, foco. */
+  private resetStage(): void {
+    this.mouth = { kind: "none" };
+    this.hud.clearCard();
+    this.hud.clearSummary();
+    this.hud.hideWheel();
+    this.hud.traceClear();
+    this.hud.setMic(null);
+    this.hud.setFocus(null);
   }
 
   /** "3 / 2 / 1" antes de grabar. Se deriva del reloj de la fase, asi un F5 no lo desfasa. */
@@ -268,7 +435,8 @@ export class Game {
       }
       SoundEffects.playRecStart();
       this.hud.setText("Grabando", this.sound?.name ?? "", "Imitalo ahora. Tenes una sola toma.");
-      this.hud.setMode("sing", () => this.recorder.level);
+      this.hud.setMic("all", true);
+      this.mouth = { kind: "me-rec" };
       this.hud.traceRecord(RECORD_MS);
       this.recorder.start((frame) => this.hud.pushLive(frame));
       this.later(() => this.finishRecording(round), RECORD_MS);
@@ -278,22 +446,26 @@ export class Game {
   private finishRecording(round: number): void {
     const pcm = this.recorder.stop();
     SoundEffects.playRecStop();
-    this.hud.setMode("idle");
+    this.mouth = { kind: "none" };
+    this.hud.setMic(null);
     const rate = this.recorder.rate;
     const feats = featuresFromFrames(analyzeTake(pcm, rate));
     const b = this.ref ? scoreTake(this.ref, feats) : { attacks: 0, rhythm: 0, melody: 0, raw: 0 };
     this.hud.setText("Tu toma", this.sound?.name ?? "", "Esperando a los demas...");
-    this.hud.showCard({
-      who: "Tu toma",
-      raw: b.raw,
-      mult: null,
-      points: null,
-      attacks: b.attacks,
-      rhythm: b.rhythm,
-      melody: b.melody,
-      pitched: this.hasPitch(),
-      hasTake: !feats.silent,
-    });
+    this.hud.showCard(
+      {
+        who: "Tu toma",
+        raw: b.raw,
+        mult: null,
+        points: null,
+        attacks: b.attacks,
+        rhythm: b.rhythm,
+        melody: b.melody,
+        pitched: this.hasPitch(),
+        hasTake: !feats.silent,
+      },
+      true,
+    );
     if (this.ref) this.hud.traceCompare(this.ref, feats);
 
     let clip = normalizeGain(trimSilence(pcm, rate));
@@ -324,41 +496,64 @@ export class Game {
     // Si justo es el turno de esta toma y llego tarde, que suene ahora.
     const s = this.latest;
     if (s?.phase === "playback" && s.round === t.round && s.playOrder?.[s.playIndex] === t.nickname) {
-      this.playSlot(s);
+      this.startTake(s);
     }
   }
 
-  private playedSlot = "";
-
+  /**
+   * Un turno de la reproduccion, con aire entre cada cosa: el micro vuela a la cara del
+   * que le toca (`PRE_SLOT_MS`), suena su toma con la mesa en silencio, y despues el
+   * jurado arma la tarjeta de a poco mientras la mesa ya puede hablar; al final salta el
+   * "+N" sobre su cabeza.
+   */
   private playSlot(s: MtState): void {
     const nick = s.playOrder?.[s.playIndex];
     if (!nick) return;
-    const slotKey = `${s.round}|${s.playIndex}`;
     const result = s.results?.find((r) => r.nickname === nick) ?? null;
     const effect = s.players.find((p) => p.nickname === nick)?.effect ?? null;
     const kicker = `Toma ${s.playIndex + 1} de ${s.playOrder?.length ?? 0}`;
-    const effectLine = effect ? `Con ${EFFECTS[effect].label} (x${EFFECTS[effect].mult})` : "";
     const who = nick === this.me ? "Vos" : nick;
+    this.clearTimers();
     this.hud.clearCard();
+    this.hud.traceClear();
+    this.hud.setFocus(nick);
+    this.hud.setMic(nick);
+    this.mouth = { kind: "none" };
+    this.setRevealOpen(false);
+    this.hud.setText(kicker, `Le toca a ${who}`, effect ? `Con ${EFFECTS[effect].label} (x${EFFECTS[effect].mult})` : "");
 
     if (!result?.hasTake) {
-      this.hud.setText(kicker, who, "No grabo nada.");
-      this.hud.traceClear();
+      this.later(() => {
+        this.hud.setText(kicker, who, "No grabo nada.");
+        this.hud.showCard({ who, raw: 0, mult: null, points: 0, attacks: 0, rhythm: 0, melody: 0, pitched: false, hasTake: false });
+        this.setRevealOpen(true);
+      }, PRE_SLOT_MS);
       return;
     }
+    this.later(() => this.startTake(s), PRE_SLOT_MS);
+  }
+
+  private startTake(s: MtState): void {
+    const nick = s.playOrder?.[s.playIndex];
+    if (!nick || this.latest?.playIndex !== s.playIndex || this.latest.phase !== "playback") return;
+    const slotKey = `${s.round}|${s.playIndex}`;
     const take = this.takes.get(`${s.round}|${nick}`);
-    this.hud.setText(kicker, who, effectLine);
-    if (!take || this.playedSlot === slotKey) return; // la toma todavia no llego: onTake la dispara
+    if (!take || this.playedSlot === slotKey) return; // todavia no llego: onTake la dispara
     this.playedSlot = slotKey;
 
+    const result = s.results?.find((r) => r.nickname === nick) ?? null;
+    const effect = s.players.find((p) => p.nickname === nick)?.effect ?? null;
+    const who = nick === this.me ? "Vos" : nick;
     if (!take.features) take.features = featuresFromFrames(analyzeTake(take.pcm, take.rate));
     if (this.ref) this.hud.traceCompare(this.ref, take.features);
-    this.hud.setMode("play", outputLevel);
+    this.mouth = { kind: "playing", nick };
     playTake(take.buffer, effect);
     const dur = playbackDuration(take.buffer, effect);
+
     this.later(() => {
-      this.hud.setMode("idle");
-      SoundEffects.playScore(result.raw);
+      this.mouth = { kind: "none" };
+      if (!result) return;
+      this.setRevealOpen(true);
       this.hud.showCard({
         who,
         raw: result.raw,
@@ -370,15 +565,17 @@ export class Game {
         pitched: this.hasPitch(),
         hasTake: true,
       });
-    }, dur * 1000 + 150);
+      this.later(() => {
+        SoundEffects.playScore(result.raw);
+        this.hud.popPoints(nick, result.points, result.mult);
+      }, CARD_SUM_DELAY_MS);
+    }, dur * 1000 + 200);
   }
 
   // ---------- Ruleta ----------
 
   private spinWheel(s: MtState): void {
     const w = s.wheel;
-    this.hud.clearCard();
-    this.hud.traceClear();
     if (!w) return;
     const fx = EFFECTS[w.outcome];
     const who = w.target === this.me ? "Vos" : w.target;

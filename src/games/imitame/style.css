@@ -105,64 +105,6 @@ body {
   background: var(--mt-pink);
 }
 
-/* ---------- Roster ---------- */
-
-.mt__roster {
-  width: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-}
-
-.mt__chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border: 3px solid var(--mt-line);
-  border-radius: 999px;
-  background: var(--mt-stage);
-  box-shadow: 3px 3px 0 var(--mt-line);
-  font-size: 13px;
-  font-weight: 800;
-  transition: transform 0.15s;
-}
-
-.mt__chip.is-me {
-  background: #3d2670;
-}
-
-.mt__chip.is-off {
-  opacity: 0.4;
-}
-
-.mt__chip.is-done {
-  background: var(--mt-lime);
-  color: var(--mt-line);
-}
-
-.mt__chip.is-playing {
-  background: var(--mt-yellow);
-  color: var(--mt-line);
-  transform: translateY(-3px) rotate(-2deg);
-}
-
-.mt__chip-pts {
-  font-variant-numeric: tabular-nums;
-  opacity: 0.85;
-}
-
-.mt__chip-fx {
-  padding: 1px 6px;
-  border: 2px solid var(--mt-line);
-  border-radius: 6px;
-  background: var(--fx);
-  color: var(--mt-line);
-  font-size: 10px;
-  letter-spacing: 0.05em;
-}
-
 /* ---------- Carteles ---------- */
 
 .mt__head {
@@ -198,32 +140,72 @@ body {
   opacity: 0.85;
 }
 
-/* ---------- Boca + ruleta ---------- */
+/* ---------- Escenario (los jugadores) + ruleta ---------- */
 
 .mt__show {
-  width: min(260px, 62vw);
-  aspect-ratio: 1;
+  width: 100%;
   display: grid;
   place-items: center;
 }
 
-.mt__face {
+.mt__scene {
   width: 100%;
-  height: 100%;
+  height: auto;
 }
 
 .mt__wheel {
-  width: 100%;
-  height: 100%;
-}
-
-/* En la ruleta no hay melodia que mostrar: la ruleta crece y el trazo se va. */
-.mt__stage[data-phase="wheel"] .mt__show {
   width: min(330px, 84vw);
+  aspect-ratio: 1;
 }
 
-.mt__stage[data-phase="wheel"] .mt__trace {
+/* En la ruleta y el resumen no hay melodia que mostrar. */
+.mt__stage[data-phase="wheel"] .mt__trace,
+.mt__stage[data-phase="summary"] .mt__trace,
+.mt__stage[data-phase="summary"] .mt__card {
   display: none;
+}
+
+/* ---------- Chat de voz ---------- */
+
+.mt__mute {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 3px solid var(--mt-line);
+  border-radius: 999px;
+  background: var(--mt-lime);
+  color: var(--mt-line);
+  box-shadow: 3px 3px 0 var(--mt-line);
+  font: 900 13px var(--mt-font);
+  cursor: pointer;
+}
+
+.mt__mute svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--mt-line);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.mt__mute-x {
+  display: none;
+}
+
+.mt__mute.is-muted {
+  background: var(--mt-pink);
+}
+
+.mt__mute.is-muted .mt__mute-x {
+  display: inline;
+}
+
+/* La mesa esta en silencio (suena algo o se graba): el boton se apaga pero sigue ahi. */
+.mt__mute.is-closed {
+  opacity: 0.5;
 }
 
 .mt__trace {
@@ -296,12 +278,74 @@ body {
   overflow: hidden;
 }
 
+/*
+ * La tarjeta del jurado se arma de a poco: cada barra se llena despues de la anterior,
+ * despues aparece el puntaje y al final lo que suma. Con `.is-quick` (tu propia toma,
+ * apenas grabaste) sale todo junto.
+ */
 .mt__bar-fill {
   display: block;
   height: 100%;
   width: var(--v);
   background: var(--c);
-  animation: mt-bar 0.6s ease-out;
+  animation: mt-bar 0.7s ease-out both;
+  animation-delay: calc(0.25s + var(--i) * 0.75s);
+}
+
+.mt__bar-val {
+  animation: mt-fade 0.3s ease-out both;
+  animation-delay: calc(0.9s + var(--i) * 0.75s);
+}
+
+.mt__card-raw {
+  animation: mt-pop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+  animation-delay: 2.6s;
+}
+
+.mt__card-sum {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 8px;
+  animation: mt-pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+  animation-delay: 3.3s;
+}
+
+.mt__card-x {
+  font-size: 18px;
+  font-weight: 900;
+  padding: 2px 8px;
+  border: 3px solid var(--mt-line);
+  border-radius: 8px;
+  background: var(--mt-yellow);
+}
+
+.mt__card-plus {
+  font-size: 34px;
+  font-weight: 900;
+  color: #2e9e3f;
+  text-shadow: 2px 2px 0 var(--mt-line);
+}
+
+.mt__card.is-quick .mt__bar-fill,
+.mt__card.is-quick .mt__bar-val,
+.mt__card.is-quick .mt__card-raw,
+.mt__card.is-quick .mt__card-sum {
+  animation-delay: 0s;
+}
+
+@keyframes mt-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes mt-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
 }
 
 @keyframes mt-bar {
@@ -315,11 +359,64 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.mt__card-mult {
-  margin-top: 6px;
+/* ---------- Resumen de la ronda ---------- */
+
+.mt__summary {
+  width: 100%;
+  padding: 12px 16px 14px;
+  border: 4px solid var(--mt-line);
+  border-radius: 18px;
+  background: var(--mt-cream);
+  color: var(--mt-line);
+  box-shadow: 6px 6px 0 var(--mt-line);
+}
+
+.mt__sum-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4px 6px 40px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.mt__sum-row {
+  display: grid;
+  grid-template-columns: 30px 1fr auto 60px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  border-top: 2px solid rgba(18, 10, 36, 0.12);
+  font-weight: 900;
+  animation: mt-card-in 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+  animation-delay: calc(var(--i) * 0.35s);
+}
+
+.mt__sum-row.is-me {
+  background: rgba(255, 210, 63, 0.35);
+  border-radius: 10px;
+}
+
+.mt__sum-place {
+  font-size: 20px;
+  color: var(--mt-pink);
+}
+
+.mt__sum-plus {
+  font-size: 22px;
+  color: #2e9e3f;
+}
+
+.mt__sum-plus.is-zero {
+  color: rgba(18, 10, 36, 0.4);
+}
+
+.mt__sum-total {
+  font-size: 22px;
   text-align: right;
-  font-size: 15px;
-  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .mt__card-empty {
@@ -433,4 +530,168 @@ body {
   font: 800 13px var(--mt-font);
   text-decoration: none;
   opacity: 0.7;
+}
+
+/* ---------- Biblioteca de audios (pagina fuera de sala) ---------- */
+
+.mt--library {
+  overflow-y: auto;
+}
+
+.mt__lib {
+  width: min(560px, 100%);
+  padding: 44px 16px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mt__lib-head {
+  text-align: center;
+}
+
+.mt__lib-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+}
+
+.mt__lib-name input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 3px solid var(--mt-line);
+  border-radius: 999px;
+  background: var(--mt-cream);
+  color: var(--mt-line);
+  font: 800 16px var(--mt-font);
+}
+
+.mt__drop {
+  display: grid;
+  gap: 6px;
+  place-items: center;
+  padding: 34px 16px;
+  border: 4px dashed var(--mt-cyan);
+  border-radius: 22px;
+  background: rgba(53, 214, 232, 0.08);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    transform 0.15s,
+    background 0.15s;
+}
+
+.mt__drop strong {
+  font-size: 22px;
+  color: var(--mt-cyan);
+}
+
+.mt__drop span {
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.mt__drop.is-over {
+  transform: scale(1.02) rotate(-1deg);
+  background: rgba(53, 214, 232, 0.2);
+  border-color: var(--mt-yellow);
+}
+
+.mt__lib-status {
+  min-height: 20px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.mt__lib-status[data-kind="error"] {
+  color: var(--mt-pink);
+}
+
+.mt__lib-status[data-kind="ok"] {
+  color: var(--mt-lime);
+}
+
+.mt__lib-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mt__lib-empty {
+  text-align: center;
+  opacity: 0.7;
+  padding: 12px;
+}
+
+.mt__clip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 3px solid var(--mt-line);
+  border-radius: 16px;
+  background: var(--mt-stage);
+  box-shadow: 4px 4px 0 var(--mt-line);
+}
+
+.mt__clip.is-fresh {
+  animation: mt-card-in 0.35s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+.mt__clip-play {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 3px solid var(--mt-line);
+  border-radius: 50%;
+  background: var(--mt-yellow);
+  cursor: pointer;
+}
+
+.mt__clip-play svg {
+  width: 20px;
+  height: 20px;
+  fill: var(--mt-line);
+}
+
+.mt__clip.is-playing .mt__clip-play {
+  background: var(--mt-pink);
+}
+
+.mt__clip-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mt__clip-name {
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mt__clip-meta {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.mt__clip-del {
+  flex: none;
+  padding: 6px 12px;
+  border: 3px solid var(--mt-line);
+  border-radius: 999px;
+  background: var(--mt-cream);
+  color: var(--mt-line);
+  font: 800 13px var(--mt-font);
+  cursor: pointer;
+}
+
+.mt__lib-rooms {
+  align-self: center;
+  text-decoration: none;
 }

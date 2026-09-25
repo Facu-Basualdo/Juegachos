@@ -13,6 +13,7 @@ export type MtPhase =
   | "record"
   | "upload"
   | "playback"
+  | "summary"
   | "wheel"
   | "over";
 
@@ -66,7 +67,7 @@ export interface MtState {
   /** playback: orden en que suenan las tomas. */
   playOrder: string[] | null;
   playIndex: number;
-  /** playback: resultados hasta `playIndex` inclusive; wheel: todos. */
+  /** playback: resultados hasta `playIndex` inclusive; summary / wheel: todos. */
   results: MtResult[] | null;
   wheel: MtWheel | null;
 }

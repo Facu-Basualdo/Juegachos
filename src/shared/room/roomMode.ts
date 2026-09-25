@@ -169,10 +169,12 @@ const POLL_MS = 5000;
 export const VOTE_SECONDS = 20;
 /**
  * Tope de lectura del briefing previo a cada ronda (de que va el juego + los
- * controles). Si nadie toca "Listo", la ronda arranca igual al vencer; si todos
- * los presentes marcan "Listo" antes, el host la arranca en el acto.
+ * controles). Ya no se cierra solo cuando todos marcan "Listo" (cortaba la lectura
+ * del que leia mas lento): con todos los presentes listos, el host (el capitan) ve
+ * habilitado "Empezar" y arranca el cuando quiere. Si nadie lo aprieta, la ronda
+ * arranca igual al vencer este tope.
  */
-export const BRIEFING_SECONDS = 10;
+export const BRIEFING_SECONDS = 30;
 /** Marca de "listo" en room_votes (columna game_id) durante el briefing. */
 const READY_VOTE = "ready";
 /**
@@ -853,6 +855,7 @@ class RoomModeController implements RoomMode {
         .map((v) => v.player),
     );
     const readyCount = state.players.filter((p) => ready.has(p)).length;
+    const isHost = this.isHost();
 
     const limit = roomTimeLimitFor(this.gameId);
 
@@ -874,9 +877,29 @@ class RoomModeController implements RoomMode {
           void this.refresh();
         });
       },
+      host: isHost ? { allReady: this.allPresentReady(), onStart: () => void this.hostStartRound() } : null,
     });
+  }
 
-    if (this.isHost()) void this.maybeFinishBriefing();
+  /** Todos los jugadores conectados marcaron "Listo" (a los ausentes no se los espera). */
+  private allPresentReady(): boolean {
+    const state = this.state;
+    if (!state) return false;
+    const round = state.room.current_round;
+    const ready = new Set(
+      state.votes
+        .filter((v) => v.round_no === round && v.game_id === READY_VOTE)
+        .map((v) => v.player),
+    );
+    const present = this.channel?.presentPlayers() ?? [];
+    const registeredPresent = state.players.filter((p) => present.includes(p));
+    return registeredPresent.length > 0 && registeredPresent.every((p) => ready.has(p));
+  }
+
+  /** El capitan aprieta "Empezar": solo vale con todos los presentes listos. */
+  private async hostStartRound(): Promise<void> {
+    if (!this.isHost() || this.state?.room.status !== "briefing" || !this.allPresentReady()) return;
+    await this.finishBriefing();
   }
 
   // ---------- Logica de host ----------
@@ -1012,25 +1035,13 @@ class RoomModeController implements RoomMode {
   }
 
   /**
-   * Cierra el briefing si vencio el tope o si todos los jugadores presentes ya
-   * marcaron "Listo" (a los ausentes no se los espera). Solo el host.
+   * Cierra el briefing cuando vence el tope. Que esten todos listos ya no alcanza: eso
+   * solo habilita el "Empezar" del capitan (`hostStartRound`). Solo el host.
    */
   private async maybeFinishBriefing(deadlinePassed = false): Promise<void> {
     const state = this.state;
     if (!state || state.room.status !== "briefing" || !this.isHost()) return;
-
-    const round = state.room.current_round;
-    const ready = new Set(
-      state.votes
-        .filter((v) => v.round_no === round && v.game_id === READY_VOTE)
-        .map((v) => v.player),
-    );
-    const present = this.channel?.presentPlayers() ?? [];
-    const registeredPresent = state.players.filter((p) => present.includes(p));
-    const allPresentReady =
-      registeredPresent.length > 0 && registeredPresent.every((p) => ready.has(p));
-
-    if (!deadlinePassed && !allPresentReady) return;
+    if (!deadlinePassed) return;
     await this.finishBriefing();
   }
 

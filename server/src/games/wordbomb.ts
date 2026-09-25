@@ -16,7 +16,7 @@ import type { WbEmoteId, WbGameover, WbPlayerView, WbState } from "../protocol.j
  */
 
 /** Vidas iniciales por jugador. */
-const STARTING_LIVES = 3;
+const STARTING_LIVES = 2;
 /** Mecha base; se acorta a medida que avanza la partida (piso FUSE_MIN). */
 const FUSE_BASE_MS = 13000;
 const FUSE_STEP_MS = 150;

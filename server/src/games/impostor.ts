@@ -1,6 +1,6 @@
 import type { Server } from "socket.io";
 import { GameRoom, registerGame, type RoomSim } from "../rooms.js";
-import { pickWord } from "../words-impostor.js";
+import { isCorrectGuess, pickWord } from "../words-impostor.js";
 import type {
   ImClue,
   ImOutcome,
@@ -40,12 +40,19 @@ const CLUE_TURN_MS = 37500;
  * la lista completa y avisa que arranca la votacion).
  */
 const CLUES_RECAP_MS = 3500;
-/** Duracion de la votacion. */
-const VOTE_MS = 30000;
+/**
+ * Duracion de la votacion, que es tambien la discusion final de la mesa. Era de 30s y no
+ * alcanzaba para discutir: la mitad del tiempo se iba en leer las pistas. Si votan todos
+ * los presentes antes, se adelanta el cierre (`VOTE_GRACE_MS`).
+ */
+const VOTE_MS = 60000;
 /** Tiempo del impostor descubierto para adivinar la palabra. */
 const GUESS_MS = 20000;
-/** Gracia tras el ultimo voto antes de cerrar (para alcanzar a ver el resultado). */
-const VOTE_GRACE_MS = 1200;
+/**
+ * Gracia tras el ultimo voto antes de cerrar. Era de 1.2s y el adelanto no se notaba:
+ * con 3s se alcanza a ver el conteo final (y a cambiar el voto) antes del resultado.
+ */
+const VOTE_GRACE_MS = 3000;
 /** Cuanto se muestra el desenlace de la ronda antes de la proxima. */
 const RESULT_MS = 9000;
 
@@ -60,21 +67,6 @@ const MAX_WORD_LEN = 24;
 /** Cuantos impostores segun cuantos jueguen: 2 con 7+, si no 1 (siempre >= 1 inocente). */
 function impostorCount(seats: number): number {
   return seats >= 7 ? 2 : 1;
-}
-
-/**
- * Normaliza para comparar la adivinanza contra la palabra secreta: minuscula, saca acentos,
- * conserva la ñ, colapsa espacios. Copiada a proposito (Impostor no depende del diccionario).
- */
-function normalize(input: string): string {
-  return input
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[́̈]/g, "")
-    .normalize("NFC")
-    .replace(/[^a-zñ ]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 /** Recorta y limita una pista/adivinanza cruda del cliente (se muestra tal cual). */
@@ -148,6 +140,8 @@ class ImpostorSim implements RoomSim {
 
   leave(_nickname: string): void {
     // No elimina al desconectar: si vuelve se reengancha. Solo refresca las luces.
+    // Pero si el que faltaba votar se fue, ya votaron todos los presentes: se adelanta.
+    if (this.phase === "voting") this.maybeHurryVote();
     if (this.phase !== "over") this.broadcastState();
   }
 
@@ -180,12 +174,19 @@ class ImpostorSim implements RoomSim {
     if (target === voter || !this.seats.includes(target)) return; // no te votas a vos mismo
     if (this.votes.get(voter) === target) this.votes.delete(voter); // toggle = destildar
     else this.votes.set(voter, target);
-    // Adelanta el cierre si ya votaron todos los presentes (gracia corta para ver el ultimo).
-    if (this.everyPresentVoted()) {
-      this.deadline = Math.min(this.deadline ?? Date.now(), Date.now() + VOTE_GRACE_MS);
-      this.armTimer(() => this.closeVoting());
-    }
+    this.maybeHurryVote();
     this.broadcastState();
+  }
+
+  /**
+   * Adelanta el cierre si ya votaron todos los presentes (con una gracia corta para ver
+   * el conteo). El reloj visible se reinicia a esa gracia, asi la barra lo muestra.
+   */
+  private maybeHurryVote(): void {
+    if (this.phase !== "voting" || !this.everyPresentVoted()) return;
+    if (this.deadline !== null && this.deadline - Date.now() <= VOTE_GRACE_MS) return;
+    this.setPhaseClock(VOTE_GRACE_MS);
+    this.armTimer(() => this.closeVoting());
   }
 
   private onGuess(nickname: string, payload: unknown): void {
@@ -306,9 +307,7 @@ class ImpostorSim implements RoomSim {
   private toResult(): void {
     if (this.phase === "result" || this.phase === "over") return;
     const correct =
-      this.guessText !== null &&
-      this.word !== null &&
-      normalize(this.guessText) === normalize(this.word);
+      this.guessText !== null && this.word !== null && isCorrectGuess(this.guessText, this.word);
     this.resolve(correct ? "impostor-guessed" : "impostor-caught");
   }
 

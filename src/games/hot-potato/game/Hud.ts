@@ -85,6 +85,10 @@ export class Hud {
   private seqShown = "";
   private noteTimer = 0;
   private heatShown = -1;
+  private readonly riskEl: HTMLElement;
+  private readonly bands: SVGPathElement[];
+  private fuseWindow = "";
+  private riskShown = "";
 
   private arrowCb: (a: Arrow) => void = () => {};
   private pickCb: (nick: string) => void = () => {};
@@ -105,6 +109,7 @@ export class Hud {
               <path class="hp__meter-band hp__meter-band--hot" d="M84 20.4A48 48 0 0 1 108 62"/>
               <g class="hp__needle"><path d="M60 62 60 20"/><circle cx="60" cy="62" r="5"/></g>
             </svg>
+            <div class="hp__risk" hidden></div>
             <div class="hp__big"></div>
             <div class="hp__small"></div>
             <div class="hp__seq" aria-live="polite"></div>
@@ -136,6 +141,8 @@ export class Hud {
     this.smallEl = wrap.querySelector(".hp__small")!;
     this.seqEl = wrap.querySelector(".hp__seq")!;
     this.noteEl = wrap.querySelector(".hp__note")!;
+    this.riskEl = wrap.querySelector(".hp__risk")!;
+    this.bands = [...wrap.querySelectorAll<SVGPathElement>(".hp__meter-band")];
     this.pad = wrap.querySelector(".hp__pad")!;
     this.pingEl = wrap.querySelector(".hp__ping")!;
     this.overlay = wrap.querySelector(".hp__overlay")!;
@@ -330,6 +337,49 @@ export class Hud {
     this.noteTimer = window.setTimeout(() => this.noteEl.classList.remove("is-on"), 1400);
   }
 
+  /**
+   * Pinta las franjas del termometro con la regla real de la mecha: desde 0 hasta
+   * `minMs` es zona segura (la papa no explota nunca), y de ahi a `maxMs` puede
+   * explotar en cualquier momento (tibia la primera mitad, roja la segunda).
+   */
+  setFuseWindow(minMs: number, maxMs: number): void {
+    const key = `${minMs}/${maxMs}`;
+    if (key === this.fuseWindow || maxMs <= 0) return;
+    this.fuseWindow = key;
+    const safe = Math.min(0.95, Math.max(0.05, minMs / maxMs));
+    const mid = (safe + 1) / 2;
+    const [cool, warm, hot] = this.bands;
+    cool?.setAttribute("d", arcPath(0, safe));
+    warm?.setAttribute("d", arcPath(safe, mid));
+    hot?.setAttribute("d", arcPath(mid, 1));
+  }
+
+  /**
+   * Explica la barra en vivo. En la zona segura dice cuanto falta para que la papa
+   * pueda explotar; despues, la chance de que explote en el proximo segundo. La mecha
+   * sale pareja entre el minimo y el tope, asi que habiendo pasado `t` esa chance es
+   * 1 s dividido lo que falta para el tope: sube sola a medida que pasa el tiempo.
+   */
+  setRisk(elapsedMs: number | null, minMs: number, maxMs: number): void {
+    let text = "";
+    let hot = false;
+    if (elapsedMs !== null) {
+      if (elapsedMs < minMs) {
+        text = `Zona segura: no explota hasta los ${Math.round(minMs / 1000)} s`;
+      } else {
+        const left = Math.max(0, maxMs - elapsedMs);
+        const pct = left <= 1000 ? 100 : Math.round((1000 / left) * 100);
+        text = `Puede explotar ya: ${pct}% de que sea en el proximo segundo`;
+        hot = true;
+      }
+    }
+    if (text === this.riskShown) return;
+    this.riskShown = text;
+    this.riskEl.hidden = text === "";
+    this.riskEl.textContent = text;
+    this.riskEl.classList.toggle("is-hot", hot);
+  }
+
   /** Calor 0..1: aguja del termometro, color de la papa y temblor. */
   setHeat(heat: number): void {
     const h = Math.round(heat * 200) / 200;
@@ -369,4 +419,13 @@ export class Hud {
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
+/** Arco del termometro entre dos fracciones (0 = izquierda, 1 = derecha). Centro (60, 62), radio 48. */
+function arcPath(from: number, to: number): string {
+  const pt = (f: number): string => {
+    const a = Math.PI - f * Math.PI;
+    return `${(60 + 48 * Math.cos(a)).toFixed(1)} ${(62 - 48 * Math.sin(a)).toFixed(1)}`;
+  };
+  return `M${pt(from)}A48 48 0 0 1 ${pt(to)}`;
 }

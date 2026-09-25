@@ -1,12 +1,11 @@
 /**
- * Biblioteca de sonidos a imitar. Todo sintetizado (sin assets): cada sonido es una
- * lista de notas con su contorno de altura, y de esa misma definicion salen el audio
- * (`synth.ts`) y la "partitura" contra la que se puntua (`analysis.ts`). Por eso el
- * puntaje de referencia es exacto: no se analiza el audio de referencia, se lee la
- * definicion.
+ * Biblioteca de sonidos sintetizados del juego (sin assets): cada sonido es una lista de
+ * notas con su contorno de altura, y de esa misma definicion salen el audio (`synth.ts`)
+ * y la "partitura" contra la que se puntua (`analysis.ts`): la referencia no se analiza,
+ * se lee.
  *
- * Los ids **espejan `SOUND_IDS` de `server/src/games/imitame.ts`** (el server sortea
- * solo el id). Para agregar un sonido: sumarlo aca y en el server, y redeployar.
+ * Los ids **espejan `SOUND_IDS` de `server/src/games/imitame.ts`** (el server sortea solo
+ * el id). Los audios que sube la gente no viven aca: estan en Supabase (`clips.ts`).
  */
 
 export type Timbre = "voz" | "silbido" | "ladrido" | "bip" | "bocina" | "golpe";
@@ -24,13 +23,15 @@ export interface Note {
   m: number[] | null;
 }
 
-export interface Sound {
+export interface SynthSound {
   id: string;
   pack: string;
   name: string;
   timbre: Timbre;
   notes: Note[];
 }
+
+export type Sound = SynthSound;
 
 const beeps = (count: number, gap: number, d: number, pitches: number[]): Note[] =>
   Array.from({ length: count }, (_, i) => ({ t: i * gap, d, m: [pitches[i % pitches.length]] }));
@@ -209,12 +210,12 @@ export function soundById(id: string | null): Sound | null {
 }
 
 /** Fin del sonido (fin de la ultima nota), en segundos. */
-export function soundDuration(sound: Sound): number {
+export function soundDuration(sound: SynthSound): number {
   return sound.notes.reduce((end, n) => Math.max(end, n.t + n.d), 0);
 }
 
 /** Altura (MIDI) de la nota en el instante `t` (s), o null si no hay nota con altura ahi. */
-export function pitchAt(sound: Sound, t: number): number | null {
+export function pitchAt(sound: SynthSound, t: number): number | null {
   for (const n of sound.notes) {
     if (t < n.t || t > n.t + n.d || !n.m) continue;
     if (n.m.length === 1) return n.m[0];

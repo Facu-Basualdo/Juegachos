@@ -744,6 +744,7 @@ export type MtPhase =
   | "record"
   | "upload"
   | "playback"
+  | "summary"
   | "wheel"
   | "over";
 
@@ -806,8 +807,11 @@ export interface MtGameover {
 
 /** Cliente -> Server. */
 export interface MtClientToServer {
-  "mt:join": (msg: { code: string; nickname: string; roster: string[] }) => void;
+  /** `clips`: ids de la biblioteca de la comunidad (Supabase) para sumar al sorteo. */
+  "mt:join": (msg: { code: string; nickname: string; roster: string[]; clips?: string[] }) => void;
   /** La toma (mu-law, 1 byte por muestra) + el puntaje que calculo el cliente. */
+  /** Senalizacion WebRTC del chat de voz, para un jugador puntual. */
+  "mt:rtc": (msg: { to: string; data: unknown }) => void;
   "mt:take": (msg: {
     round: number;
     rate: number;
@@ -825,6 +829,8 @@ export interface MtServerToClient {
   /** Una toma, reenviada a todos al abrir la reproduccion (y al que reconecta en ella). */
   "mt:take": (msg: { round: number; nickname: string; rate: number; audio: Buffer }) => void;
   "mt:gameover": (msg: MtGameover) => void;
+  /** Senalizacion WebRTC reenviada, con el remitente estampado por el server. */
+  "mt:rtc": (msg: { from: string; data: unknown }) => void;
 }
 
 /* ======================= PAPA CALIENTE (namespace /hotpotato) ======================= */
@@ -863,6 +869,8 @@ export interface HpState {
   /** Inicio de la papa actual (epoch del server), para el termometro. */
   burnStart: number | null;
   /** Tope de la mecha (publico): el termometro llena contra esto. */
+  /** Minimo publico de la mecha: antes de esto la papa no explota nunca. */
+  fuseMinMs: number;
   fuseMaxMs: number;
   /** Cuando arranca la proxima papa (en `pause`). */
   nextBurnAt: number | null;

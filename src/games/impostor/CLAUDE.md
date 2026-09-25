@@ -54,8 +54,11 @@ secreta solo aparece en `im:state` en la fase `result` (ya termino la ronda, se 
    durante `CLUES_RECAP_MS` (3.5s) para que la mesa alcance a leer lo que escribio el ultimo
    (`endClues`). **`currentTurn()` devuelve null cuando se agotaron los turnos**: sin ese corte el
    modulo daba la vuelta y volvia a marcar de turno al primero durante la pausa.
-4. `voting` — `VOTE_MS` (30s): cada uno vota (`im:vote {target}`, cambiable/toggle, no a si mismo).
-   Cierra al vencer o `VOTE_GRACE_MS` (1.2s) despues de que votaron todos los presentes. El mas
+4. `voting` — `VOTE_MS` (60s; era 30 y no alcanzaba para discutir, que es lo que pasa en esta
+   fase): cada uno vota (`im:vote {target}`, cambiable/toggle, no a si mismo).
+   Cierra al vencer o `VOTE_GRACE_MS` (3s; era 1.2 y el adelanto no se notaba) despues de que
+   votaron todos los presentes; el reloj visible se reinicia a esa gracia (`maybeHurryVote`), y
+   tambien se adelanta si el unico que faltaba votar se desconecta (`leave`). El mas
    votado es el **acusado**; empate o sin votos -> nadie acusado (el impostor zafa).
 5. `guess` — solo si el acusado **es** impostor. `GUESS_MS` (20s) para que **ese** impostor
    escriba su adivinanza (`im:guess`); acierta si normaliza igual que la palabra secreta.
@@ -76,7 +79,12 @@ inocentes que votaron bien; hoy es team-based por simplicidad.)
 ## Banco de palabras
 
 `server/src/words-impostor.ts`: categorias (`WORD_CATEGORIES`) con palabras concretas y
-adivinables en espanol rioplatense. La **categoria es una pista deliberada** para el impostor, asi
+adivinables en espanol rioplatense, mas dos categorias de nombres propios: **Futbolista argentino**
+y **Futbolista del mundo** (nombres tomados de la base de github.com/nsh1z/impostor; solo los
+nombres, no su codigo ni sus pistas). Como a una persona se la adivina por apodo o apellido, la
+adivinanza del impostor se valida con `isCorrectGuess` (igual exacto, `ALIASES` como "kun" o
+"cr7", un nombre mas completo que contenga la palabra, o el apellido solo si la palabra tiene dos).
+La **categoria es una pista deliberada** para el impostor, asi
 que las palabras de una categoria tienen que distinguirse entre si. `pickWord(exclude)` sortea sin
 repetir en el partido. Se edita a mano; requiere redeploy del server. No se usa el diccionario.
 

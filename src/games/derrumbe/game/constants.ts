@@ -77,13 +77,24 @@ export const REMOTE_EASE = 14;
  * sigue mirando hacia abajo (incluso con el FOV abierto del celu en vertical), asi
  * que el piso de arriba nunca entra en pantalla.
  */
-export const CAM_DISTANCE = 10;
-/** Inclinacion (rad, ~54 grados): alta, para ver el piso alrededor del muñeco. */
-export const CAM_PITCH = 0.95;
+export const CAM_DISTANCE = 8;
+/**
+ * Inclinacion (rad, ~52 grados): alta, para ver el piso alrededor del muñeco. Con
+ * DISTANCE 8 la camara queda a ~7.4 sobre los pies (tope: 10). Estaba en 10 / 0.95 y el
+ * muñeco se veia chico; mas cerca todavia, en el celu se deja de ver el agujero de al lado.
+ */
+export const CAM_PITCH = 0.9;
 export const CAM_FOV = 62;
 /** Espectador: vista fija de todo el piso desde el mismo lado. */
 export const SPECTATOR_BACK = 30;
 export const SPECTATOR_HEIGHT = 24;
+/**
+ * El espectador no se acerca (mas cerca, los pisos de arriba tapan a los de abajo):
+ * hace ZOOM cerrando el campo de vision sobre los que siguen en pie. Estos son los
+ * topes del zoom, en grados.
+ */
+export const SPECTATOR_FOV_MIN = 24;
+export const SPECTATOR_FOV_MAX = 62;
 
 // ---- Countdown ----
 export const COUNTDOWN_LABELS = ["3", "2", "1", "YA"] as const;

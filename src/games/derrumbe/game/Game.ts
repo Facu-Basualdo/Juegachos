@@ -18,7 +18,10 @@ import {
   POS_SEND_MS,
   PREROLL_MS,
   REMOTE_EASE,
+  ARENA_RADIUS,
   SPECTATOR_BACK,
+  SPECTATOR_FOV_MAX,
+  SPECTATOR_FOV_MIN,
   SPECTATOR_HEIGHT,
   SERVER_GRACE_MS,
   cellCenterX,
@@ -101,6 +104,13 @@ export class Game {
 
   private camY = surfaceY(0);
   private specY = surfaceY(1);
+  /** Espectador: costado de la camara, punto al que mira y zoom (suavizados). */
+  private specX = 0;
+  private specLookX = 0;
+  private specLookZ = 0;
+  private specFov = SPECTATOR_FOV_MAX;
+  /** FOV de juego (depende de la orientacion, ver `resize`). */
+  private playFov = CAM_FOV;
   private posTimer = 0;
 
   /** Ms aguantados propios, una vez caido (o al final). -1 mientras sigue. */
@@ -608,6 +618,10 @@ export class Game {
   private updateCamera(dt: number): void {
     const following = (this.state === "countdown" || this.state === "playing") && this.mySeat >= 0;
     if (following) {
+      if (this.camera.fov !== this.playFov) {
+        this.camera.fov = this.playFov;
+        this.camera.updateProjectionMatrix();
+      }
       const p = this.player;
       // La camara sigue la altura con retraso: al caer se ve el piso de abajo
       // acercandose, que es lo que hace legible la caida.
@@ -620,20 +634,45 @@ export class Game {
       return;
     }
 
-    // Espectador (y de fondo en los carteles): vista fija del piso entero desde el
-    // mismo lado que la camara de juego, a la altura de los que siguen en pie.
+    // Espectador (y de fondo en los carteles): desde lejos y del mismo lado que la
+    // camara de juego, a la altura de los que siguen en pie. La camara no se acerca
+    // (los pisos de arriba taparian a los de abajo): se corre de costado hasta quedar
+    // frente al grupo y hace zoom sobre el, asi los que quedan no son puntitos.
     this.input.consumeJump();
-    let sum = 0;
-    let n = 0;
+    const alive: Remote[] = [];
     for (const [seat, r] of this.remotes) {
       if (!r.seen || (this.latest && !this.latest.alive[seat])) continue;
-      sum += r.y;
-      n++;
+      alive.push(r);
     }
-    const target = n > 0 ? sum / n : surfaceY(1);
-    this.specY += (target - this.specY) * (1 - Math.exp(-1.5 * dt));
-    this.camera.position.set(0, this.specY + SPECTATOR_HEIGHT, SPECTATOR_BACK);
-    this.camera.lookAt(0, this.specY - 1, 0);
+    const k = 1 - Math.exp(-1.5 * dt);
+    let cx = 0;
+    let cz = 0;
+    let spread = ARENA_RADIUS;
+    if (alive.length > 0) {
+      cx = alive.reduce((a, r) => a + r.x, 0) / alive.length;
+      cz = alive.reduce((a, r) => a + r.z, 0) / alive.length;
+      const ty = alive.reduce((a, r) => a + r.y, 0) / alive.length;
+      this.specY += (ty - this.specY) * k;
+      spread = Math.max(3, ...alive.map((r) => Math.hypot(r.x - cx, r.z - cz)));
+    } else {
+      this.specY += (surfaceY(1) - this.specY) * k;
+    }
+    this.specX += (cx * 0.8 - this.specX) * k;
+    this.specLookX += (cx - this.specLookX) * k;
+    this.specLookZ += (cz - this.specLookZ) * k;
+    const camPos = new THREE.Vector3(this.specX, this.specY + SPECTATOR_HEIGHT, SPECTATOR_BACK);
+    this.camera.position.copy(camPos);
+    this.camera.lookAt(this.specLookX, this.specY - 1, this.specLookZ);
+    // Zoom: que el grupo (mas un margen) entre en la altura del cuadro.
+    const dist = camPos.distanceTo(new THREE.Vector3(this.specLookX, this.specY, this.specLookZ));
+    const want = THREE.MathUtils.clamp(
+      THREE.MathUtils.radToDeg(2 * Math.atan((spread + 4) / dist)),
+      SPECTATOR_FOV_MIN,
+      SPECTATOR_FOV_MAX,
+    );
+    this.specFov += (want - this.specFov) * k;
+    this.camera.fov = this.specFov;
+    this.camera.updateProjectionMatrix();
   }
 
   private updateHud(now: number): void {
@@ -675,7 +714,8 @@ export class Game {
     this.renderer.setSize(w, h);
     this.camera.aspect = w / h;
     // En vertical se abre el campo de vision: si no, el piso entra como una franja.
-    this.camera.fov = w < h ? CAM_FOV + 14 : CAM_FOV;
+    this.playFov = w < h ? CAM_FOV + 14 : CAM_FOV;
+    this.camera.fov = this.playFov;
     this.camera.updateProjectionMatrix();
   };
 

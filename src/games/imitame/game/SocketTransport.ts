@@ -12,17 +12,21 @@ export class SocketTransport {
   private stateCb: (s: MtState) => void = () => {};
   private takeCb: (t: MtTake) => void = () => {};
   private gameoverCb: (r: MtGameover) => void = () => {};
+  private rtcCb: (from: string, data: unknown) => void = () => {};
 
   private readonly serverUrl: string;
   private readonly code: string;
   private readonly nickname: string;
   private readonly roster: string[];
+  /** ids de la biblioteca de la comunidad: el server los suma al sorteo. */
+  private readonly clips: string[];
 
-  constructor(serverUrl: string, code: string, nickname: string, roster: string[]) {
+  constructor(serverUrl: string, code: string, nickname: string, roster: string[], clips: string[]) {
     this.serverUrl = serverUrl;
     this.code = code;
     this.nickname = nickname;
     this.roster = roster;
+    this.clips = clips;
   }
 
   async connect(): Promise<void> {
@@ -31,11 +35,12 @@ export class SocketTransport {
     const socket = io(`${base}/imitame`, { transports: ["websocket"], reconnection: true });
     this.socket = socket;
     socket.on("connect", () => {
-      socket.emit("mt:join", { code: this.code, nickname: this.nickname, roster: this.roster });
+      socket.emit("mt:join", { code: this.code, nickname: this.nickname, roster: this.roster, clips: this.clips });
     });
     socket.on("mt:state", (s: MtState) => this.stateCb(s));
     socket.on("mt:take", (t: MtTake) => this.takeCb(t));
     socket.on("mt:gameover", (m: MtGameover) => this.gameoverCb(m));
+    socket.on("mt:rtc", (m: { from: string; data: unknown }) => this.rtcCb(m.from, m.data));
   }
 
   onState(cb: (s: MtState) => void): void {
@@ -46,6 +51,15 @@ export class SocketTransport {
   }
   onGameover(cb: (r: MtGameover) => void): void {
     this.gameoverCb = cb;
+  }
+
+  onRtc(cb: (from: string, data: unknown) => void): void {
+    this.rtcCb = cb;
+  }
+
+  /** Senalizacion del chat de voz para un jugador (el server la reenvia). */
+  sendRtc(to: string, data: unknown): void {
+    this.socket?.emit("mt:rtc", { to, data });
   }
 
   sendTake(take: MtTakeUpload): void {
