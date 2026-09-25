@@ -12,21 +12,22 @@ numerados), todo hecho por codigo, sin logos ni imagenes del original.
 
 ## Pedido del programador
 
-"Que no sea tan largo, pero que sea complicado." Corto: 45 s de tope y 60 m de
-cancha (~20 s si nunca te frenan). Complicado por cuatro lados, todos de tuning:
+"Que no sea tan largo, pero que sea complicado", y despues (2026-09-25) "hay que hacerlo mas
+complicado". Corto: 45 s de tope y 60 m de cancha. Complicado por todos estos lados, todos de
+tuning (primera version -> la actual):
 
-- **La cancion cambia de ritmo en cada verde** (`GREEN_PROFILES` del server:
-  rapido 1.1-1.9 s, medio 2.2-3.3 s, lento 3.6-5 s). Las nueve silabas se reparten
-  en la duracion del verde, asi que el ritmo es el aviso: una cancion rapida
-  termina enseguida.
-- **Amagues** (`TEASE_CHANCE` 0.25): a mitad de un verde de 2 s o mas, la muñeca
-  arranca a girar la cabeza y vuelve. No cambia la luz; castiga al que frena de
-  mas (pierde tiempo).
-- **Frenar no es instantaneo** (`ACCEL` 11: de lleno a quieto tarda ~0.25 s). Hay
-  que soltar antes de que termine la cancion, no cuando la muñeca ya giro.
-- **Margen corto** (`TURN_MS` 600): desde que se ve el rojo, la cabeza gira y a los
-  600 ms se prenden los ojos; desde ahi cualquier velocidad por encima de
-  `MOVE_EPS` (0.35 m/s) elimina.
+- **Cuatro ritmos de verde** (`GREEN_PROFILES` del server): **relampago** 0.65-1 s (nuevo, 20%),
+  rapido 1.1-1.9 s, medio 2.2-3.3 s y lento 3.6-4.8 s. El relampago no deja ni arrancar.
+- **La cancion no siempre va pareja** (`SONG_MODES`, viaja como `song` en el estado): pareja,
+  **acelerada** (arranca lenta y las ultimas silabas se atropellan) o **cortada** (canta seis
+  silabas, se calla y remata el "1, 2, 3" de golpe). Contar silabas ya no alcanza. El primer
+  verde y los relampago cantan parejo.
+- **Amagues** (`TEASE_CHANCE` 0.25 -> **0.45**): a mitad de un verde de 1.6 s o mas, la muñeca
+  arranca a girar la cabeza y vuelve. No cambia la luz; castiga al que frena de mas.
+- **Frenar cuesta mas** (`ACCEL` 11 -> **8.5**: de lleno a quieto ~0.35 s).
+- **Menos margen** (`TURN_MS` 600 -> **450** ms desde que se ve el rojo hasta que se prenden los
+  ojos) y **mas sensible** (`MOVE_EPS` 0.35 -> **0.25** m/s). Con el margen y el frenado, reaccionar
+  al giro no alcanza: hay que soltar antes, leyendo la cancion.
 
 ## Arquitectura
 

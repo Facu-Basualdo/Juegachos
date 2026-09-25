@@ -1006,6 +1006,8 @@ export type LrPhase = "waiting" | "preroll" | "playing" | "over";
 export type LrLight = "green" | "red";
 /** Corriendo, eliminado o llego. */
 export type LrStatus = "run" | "out" | "fin";
+/** Ritmo de la cancion en el verde: pareja, acelerada o cortada (ver `games/luzroja.ts`). */
+export type LrSong = "steady" | "rush" | "stutter";
 
 export interface LrState {
   phase: LrPhase;
@@ -1018,6 +1020,8 @@ export interface LrState {
   lightSeq: number;
   /** Duracion total de la luz actual (el cliente reparte la cancion en ella). */
   lightDur: number;
+  /** Ritmo de la cancion del verde actual. */
+  song: LrSong;
   /** Ms que le quedan a la luz actual. */
   lightLeft: number;
   status: LrStatus[];

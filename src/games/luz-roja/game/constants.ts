@@ -27,17 +27,17 @@ export const WALL_HEIGHT = 18;
 export const SPEED = 5.5;
 /**
  * Respuesta de la velocidad (1/s). Frenar NO es instantaneo: de lleno a quieto se
- * tardan ~0.25 s, y eso es parte de lo dificil (hay que soltar antes de que termine
+ * tardan ~0.35 s, y eso es parte de lo dificil (hay que soltar antes de que termine
  * la cancion, no cuando la muñeca ya se dio vuelta).
  */
-export const ACCEL = 11;
+export const ACCEL = 8.5;
 /**
  * Margen desde que se VE el rojo hasta que la muñeca empieza a mirar (ms). En ese
  * tiempo se gira la cabeza; cuando se le prenden los ojos, moverse elimina.
  */
-export const TURN_MS = 600;
+export const TURN_MS = 450;
 /** Por encima de esta velocidad (m/s) con los ojos prendidos, quedas eliminado. */
-export const MOVE_EPS = 0.35;
+export const MOVE_EPS = 0.25;
 export const MAX_DT = 0.1;
 
 // ---- Red (solo cliente) ----
