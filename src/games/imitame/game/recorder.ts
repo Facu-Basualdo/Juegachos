@@ -40,7 +40,7 @@ export class MicRecorder {
       return false;
     }
     const { ctx } = a;
-    this.factor = Math.max(1, Math.round(ctx.sampleRate / TAKE_TARGET_RATE));
+    this.factor = downsampleFactor(ctx.sampleRate);
     this.rate = ctx.sampleRate / this.factor;
     this.source = ctx.createMediaStreamSource(this.stream);
     this.processor = ctx.createScriptProcessor(2048, 1, 1);
@@ -79,17 +79,10 @@ export class MicRecorder {
   }
 
   private onBlock(input: Float32Array): void {
-    // Promedio de a `factor` muestras = bajar la tasa con un filtro pasabajos tosco.
-    const n = Math.floor(input.length / this.factor);
-    const down = new Float32Array(n);
+    const down = downsample(input, this.factor);
+    const n = down.length;
     let sum = 0;
-    for (let i = 0; i < n; i++) {
-      let acc = 0;
-      for (let k = 0; k < this.factor; k++) acc += input[i * this.factor + k];
-      const v = acc / this.factor;
-      down[i] = v;
-      sum += v * v;
-    }
+    for (let i = 0; i < n; i++) sum += down[i] * down[i];
     this.level = Math.sqrt(sum / Math.max(1, n));
     if (!this.recording) return;
     this.chunks.push(down);
@@ -107,6 +100,23 @@ export class MicRecorder {
     }
     this.tail = joined.slice(Math.max(0, joined.length - size));
   }
+}
+
+/** Factor entero para bajar `rate` a ~`TAKE_TARGET_RATE`. */
+export function downsampleFactor(rate: number): number {
+  return Math.max(1, Math.round(rate / TAKE_TARGET_RATE));
+}
+
+/** Promedio de a `factor` muestras = bajar la tasa con un filtro pasabajos tosco. */
+export function downsample(input: Float32Array, factor: number): Float32Array {
+  const n = Math.floor(input.length / factor);
+  const down = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let acc = 0;
+    for (let k = 0; k < factor; k++) acc += input[i * factor + k];
+    down[i] = acc / factor;
+  }
+  return down;
 }
 
 // ---------- Recorte y codec ----------

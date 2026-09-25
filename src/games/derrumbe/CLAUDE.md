@@ -61,7 +61,8 @@ y buffer de salto para que el salto al borde perdone unos ms.
 
 | Constante | Valor | Nota |
 | --- | --- | --- |
-| `GRID` x `LAYERS` | 25 x 4 | circulo de radio `ARENA_RADIUS` 12.4, ~483 bloques por piso |
+| `GRID` x `LAYERS` | 25 x 4 | circulo de radio `ARENA_RADIUS` 12.4 (~483 bloques por piso) con la sala llena |
+| `radiusFor(n)` | 7.4 / 9.4 / 11 / 12.4 | radio segun jugadores (1-2 / 3-4 / 5-6 / 7-8), ver abajo |
 | `FALL_DELAY_MS` | 500 | la mecha: titila y se hunde, despues cae |
 | `PREROLL_MS` | 3000 | el countdown 3/2/1/YA sale de aca |
 | `START_GRACE_MS` | 8000 | espera al resto del roster antes de largar |
@@ -84,6 +85,13 @@ piso hasta la lava (~6 s). Encima el deterioro y el tope de 120 s cortan cualqui
 partida, asi que `roomTimeLimitSec: 140` es solo la red por si el server se cae
 **despues** de largar.
 
+**El mapa se achica con menos gente** (`radiusFor` en el server). Con dos jugadores en el
+circulo de ocho no se cruzaban nunca y la partida era correr solo hasta que el piso se
+pudriera. La grilla y el protocolo no cambian: al armar la ronda el server marca como
+**caidas** las celdas de afuera del radio, y el cliente las recibe asi en el `doom` del
+`dr:init` (`reconcile` inicial + `syncAll`). La ronda de largada tambien se achica
+(`spawnPos`: `min(7, radio - 2.4)`).
+
 ## Gotchas
 
 - **El estado del server esta scopeado por RONDA** (`round` en el `dr:join`), igual
@@ -104,13 +112,19 @@ partida, asi que `roomTimeLimitSec: 140` es solo la red por si el server se cae
   arriba del muñeco, nunca gira: W es siempre "arriba en la pantalla" y en el celu
   el joystick puede apoyarse en cualquier lado (lo pidio el programador; antes se
   giraba con Q/E, el mouse o el dedo derecho). Para ver alrededor sin girar, la
-  camara va alta (`CAM_PITCH` ~54 grados, `CAM_DISTANCE` 10), a ~9.3 sobre los pies,
+  camara va alta (`CAM_PITCH` ~52 grados, `CAM_DISTANCE` 8; era 10 y el muñeco se veia
+  chico), a ~7.4 sobre los pies,
   y por eso `LAYER_GAP` es **11**: la camara tiene que quedar por debajo de la losa
   del piso de arriba (`LAYER_GAP - 1`). Con los 8 de antes quedaba adentro del piso
   de arriba y lo tenia delante de todo (la primera version lo tapaba volviendo
   translucidos los pisos de arriba; con esta cuenta ya no hace falta). **Si se toca
-  la camara o `LAYER_GAP`, rehacer la cuenta** (esta en `constants.ts`). El
-  espectador tambien es fijo: todo el piso desde el mismo lado.
+  la camara o `LAYER_GAP`, rehacer la cuenta** (esta en `constants.ts`).
+- **El espectador mira desde lejos y hace ZOOM, no se acerca.** Muerto, la camara queda
+  lejos y alta (`SPECTATOR_BACK` / `SPECTATOR_HEIGHT`) porque mas cerca los pisos de arriba
+  tapan a los de abajo. Antes eso dejaba a los vivos como puntitos: ahora se corre de
+  costado hacia el grupo, mira a su centro y cierra el FOV (`SPECTATOR_FOV_MIN`..`MAX`)
+  hasta que el grupo entre en cuadro. Todo suavizado; al volver a jugar se restaura el FOV
+  de juego (`playFov`).
 - **`MAX_DT` es 0.1, no 1/20.** Con 1/20 la fisica se frenaba a los pocos FPS del
   headless (un jugador quieto tardaba 15 s en llegar a la lava en vez de ~6). La
   fisica igual se parte en pasos de `PHYSICS_STEP` (1/120).

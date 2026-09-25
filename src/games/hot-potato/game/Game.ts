@@ -15,6 +15,9 @@ import { Hud } from "./Hud";
 import { SocketTransport } from "./SocketTransport";
 import { SoundEffects } from "./SoundEffects";
 
+/** Minimo de la mecha si el server es anterior a `fuseMinMs` (espeja `FUSE_MIN_MS`). */
+const FUSE_MIN_FALLBACK_MS = 9000;
+
 type State = "message" | "countdown" | "playing" | "over";
 
 const REJECT_MESSAGES: Partial<Record<HpRejectReason, string>> = {
@@ -405,8 +408,12 @@ export class Game {
     if (s && s.phase === "burning" && s.burnStart !== null) {
       // El calor es publico (tiempo desde que salio la papa contra el tope de la
       // mecha): no delata la mecha real, que es secreta y puede ser mucho mas corta.
-      const heat = Math.min(1, Math.max(0, (this.serverNow() - s.burnStart) / s.fuseMaxMs));
+      const elapsed = this.serverNow() - s.burnStart;
+      const heat = Math.min(1, Math.max(0, elapsed / s.fuseMaxMs));
       this.hud.setHeat(heat);
+      const minMs = s.fuseMinMs ?? FUSE_MIN_FALLBACK_MS;
+      this.hud.setFuseWindow(minMs, s.fuseMaxMs);
+      this.hud.setRisk(Math.max(0, elapsed), minMs, s.fuseMaxMs);
       const every = 650 - 470 * heat;
       if (now - this.lastTickAt >= every) {
         this.lastTickAt = now;
@@ -414,6 +421,7 @@ export class Game {
       }
     } else {
       this.hud.setHeat(0);
+      this.hud.setRisk(null, 0, 0);
     }
     this.raf = requestAnimationFrame(this.loop);
   };

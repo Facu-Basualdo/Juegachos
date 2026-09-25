@@ -26,6 +26,8 @@ export interface HpState {
   /** Contador de posesiones: sube en cada pase aceptado y en cada papa nueva. */
   n: number;
   burnStart: number | null;
+  /** Minimo publico de la mecha: antes de esto la papa no explota nunca. */
+  fuseMinMs: number;
   /** Tope publico de la mecha: el termometro llena contra esto. */
   fuseMaxMs: number;
   nextBurnAt: number | null;
