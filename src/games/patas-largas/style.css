@@ -1,0 +1,322 @@
+/* Patas Largas — "Amanecer de arcilla". Ver DESIGN.md. */
+
+:root {
+  color-scheme: light;
+  --ink: #4a3550;
+  --ink-soft: #7c6478;
+  --clay: #d97a5a;
+  --gold: #c98a2e;
+  --cream: #f6efe3;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #e6c6c8;
+  font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+canvas {
+  display: block;
+  touch-action: none;
+}
+
+.back-link {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 30;
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: var(--ink);
+  text-decoration: none;
+  opacity: 0.7;
+}
+
+.back-link:hover {
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ HUD */
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 10;
+}
+
+/* Con un cartel arriba, los metros del HUD solo estorban: el puntaje ya esta
+   escrito en el overlay. */
+.hud.is-dim .hud__distance,
+.hud.is-dim .hud__best {
+  opacity: 0;
+}
+
+.hud__distance {
+  margin-top: 34px;
+  font-size: 58px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--ink);
+  text-shadow: 0 3px 0 rgba(255, 255, 255, 0.5);
+  transition: opacity 0.2s ease;
+}
+
+.hud__best {
+  margin-top: 2px;
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: var(--clay);
+  font-weight: 700;
+}
+
+.hud__grade {
+  margin-top: 14px;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 5px;
+  color: var(--ink-soft);
+  opacity: 0;
+}
+
+.hud__grade[data-grade="perfecto"] {
+  color: var(--gold);
+}
+
+.hud__grade[data-grade="tarde"],
+.hud__grade[data-grade="apurado"] {
+  color: var(--clay);
+}
+
+.hud__grade.is-shown {
+  animation: grade-pop 0.62s ease-out;
+}
+
+@keyframes grade-pop {
+  0% { opacity: 0; transform: translateY(6px) scale(0.9); }
+  18% { opacity: 1; transform: translateY(0) scale(1.06); }
+  70% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+/* Indicador de alternancia: el punto lleno es la pata que sale. */
+.hud__legs {
+  position: absolute;
+  bottom: 34px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: opacity 0.25s ease;
+}
+
+/* Barra de tiempo del paso: se llena a medida que el cuerpo pasa el pie. */
+.hud__timing {
+  position: relative;
+  width: 168px;
+  height: 9px;
+  border-radius: 5px;
+  border: 2px solid rgba(74, 53, 80, 0.35);
+  background: rgba(255, 255, 255, 0.4);
+  overflow: hidden;
+}
+
+.hud__timing-zone {
+  position: absolute;
+  left: 42%;
+  width: 36%;
+  top: 0;
+  bottom: 0;
+  background: rgba(201, 138, 46, 0.35);
+}
+
+.hud__timing-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: var(--ink);
+  opacity: 0.75;
+}
+
+.hud__timing.is-hot .hud__timing-fill {
+  background: var(--clay);
+  opacity: 1;
+}
+
+.hud__legs.is-hidden {
+  opacity: 0;
+}
+
+.hud__leg {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid rgba(74, 53, 80, 0.42);
+  background: transparent;
+  transition: background 0.12s ease, transform 0.12s ease;
+}
+
+.hud__legs.is-charging .hud__leg:not(.is-next) {
+  background: var(--gold);
+  border-color: var(--gold);
+}
+
+.hud__leg.is-next {
+  background: var(--clay);
+  border-color: var(--clay);
+  transform: scale(1.32);
+}
+
+.hud__toast {
+  position: absolute;
+  top: 46%;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  color: var(--gold);
+  text-shadow: 0 2px 0 rgba(255, 255, 255, 0.55);
+  opacity: 0;
+}
+
+.hud__toast.is-shown {
+  animation: toast-rise 1.8s ease-out;
+}
+
+@keyframes toast-rise {
+  0% { opacity: 0; transform: translateY(18px) scale(0.94); }
+  14% { opacity: 1; transform: translateY(0) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-16px); }
+}
+
+/* -------------------------------------------------------------- overlay */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  overflow-y: auto;
+  /* Velo suave, no una cortina: la duna y la criatura tienen que leerse
+     detras del cartel (ver DESIGN.md). La legibilidad la sostienen las
+     sombras blancas del texto, no la opacidad del fondo. */
+  background: radial-gradient(
+    circle at 50% 44%,
+    rgba(246, 239, 227, 0.2) 0%,
+    rgba(224, 199, 199, 0.62) 82%
+  );
+  text-align: center;
+  pointer-events: auto;
+  z-index: 20;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+/* Solo la pantalla de inicio sube el bloque de texto: la criatura vive en el
+   tercio de abajo y el cartel no tiene por que taparla. En el game over no,
+   porque ahi debajo va el panel de ranking y se saldria de pantalla. */
+.overlay.is-start {
+  padding-bottom: 26vh;
+}
+
+.overlay__title {
+  font-size: clamp(34px, 7vw, 60px);
+  font-weight: 800;
+  letter-spacing: 8px;
+  color: var(--ink);
+  text-shadow: 0 3px 0 rgba(255, 255, 255, 0.6);
+}
+
+.overlay__subtitle {
+  font-size: 14px;
+  letter-spacing: 2px;
+  color: var(--ink);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.overlay__score {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #a8492b;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.overlay__hint {
+  max-width: 34em;
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.65;
+  letter-spacing: 0.6px;
+  color: var(--ink);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+/* ------------------------------------------------------------ countdown */
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 25;
+  font-size: clamp(90px, 20vw, 150px);
+  font-weight: 800;
+  letter-spacing: 6px;
+  color: var(--ink);
+  text-shadow: 0 6px 0 rgba(255, 255, 255, 0.45);
+  opacity: 0;
+}
+
+.countdown.is-shown {
+  animation: countdown-pop 0.75s ease-out;
+}
+
+@keyframes countdown-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  20% { opacity: 1; transform: scale(1.15); }
+  40% { transform: scale(1); }
+  80% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.4); }
+}
+
+@media (max-width: 640px) {
+  /* Con un cartel arriba, los metros del HUD solo estorban: el puntaje ya esta
+   escrito en el overlay. */
+.hud.is-dim .hud__distance,
+.hud.is-dim .hud__best {
+  opacity: 0;
+}
+
+.hud__distance {
+    margin-top: 22px;
+    font-size: 42px;
+  }
+}
