@@ -1114,3 +1114,59 @@ export interface PlServerToClient {
   /** Posiciones a 20 Hz, aplanadas: [asiento, x, y, z, rotY, flags, ...]. */
   "pl:snap": (msg: { p: number[] }) => void;
 }
+
+// ============================================================================
+// Marea de Lava (namespace `/marealava`, prefijo `ml:`).
+// ============================================================================
+
+/**
+ * El server es duenio de la semilla (la torre la genera cada cliente con ella), del
+ * reloj de la lava y del resultado de cada uno; el movimiento lo simula cada cliente
+ * y aca se reenvia. La altura de la lava es una funcion del tiempo que cada lado
+ * calcula con `elapsed` (ver `games/marealava.ts`).
+ */
+
+export type MlPhase = "waiting" | "preroll" | "playing" | "over";
+/** Trepando, alcanzado por la lava, o llego a la cima. */
+export type MlStatus = "run" | "dead" | "top";
+
+export interface MlState {
+  phase: MlPhase;
+  /** Ms para largar ("preroll") o para el tope ("playing"). */
+  msLeft: number;
+  /** Ms desde la largada (la lava sale de aca). */
+  elapsed: number;
+  /** Semilla de la torre de esta partida. */
+  seed: number;
+  status: MlStatus[];
+  /** Mejor altura por asiento (m). */
+  best: number[];
+  /** Ms en que cada asiento llego a la cima (-1 si no llego). */
+  topT: number[];
+  on: boolean[];
+}
+
+export interface MlInit extends MlState {
+  seat: number;
+  seats: string[];
+  spawn: { x: number; y: number; z: number; r: number } | null;
+}
+
+/** Cliente -> Server. */
+export interface MlClientToServer {
+  "ml:join": (msg: { code: string; nickname: string; roster: string[]; round: number }) => void;
+  /** f: 1 = en el piso, 2 = moviendose. */
+  "ml:pos": (msg: { x: number; y: number; z: number; r: number; f: number }) => void;
+  /** Me alcanzo la lava. */
+  "ml:dead": (msg: Record<string, never>) => void;
+  /** Llegue a la cima (se valida contra la ultima posicion). */
+  "ml:top": (msg: Record<string, never>) => void;
+}
+
+/** Server -> Cliente. */
+export interface MlServerToClient {
+  "ml:init": (msg: MlInit) => void;
+  "ml:state": (msg: MlState) => void;
+  /** Posiciones a 20 Hz, aplanadas: [asiento, x, y, z, rotY, flags, ...]. */
+  "ml:snap": (msg: { p: number[] }) => void;
+}
