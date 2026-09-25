@@ -1,6 +1,7 @@
-import { initRoomMode, isRoomMode, type RoomMode } from "../../../shared/room/roomMode";
+import { initRoomMode, isRoomMode } from "../../../shared/room/roomMode";
 import { isGameServerConfigured, resolveGameServerUrl } from "../../../shared/server-status";
-import { COUNTDOWN_LABELS, COUNTDOWN_STEP } from "./constants";
+import { CONNECT_TIMEOUT_MS, COUNTDOWN_LABELS, COUNTDOWN_STEP } from "./constants";
+import { devRoom, type RoomLink } from "./devRoom";
 import { Hud } from "./Hud";
 import { SocketTransport } from "./SocketTransport";
 import { SoundEffects } from "./SoundEffects";
@@ -23,10 +24,12 @@ export class Game {
   private readonly hud: Hud;
   private state: State = "message";
 
-  private readonly room: RoomMode | null;
+  private readonly room: RoomLink | null;
   private transport: SocketTransport | null = null;
   /** Guarda contra doble conexion mientras `connect()` resuelve la URL. */
   private connecting = false;
+  /** Vence si el server nunca manda un estado (ver `CONNECT_TIMEOUT_MS`). */
+  private connectTimer: number | null = null;
 
   private lastCountdownIndex = -1;
   private latest: TcState | null = null;
@@ -45,10 +48,11 @@ export class Game {
     });
     this.hud.onGuess((text) => this.transport?.sendGuess(text));
 
-    this.room = initRoomMode("telefono-cortado", {
-      getScore: () => this.liveScore(),
-      onStart: () => this.beginCountdown(),
-    });
+    this.room =
+      initRoomMode("telefono-cortado", {
+        getScore: () => this.liveScore(),
+        onStart: () => this.beginCountdown(),
+      }) ?? devRoom(() => this.beginCountdown());
 
     if (!this.room) {
       if (isRoomMode()) {
@@ -80,7 +84,7 @@ export class Game {
   // ---------- Countdown ----------
 
   private beginCountdown(): void {
-    if (this.state === "countdown" || this.state === "playing") return;
+    if (this.state !== "message") return;
     this.state = "countdown";
     this.lastCountdownIndex = -1;
     this.prevPhase = null;
@@ -105,7 +109,9 @@ export class Game {
   }
 
   private startPlaying(): void {
-    this.state = "playing";
+    // Un F5 con la partida ya terminada recibe el gameover durante el countdown: el
+    // puntaje ya se reporto, pero igual se muestra la galeria.
+    if (this.state === "countdown") this.state = "playing";
     this.hud.showStage();
     if (this.latest) this.applyState(this.latest);
   }
@@ -118,48 +124,84 @@ export class Game {
   private async connect(): Promise<void> {
     if (this.transport || this.connecting || !this.room) return;
     this.connecting = true;
+    this.armConnectTimeout();
     const url = await resolveGameServerUrl();
     this.connecting = false;
     if (this.transport || !url) return;
 
-    const transport = new SocketTransport(url, this.room.code, this.room.me, this.room.players());
+    const transport = new SocketTransport(
+      url,
+      this.room.code,
+      this.room.me,
+      this.room.players(),
+      this.room.round(),
+    );
     transport.onState((s) => this.onState(s));
     transport.onYou((you) => this.onYou(you));
     transport.onChain((chain) => this.hud.addChain(chain));
     transport.onGameover((r) => this.onGameover(r));
+    transport.onConnection((up) => this.hud.setConnection(up || this.latest === null));
     this.transport = transport;
     void transport.connect();
   }
 
+  /**
+   * Sin `roomTimeLimitSec` (el server arbitra las fases), si el server no contesta
+   * nunca la ronda de la sala quedaria colgada para siempre: nadie reporta. Pasado el
+   * tope sin un solo estado, se avisa y se reporta un cero para que la sala siga.
+   */
+  private armConnectTimeout(): void {
+    if (this.connectTimer !== null) return;
+    this.connectTimer = window.setTimeout(() => {
+      this.connectTimer = null;
+      if (this.latest || this.state === "over") return;
+      this.state = "over";
+      this.hud.showMessage(
+        "Sin conexi&oacute;n",
+        "No se pudo conectar con el servidor del juego. Esta ronda no suma puntos.",
+      );
+      this.room?.reportScore(0);
+    }, CONNECT_TIMEOUT_MS);
+  }
+
   private onState(s: TcState): void {
+    if (this.connectTimer !== null) {
+      window.clearTimeout(this.connectTimer);
+      this.connectTimer = null;
+    }
     this.latest = s;
-    if (this.state === "playing") this.applyState(s);
+    this.hud.setConnection(true);
+    if (this.state === "playing" || this.state === "over") this.applyState(s);
   }
 
   private onYou(you: TcYou): void {
-    // Un intento fallido llega como un `tc:you` con el mismo `solved: false` y el
-    // ultimo intento en `submitted`: el server no manda un evento aparte porque no
-    // hay nada que revelar (decir "fallaste" es todo lo que el cliente puede saber).
-    const prev = this.you;
-    if (you.phase === "guessing" && !you.solved && you.submitted && you.submitted !== prev?.submitted) {
-      SoundEffects.playWrong();
-      this.hud.showWrongGuess(you.submitted);
-    }
-    if (you.phase === "guessing" && you.solved && !prev?.solved) {
-      SoundEffects.playCorrect();
+    // Un intento fallido llega como un `tc:you` con `attempts` mas alto y sin
+    // `solved`: el server no manda un evento aparte porque no hay nada que revelar.
+    // Solo contra la tarea anterior de la MISMA fase: tras un F5 la primera que llega
+    // ya trae los intentos viejos y no tiene que sonar como un fallo nuevo.
+    const prev = this.you && this.you.phase === you.phase ? this.you : null;
+    if (prev && you.phase === "guessing") {
+      if (!you.solved && you.attempts > prev.attempts) {
+        SoundEffects.playWrong();
+        this.hud.showWrongGuess(you.submitted ?? "", you.close);
+      }
+      if (you.solved && !prev.solved) SoundEffects.playCorrect();
     }
 
     this.you = you;
-    if (this.state === "playing" && this.latest) this.applyState(this.latest);
+    if ((this.state === "playing" || this.state === "over") && this.latest) this.applyState(this.latest);
   }
 
   private applyState(s: TcState): void {
     if (this.prevPhase !== s.phase) {
       if (s.phase === "reveal") SoundEffects.playReveal();
-      else if (this.prevPhase !== null) SoundEffects.playPhase();
+      else if (this.prevPhase !== null && s.phase !== "over") SoundEffects.playPhase();
       this.prevPhase = s.phase;
     }
-    this.hud.render(s, this.you, this.room?.me ?? "");
+    // La tarea de otra fase no vale para esta: se pinta "cargando" hasta que llegue
+    // la que corresponde (el server la manda antes del estado, pero no se asume).
+    const you = this.you && this.you.phase === s.phase ? this.you : null;
+    this.hud.render(s, you, this.room?.me ?? "");
   }
 
   private onGameover(result: TcGameover): void {
@@ -168,19 +210,26 @@ export class Game {
 
     const me = this.room?.me ?? "";
     const mine = result.ranking.find((r) => r.nickname === me);
+    // El que no estaba sentado (entro tarde) mira y no suma.
+    if (mine) {
+      if (mine.place === 1) SoundEffects.playWin();
+      else SoundEffects.playLose();
+    }
     const place = mine?.place ?? result.ranking.length;
-    if (place === 1) SoundEffects.playWin();
-    else SoundEffects.playLose();
 
     // Puntaje placement-based (mayor = mejor), como el resto de los juegos de sala con
     // server. El RoomOverlay toma la pantalla con el resultado; no va al ranking global.
     if (this.room) this.room.reportScore(Math.max(0, result.ranking.length - place));
   }
 
-  /** Puntaje en vivo para el parcial por timeout de Supabase (rara vez se usa: el
-   *  server termina la partida antes). Proxy: el total acumulado del jugador. */
+  /** Puntaje en vivo para el parcial (si el jugador se va antes del gameover): el
+   *  placement segun los totales de ahora, en la misma escala que el reporte final.
+   *  Con el total crudo, un parcial de 250 le ganaria a un final de 3. */
   private liveScore(): number {
-    if (!this.latest) return 0;
-    return this.latest.players.find((p) => p.nickname === this.room?.me)?.total ?? 0;
+    const players = this.latest?.players ?? [];
+    const mine = players.find((p) => p.nickname === this.room?.me);
+    if (!mine) return 0;
+    const place = 1 + players.filter((p) => p.total > mine.total).length;
+    return Math.max(0, players.length - place);
   }
 }

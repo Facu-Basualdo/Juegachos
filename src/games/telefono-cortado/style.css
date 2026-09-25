@@ -28,15 +28,34 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 10px;
+  /* Arriba deja lugar al "Volver", que es absoluto y si no se monta sobre el titulo. */
+  padding: 52px 10px 16px;
   box-sizing: border-box;
 }
 
+/* Con la pantalla ancha el panel queda lejos del "Volver" y no hace falta el hueco. */
+@media (min-width: 1150px) {
+  #app {
+    padding-top: 16px;
+  }
+}
+
 .countdown {
-  font-size: clamp(2rem, 5vw, 4rem);
+  font-size: clamp(3rem, 12vw, 6rem);
   font-weight: bold;
   text-align: center;
+  color: #fff;
   text-shadow: 0 4px 10px rgba(0,0,0,0.8);
+}
+
+.countdown--pop {
+  animation: countdown-pop 0.45s ease-out;
+}
+
+@keyframes countdown-pop {
+  0% { transform: scale(1.6); opacity: 0; }
+  60% { transform: scale(0.95); opacity: 1; }
+  100% { transform: scale(1); }
 }
 
 .phase-container {
@@ -80,12 +99,17 @@ body {
   box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
 }
 
+/* Sin transicion de ancho: la barra ya se anima cuadro a cuadro contra el reloj
+   (Hud.tickClock), y una `transition: width 1s` encima la dejaba un segundo atrasada. */
 .timer-bar {
   position: absolute;
   top: 0; left: 0; bottom: 0;
   width: 100%;
   background: linear-gradient(90deg, #007bff, #00ffcc);
-  transition: width 1s linear, background-color 0.5s;
+}
+
+.timer-bar--low {
+  background: #ff3333;
 }
 
 .timer-text {
@@ -101,13 +125,35 @@ body {
   z-index: 2;
 }
 
+/* Pista por palabras: una casilla por letra, las palabras bajan de renglon. */
 .hangman-hint {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 22px;
+  max-width: 100%;
   font-family: monospace;
-  font-size: 2rem;
-  letter-spacing: 5px;
+  font-size: clamp(1.2rem, 4.5vw, 1.9rem);
+  font-weight: bold;
   color: #ffcc00;
   text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-  margin-bottom: 10px;
+}
+
+.hint-word {
+  display: flex;
+  gap: 4px;
+}
+
+.hint-char {
+  display: inline-flex;
+  justify-content: center;
+  align-items: flex-end;
+  min-width: 0.9em;
+  height: 1.25em;
+}
+
+.hint-char--blank {
+  border-bottom: 3px solid #ffcc00;
 }
 
 .text-input {
@@ -128,7 +174,30 @@ body {
   gap: 20px;
   width: 100%;
   justify-content: center;
+  align-items: flex-start;
   flex-direction: row;
+}
+
+/* En escritorio la caja de herramientas va en dos columnas al costado del papel: en
+   una sola, sus 12 botones median mas que el lienzo y estiraban toda la fase. */
+.toolbox {
+  display: grid;
+  grid-template-columns: repeat(2, 45px);
+  gap: 8px;
+  align-content: start;
+  background: rgba(0,0,0,0.5);
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  flex: none;
+}
+
+.toolbox-divider {
+  grid-column: 1 / -1;
+  align-self: center;
+  width: 100%;
+  height: 1px;
+  background: #555;
 }
 
 @media (max-width: 768px) {
@@ -137,33 +206,15 @@ body {
     align-items: center;
   }
   .toolbox {
-    width: 100% !important;
-    flex-direction: row !important;
+    display: flex;
     flex-wrap: wrap;
     justify-content: center;
+    width: 100%;
+    box-sizing: border-box;
   }
   .tool-btn {
     flex: 1 1 auto;
   }
-}
-
-.toolbox {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  background: rgba(0,0,0,0.5);
-  padding: 15px 10px;
-  border-radius: 8px;
-  border: 1px solid #444;
-  width: 70px;
-  align-items: center;
-}
-
-.toolbox-divider {
-  width: 80%;
-  height: 1px;
-  background: #555;
-  margin: 5px 0;
 }
 
 .tool-btn {
@@ -184,6 +235,18 @@ body {
 .tool-btn:hover {
   background: #444;
   border-color: #666;
+}
+
+@media (max-width: 768px) {
+  .tool-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .toolbox .toolbox-divider {
+    width: 1px;
+    height: 28px;
+    margin: 0 2px;
+  }
 }
 
 .tool-btn.active {
@@ -217,15 +280,26 @@ body {
 }
 .clear-btn:hover { background: #cc4444; }
 
+/* El papel se achica con el alto de la ventana para que la fase entera (consigna,
+   lienzo, paleta y boton) entre sin scroll en una pantalla de notebook. */
 .canvas-container {
   background-color: white;
   border: 4px solid #444;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-  width: 100%;
-  max-width: 800px;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: min(800px, max(320px, calc((100vh - 430px) * 1.6)));
   aspect-ratio: 8 / 5;
+}
+
+@media (max-width: 768px) {
+  .canvas-container {
+    flex: none;
+    width: 100%;
+    max-width: 100%;
+  }
 }
 
 .drawing-canvas {
@@ -248,8 +322,9 @@ body {
 }
 
 .color-btn {
-  width: 35px;
-  height: 35px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   border-radius: 50%;
   border: 2px solid #555;
   cursor: pointer;
@@ -281,6 +356,16 @@ body {
   background-color: #0056b3;
 }
 
+.action-button:disabled {
+  background-color: #3a4a5c;
+  color: #9aa;
+  cursor: default;
+}
+
+.text-input:disabled {
+  opacity: 0.6;
+}
+
 /* ---------- Armazon de fase ---------- */
 
 .tc-stage {
@@ -303,10 +388,32 @@ body {
   color: #fff;
 }
 
+.tc-prompt__phrase {
+  color: #ffcc00;
+}
+
+/* Gris, no rojo: el DESIGN.md reserva el rojo para el reloj que se acaba. */
+.tc-banner {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid #777;
+  color: #ddd;
+  text-align: center;
+  font-weight: bold;
+  box-sizing: border-box;
+}
+
+.tc-banner[hidden] {
+  display: none;
+}
+
 .tc-note {
   margin: 0;
   color: #bbb;
   text-align: center;
+  font-size: 0.95rem;
 }
 
 .tc-quote {
@@ -383,6 +490,10 @@ body {
   text-align: center;
 }
 
+.tc-feedback--close {
+  color: #ffcc00;
+}
+
 .tc-feedback--shake {
   animation: tc-shake 0.3s ease;
 }
@@ -413,10 +524,19 @@ body {
   gap: 6px;
   margin: 0;
   padding: 12px;
-  width: 240px;
+  width: 260px;
+  max-width: 100%;
+  box-sizing: border-box;
   background: rgba(0, 0, 0, 0.5);
   border: 1px solid #444;
   border-radius: 10px;
+  animation: tc-card-in 0.4s ease-out both;
+  animation-delay: calc(var(--i, 0) * 0.25s);
+}
+
+@keyframes tc-card-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
 }
 
 .tc-chain__phrase {

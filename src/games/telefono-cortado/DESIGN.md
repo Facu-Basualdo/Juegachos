@@ -24,7 +24,9 @@ que avanza, la herramienta elegida, la barra de tiempo mientras hay tiempo. El a
 (`#ffcc00`) es la palabra: la frase propia, la pista del ahorcado, los puntos — todo lo que
 es lenguaje en un juego que trata sobre el lenguaje deformandose. El rojo aparece una sola
 vez, cuando al reloj le queda menos de un cuarto, y por eso significa algo. El verde queda
-reservado para el unico hecho binario del roster: ya entregaste. Fuera de esos, gris.
+reservado para el unico hecho binario del roster: ya entregaste. Fuera de esos, gris —
+incluido el aviso de conexion caida, que informa sin competir con el reloj. La paleta
+del lienzo no cuenta: son los colores del jugador, no de la interfaz.
 
 **El tiempo se ve antes de leerse.** Cada fase tiene un reloj y el reloj es primero una
 barra que se vacia y despues un numero. Se anima contra el reloj de la pared, no contra los
@@ -36,10 +38,14 @@ permite.
 enunciado, un campo y un boton, en ese orden vertical y centrados. No hay navegacion, ni
 pestañas, ni nada opcional; el jugador nunca tiene que decidir donde mirar, porque la fase
 ya decidio por el. El roster vive arriba, chico y al margen, como un dato de fondo — quien
-falta, quien ya esta — y jamas interrumpe.
+falta, quien ya esta — y jamas interrumpe. La pista del ahorcado es lenguaje con forma:
+una casilla amarilla por letra, las palabras separadas como en la frase real, para que
+se lea su silueta (cuantas palabras, de que largo) antes que cualquier letra.
 
 **El final es una vitrina, no una tabla.** El reveal abandona la austeridad de las fases:
 las cadenas se muestran como fichas — la frase en amarillo arriba, el dibujo en su marco
 blanco, la autoria en gris pequeño, el veredicto abajo — repetidas en una grilla que se
 puede recorrer. Es el unico momento en que el juego invita a quedarse mirando en vez de
 apurar, y la composicion tiene que darle permiso.
+Las fichas entran de a una, escalonadas, como quien da vuelta las hojas del telefono en
+orden: la composicion es la misma grilla, pero se descubre en secuencia.

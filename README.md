@@ -82,6 +82,7 @@ Hecho con **Vite + TypeScript** (sin framework) y desplegado como sitio estátic
 | Derrumbe | Party | Cuatro pisos de bloques colgados sobre la lava, al estilo TNT Run: cada bloque que pisás titila medio segundo y se cae. No te podés quedar quieto: corré, saltá los agujeros y rompele el piso a los demás. Gana el último que queda en pie. Solo en salas. | [matiasgzlez](https://github.com/matiasgzlez) |
 | Luz Roja, Luz Verde | Party | La cancha de Squid Game: la muñeca gigante canta de espaldas y vos corrés hacia la línea roja. Cuando se da vuelta y se le prenden los ojos, quedate quieto o quedás eliminado. La canción cambia de ritmo, a veces amaga y frenar no es instantáneo. 45 segundos para cruzar. Solo en salas. | [matiasgzlez](https://github.com/matiasgzlez) |
 | Pista Loca | Party | Una pista de baile de bloques de colores colgada en la nada, al estilo Block Party. Mientras suena la música bailás; cuando se corta, se pide un color y tenés unos segundos para pararte encima antes de que se caiga todo lo demás. Cada ronda hay menos tiempo. Gana el último en pie. Solo en salas. | [matiasgzlez](https://github.com/matiasgzlez) |
+| Teléfono Cortado | Party | El teléfono descompuesto con dibujos: cada uno escribe una frase, dibujás la de otro y adivinás qué quiso decir un tercero mirando su dibujo, con una pista tipo ahorcado que se va destapando. Al final se ven todas las cadenas, de la frase original a lo que entendieron. Solo se juega en salas con amigos. | [MissedSalmon](https://github.com/MissedSalmon) |
 
 ## Empezar
 

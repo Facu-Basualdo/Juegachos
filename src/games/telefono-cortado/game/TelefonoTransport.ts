@@ -39,6 +39,10 @@ export interface TcYou {
   /** Lo ya entregado en esta fase, para repintarlo tras un F5. */
   submitted: string | null;
   solved: boolean;
+  /** Intentos de adivinanza hechos: si sube sin `solved`, el ultimo fallo. */
+  attempts: number;
+  /** El ultimo intento fallido estuvo cerca. */
+  close: boolean;
 }
 
 /** Una cadena completa, revelada al final. Llega de a una. */
@@ -67,6 +71,8 @@ export interface TelefonoTransport {
   onYou(cb: (you: TcYou) => void): void;
   onChain(cb: (chain: TcChainView) => void): void;
   onGameover(cb: (r: TcGameover) => void): void;
+  /** Se cayo (false) o se (re)establecio (true) la conexion con el server. */
+  onConnection(cb: (up: boolean) => void): void;
   sendPhrase(text: string): void;
   sendDrawing(image: string): void;
   sendGuess(text: string): void;

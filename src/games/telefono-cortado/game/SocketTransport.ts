@@ -10,7 +10,7 @@ import type {
 /**
  * Transporte socket.io contra el namespace `/telefonocortado` del game server. Se
  * conecta con la lib cargada dinamicamente (no se incluye en juegos que no la usan) y
- * anuncia {code, nickname, roster} al conectar; el server fija el orden de los
+ * anuncia {code, nickname, roster, round} al conectar; el server fija el orden de los
  * jugadores con el roster (room.players() de Supabase, por joined_at), que es lo que
  * determina a quien le toca dibujar y adivinar cada cadena.
  */
@@ -20,17 +20,20 @@ export class SocketTransport implements TelefonoTransport {
   private youCb: (you: TcYou) => void = () => {};
   private chainCb: (chain: TcChainView) => void = () => {};
   private gameoverCb: (r: TcGameover) => void = () => {};
+  private connectionCb: (up: boolean) => void = () => {};
 
   private readonly serverUrl: string;
   private readonly code: string;
   private readonly nickname: string;
   private readonly roster: string[];
+  private readonly round: number;
 
-  constructor(serverUrl: string, code: string, nickname: string, roster: string[]) {
+  constructor(serverUrl: string, code: string, nickname: string, roster: string[], round: number) {
     this.serverUrl = serverUrl;
     this.code = code;
     this.nickname = nickname;
     this.roster = roster;
+    this.round = round;
   }
 
   async connect(): Promise<void> {
@@ -43,8 +46,18 @@ export class SocketTransport implements TelefonoTransport {
     this.socket = socket;
 
     socket.on("connect", () => {
-      socket.emit("tc:join", { code: this.code, nickname: this.nickname, roster: this.roster });
+      // `round` scopea el estado del server a esta ronda: si la sala vuelve a votar
+      // este juego, el GameRoom de la partida anterior no se mezcla con la nueva.
+      socket.emit("tc:join", {
+        code: this.code,
+        nickname: this.nickname,
+        roster: this.roster,
+        round: this.round,
+      });
+      this.connectionCb(true);
     });
+    socket.on("disconnect", () => this.connectionCb(false));
+    socket.on("connect_error", () => this.connectionCb(false));
     socket.on("tc:state", (s: TcState) => this.stateCb(s));
     socket.on("tc:you", (m: TcYou) => this.youCb(m));
     socket.on("tc:chain", (m: TcChainView) => this.chainCb(m));
@@ -62,6 +75,9 @@ export class SocketTransport implements TelefonoTransport {
   }
   onGameover(cb: (r: TcGameover) => void): void {
     this.gameoverCb = cb;
+  }
+  onConnection(cb: (up: boolean) => void): void {
+    this.connectionCb = cb;
   }
 
   sendPhrase(text: string): void {
