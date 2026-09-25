@@ -443,6 +443,31 @@ body {
   color: var(--im-red);
 }
 
+/* Regla de la pista; si el server la rechaza, el motivo toma su lugar en rojo. */
+.im__cluenote {
+  margin: 8px 2px 0;
+  font-size: 13px;
+  color: var(--im-dim);
+}
+
+.im__cluenote.is-error {
+  color: var(--im-red);
+  animation: im-note-shake 0.35s ease-out;
+}
+
+@keyframes im-note-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
 /* Pausa de lectura tras la ultima pista (CLUES_RECAP_MS en el server). */
 .im__turnwait.is-recap {
   border-color: rgba(228, 182, 76, 0.45);
@@ -469,6 +494,13 @@ body {
   color: var(--im-red);
   text-align: center;
   margin-bottom: 14px;
+}
+
+.im__votesub {
+  margin: -8px 0 14px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--im-dim);
 }
 
 .im__suspects {
@@ -649,7 +681,7 @@ body {
 
 .im__score {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr auto auto;
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
@@ -660,6 +692,26 @@ body {
 
 .im__score.is-me {
   border-color: var(--im-gold);
+}
+
+/* El mas votado de la ronda (el que la mesa senalo, fuera o no el impostor). */
+.im__score.is-accused {
+  background: rgba(210, 59, 69, 0.08);
+}
+
+.im__score-eye {
+  margin-left: 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--im-gold);
+}
+
+.im__score-votes {
+  font-size: 12px;
+  color: var(--im-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .im__score-role {
@@ -796,7 +848,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .im__countdown.is-pop,
-  .im__clue.is-new {
+  .im__clue.is-new,
+  .im__cluenote.is-error {
     animation: none;
   }
 }

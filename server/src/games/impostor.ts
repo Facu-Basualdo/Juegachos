@@ -1,6 +1,6 @@
 import type { Server } from "socket.io";
 import { GameRoom, registerGame, type RoomSim } from "../rooms.js";
-import { isCorrectGuess, pickWord } from "../words-impostor.js";
+import { clueRevealsWord, isCorrectGuess, pickWord, sameClue } from "../words-impostor.js";
 import type {
   ImClue,
   ImOutcome,
@@ -60,6 +60,23 @@ const RESULT_MS = 9000;
 const IMPOSTOR_WIN_PTS = 3;
 /** Puntos que gana cada inocente cuando descubren al impostor. */
 const INNOCENT_WIN_PTS = 2;
+/**
+ * Extra para el inocente que voto a un impostor, gane o pierda su equipo. Sin esto el que
+ * voto a ciegas cobraba lo mismo que el que lo descubrio, y los totales empataban mucho.
+ */
+const CORRECT_VOTE_BONUS = 1;
+
+/**
+ * Tope del turno (pista o adivinanza) cuando el jugador de turno se desconecta. Antes la
+ * mesa esperaba los 37.5s enteros mirando "Turno de X" a alguien que ya no estaba.
+ */
+const ABSENT_TURN_MS = 5000;
+/**
+ * Minimo que recupera el jugador que vuelve (F5) en su propio turno: el recorte de
+ * `ABSENT_TURN_MS` no puede dejarlo sin tiempo para escribir. No devuelve el turno entero,
+ * asi recargar no sirve para ganar tiempo.
+ */
+const REJOIN_TURN_MS = 12000;
 
 /** Largo maximo de una pista / adivinanza (defensa; el cliente ya acota). */
 const MAX_WORD_LEN = 24;
@@ -96,6 +113,8 @@ class ImpostorSim implements RoomSim {
   private word: string | null = null;
   private readonly usedWords = new Set<string>();
   private impostors = new Set<string>();
+  /** Cuantas veces fue impostor cada jugador en el partido (reparto parejo del rol). */
+  private readonly impostorTimes = new Map<string, number>();
 
   /** Orden de turnos de la ronda (barajado) y puntero al turno actual. */
   private turnOrder: string[] = [];
@@ -107,6 +126,9 @@ class ImpostorSim implements RoomSim {
   private accused: string | null = null;
   private guessText: string | null = null;
   private outcome: ImOutcome | null = null;
+
+  /** Ya se le devolvio tiempo al de turno por reconectar (ver `REJOIN_TURN_MS`). */
+  private rejoinGranted = false;
 
   private deadline: number | null = null;
   private phaseTotalMs = 0;
@@ -129,6 +151,14 @@ class ImpostorSim implements RoomSim {
       }
     }
 
+    if (this.isOnTheClock(nickname) && !this.rejoinGranted && this.remaining() < REJOIN_TURN_MS) {
+      // Volvio en su turno despues del recorte de `leave`: que alcance a escribir. Una
+      // sola vez por turno, o recargar en loop estiraria el turno para siempre.
+      this.rejoinGranted = true;
+      this.setPhaseClock(REJOIN_TURN_MS);
+      this.armTimer(() => this.onTurnClockOut());
+    }
+
     this.broadcastState();
     if (this.phase === "over") {
       this.room.emitTo(nickname, "im:gameover", this.gameoverPayload());
@@ -138,10 +168,15 @@ class ImpostorSim implements RoomSim {
     }
   }
 
-  leave(_nickname: string): void {
+  leave(nickname: string): void {
     // No elimina al desconectar: si vuelve se reengancha. Solo refresca las luces.
     // Pero si el que faltaba votar se fue, ya votaron todos los presentes: se adelanta.
     if (this.phase === "voting") this.maybeHurryVote();
+    // Si era su turno (pista o adivinanza), la mesa no le espera el reloj entero.
+    if (this.isOnTheClock(nickname) && this.remaining() > ABSENT_TURN_MS) {
+      this.setPhaseClock(ABSENT_TURN_MS);
+      this.armTimer(() => this.onTurnClockOut());
+    }
     if (this.phase !== "over") this.broadcastState();
   }
 
@@ -164,8 +199,30 @@ class ImpostorSim implements RoomSim {
     if (this.currentTurn() !== nickname) return;
     const word = cleanWord((payload as { word?: unknown })?.word);
     if (word === "") return; // pista vacia solo la mete el timeout
+    const reason = this.clueProblem(nickname, word);
+    if (reason !== null) {
+      // Rechazo dirigido: el turno sigue siendo suyo y el cliente le rehabilita el campo.
+      this.room.emitTo(nickname, "im:reject", { reason });
+      return;
+    }
     this.clues.push({ player: nickname, word });
     this.advanceTurn();
+  }
+
+  /**
+   * Por que no vale la pista, o null si vale.
+   * - Repetida: copiar la pista de otro es la salida gratis del impostor (y de un inocente
+   *   que no tiene ganas de pensar). Se rechaza con el nombre de quien ya la dio.
+   * - Canta la palabra: un inocente que escribe la secreta le regala la ronda al impostor.
+   *   Solo se chequea a los inocentes: rechazarsela al impostor le avisaria que la acerto.
+   */
+  private clueProblem(nickname: string, word: string): string | null {
+    const dup = this.clues.find((c) => sameClue(c.word, word));
+    if (dup) return `Esa pista ya la dio ${dup.player}. Pensa otra.`;
+    if (!this.impostors.has(nickname) && this.word !== null && clueRevealsWord(word, this.word)) {
+      return "Esa pista canta la palabra secreta. Pensa otra.";
+    }
+    return null;
   }
 
   private onVote(voter: string, payload: unknown): void {
@@ -208,19 +265,22 @@ class ImpostorSim implements RoomSim {
     }
     this.seats = this.roster.filter((n) => this.room.isConnected(n));
     if (this.seats.length < 2) return; // se reintenta al proximo join (min 2 para tener rol)
-    for (const n of this.seats) this.totals.set(n, 0);
+    for (const n of this.seats) {
+      this.totals.set(n, 0);
+      this.impostorTimes.set(n, 0);
+    }
     this.roundIndex = 0;
     this.startRound();
   }
 
   private startRound(): void {
-    const picked = pickWord(this.usedWords);
+    const picked = pickWord(this.usedWords, this.category);
     this.category = picked.category;
     this.word = picked.word;
     this.usedWords.add(picked.word);
 
-    // Reparte roles: impostores al azar entre los seats.
-    this.impostors = new Set(shuffle(this.seats).slice(0, impostorCount(this.seats.length)));
+    this.impostors = this.pickImpostors();
+    for (const n of this.impostors) this.impostorTimes.set(n, (this.impostorTimes.get(n) ?? 0) + 1);
     this.turnOrder = shuffle(this.seats);
     this.turnPos = 0;
     this.clues = [];
@@ -243,6 +303,7 @@ class ImpostorSim implements RoomSim {
   }
 
   private startTurn(): void {
+    this.rejoinGranted = false;
     // Saltea turnos de jugadores desconectados (dejan pista vacia).
     while (this.turnPos < this.turnOrder.length * CLUE_LAPS) {
       const player = this.currentTurn();
@@ -299,7 +360,10 @@ class ImpostorSim implements RoomSim {
 
   private toGuess(): void {
     this.phase = "guess";
-    this.setPhaseClock(GUESS_MS);
+    this.rejoinGranted = false;
+    // Si el acusado ya no esta, no tiene sentido esperarle los 20s de adivinanza.
+    const accusedHere = this.accused !== null && this.room.isConnected(this.accused);
+    this.setPhaseClock(accusedHere ? GUESS_MS : ABSENT_TURN_MS);
     this.armTimer(() => this.toResult());
     this.broadcastState();
   }
@@ -323,12 +387,22 @@ class ImpostorSim implements RoomSim {
         if (!this.impostors.has(n)) roundPts.set(n, INNOCENT_WIN_PTS);
       }
     }
+    // Ojo clinico: el inocente que voto a un impostor suma aparte, gane o pierda su equipo.
+    const votedRight = new Set<string>();
+    for (const [voter, target] of this.votes) {
+      if (!this.impostors.has(voter) && this.impostors.has(target)) votedRight.add(voter);
+    }
+    for (const n of votedRight) roundPts.set(n, (roundPts.get(n) ?? 0) + CORRECT_VOTE_BONUS);
     for (const [n, pts] of roundPts) this.totals.set(n, (this.totals.get(n) ?? 0) + pts);
 
     this.outcome = {
       kind,
       guess: this.guessText,
-      scores: this.seats.map((player) => ({ player, points: roundPts.get(player) ?? 0 })),
+      scores: this.seats.map((player) => ({
+        player,
+        points: roundPts.get(player) ?? 0,
+        votedRight: votedRight.has(player),
+      })),
       winners: impostorsWin ? "impostores" : "inocentes",
     };
     this.phase = "result";
@@ -367,6 +441,30 @@ class ImpostorSim implements RoomSim {
       category: this.category ?? "",
       mates: impostor ? [...this.impostors].filter((n) => n !== nickname) : [],
     });
+  }
+
+  /**
+   * Impostores de la ronda: sale entre los que MENOS veces lo fueron (desempate al azar).
+   * Al azar puro, en un partido de 3 rondas uno podia ser impostor dos veces y otro
+   * ninguna, y como el impostor que gana suma mas, el reparto decidia el partido.
+   */
+  private pickImpostors(): Set<string> {
+    const times = (n: string) => this.impostorTimes.get(n) ?? 0;
+    const order = shuffle(this.seats).sort((a, b) => times(a) - times(b));
+    return new Set(order.slice(0, impostorCount(this.seats.length)));
+  }
+
+  /** Es `nickname` el que tiene el reloj de la fase (pista de su turno o adivinanza)? */
+  private isOnTheClock(nickname: string): boolean {
+    if (this.phase === "clues") return this.currentTurn() === nickname;
+    if (this.phase === "guess") return this.accused === nickname;
+    return false;
+  }
+
+  /** Vencio el reloj del jugador de turno (con o sin el recorte por desconexion). */
+  private onTurnClockOut(): void {
+    if (this.phase === "clues") this.onTurnTimeout();
+    else if (this.phase === "guess") this.toResult();
   }
 
   private currentTurn(): string | null {
@@ -460,14 +558,15 @@ class ImpostorSim implements RoomSim {
   }
 
   private gameoverPayload() {
-    const ranked = [...this.seats].sort(
-      (a, b) => (this.totals.get(b) ?? 0) - (this.totals.get(a) ?? 0),
-    );
+    const total = (n: string) => this.totals.get(n) ?? 0;
+    const ranked = [...this.seats].sort((a, b) => total(b) - total(a));
+    // Puestos compartidos en el empate (1, 1, 3): con el puesto por indice, dos jugadores
+    // con el mismo total se llevaban distinto puntaje de sala segun el orden del roster.
     return {
-      ranking: ranked.map((nickname, i) => ({
+      ranking: ranked.map((nickname) => ({
         nickname,
-        place: i + 1,
-        total: this.totals.get(nickname) ?? 0,
+        place: 1 + ranked.filter((n) => total(n) > total(nickname)).length,
+        total: total(nickname),
       })),
     };
   }

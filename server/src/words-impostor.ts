@@ -414,9 +414,42 @@ export function isCorrectGuess(guess: string, word: string): boolean {
   return wt.length > 1 && gt.length === 1 && gt[0] === wt[wt.length - 1];
 }
 
-/** Sortea una categoria y una palabra de ella. */
-export function pickWord(exclude: Set<string> = new Set()): { category: string; word: string } {
-  const cat = WORD_CATEGORIES[Math.floor(Math.random() * WORD_CATEGORIES.length)];
+/** Sin espacios: para detectar la palabra metida adentro de otra ("milanesas"). */
+function compact(input: string): string {
+  return norm(input).replace(/ /g, "");
+}
+
+/**
+ * La pista "canta" la palabra secreta: vale lo mismo que una adivinanza correcta (la
+ * palabra, un alias, el apellido) o la trae adentro ("milanesas", "supermilanesa"). Lo
+ * de adentro solo desde 4 letras, para que una secreta corta no se coma pistas legitimas.
+ */
+export function clueRevealsWord(clue: string, word: string): boolean {
+  if (isCorrectGuess(clue, word)) return true;
+  const w = compact(word);
+  return w.length >= 4 && compact(clue).includes(w);
+}
+
+/** Misma pista que otra, con la normalizacion del sim (sin acentos ni mayusculas). */
+export function sameClue(a: string, b: string): boolean {
+  const na = compact(a);
+  return na !== "" && na === compact(b);
+}
+
+/**
+ * Sortea una categoria y una palabra de ella, sin repetir palabra del partido
+ * (`exclude`) y evitando la categoria de la ronda anterior (`avoidCategory`): tres
+ * rondas seguidas de Comida hacen que la categoria deje de ser informacion. Las
+ * categorias agotadas quedan afuera; si no queda ninguna, se recicla.
+ */
+export function pickWord(
+  exclude: Set<string> = new Set(),
+  avoidCategory: string | null = null,
+): { category: string; word: string } {
+  const fresh = WORD_CATEGORIES.filter((c) => c.words.some((w) => !exclude.has(w)));
+  const varied = fresh.filter((c) => c.label !== avoidCategory);
+  const cats = varied.length > 0 ? varied : fresh.length > 0 ? fresh : WORD_CATEGORIES;
+  const cat = cats[Math.floor(Math.random() * cats.length)];
   const pool = cat.words.filter((w) => !exclude.has(w));
   const from = pool.length > 0 ? pool : cat.words;
   const word = from[Math.floor(Math.random() * from.length)];

@@ -2,6 +2,7 @@ import type { Socket } from "socket.io-client";
 import type {
   ImGameover,
   ImpostorTransport,
+  ImReject,
   ImState,
   ImYou,
 } from "./ImpostorTransport";
@@ -17,6 +18,7 @@ export class SocketTransport implements ImpostorTransport {
   private stateCb: (s: ImState) => void = () => {};
   private youCb: (you: ImYou) => void = () => {};
   private gameoverCb: (r: ImGameover) => void = () => {};
+  private rejectCb: (m: ImReject) => void = () => {};
 
   private readonly serverUrl: string;
   private readonly code: string;
@@ -45,6 +47,7 @@ export class SocketTransport implements ImpostorTransport {
     socket.on("im:state", (s: ImState) => this.stateCb(s));
     socket.on("im:you", (m: ImYou) => this.youCb(m));
     socket.on("im:gameover", (m: ImGameover) => this.gameoverCb(m));
+    socket.on("im:reject", (m: ImReject) => this.rejectCb(m));
   }
 
   onState(cb: (s: ImState) => void): void {
@@ -55,6 +58,9 @@ export class SocketTransport implements ImpostorTransport {
   }
   onGameover(cb: (r: ImGameover) => void): void {
     this.gameoverCb = cb;
+  }
+  onReject(cb: (m: ImReject) => void): void {
+    this.rejectCb = cb;
   }
 
   sendClue(word: string): void {

@@ -282,8 +282,10 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   (`reveal` -> `clues` por turnos -> `voting` -> `guess` condicional -> `result`) con `setTimeout`
   propio. El rol (palabra / impostor) viaja SOLO por el evento dirigido `im:you`, nunca en el
   broadcast `im:state` (no espiable); tambien se reenvia al reconectar (F5). Recolecta pistas
-  (`im:clue`), votos (`im:vote`) y la adivinanza del acusado (`im:guess`), y computa el puntaje por
-  equipo (impostor gana 3, inocente 2). Un partido son 3 rondas. Ver el `CLAUDE.md` de `impostor`.
+  (`im:clue`, rechazando con `im:reject` dirigido la pista repetida o la que canta la palabra),
+  votos (`im:vote`) y la adivinanza del acusado (`im:guess`), y computa el puntaje por equipo
+  (impostor gana 3, inocente 2, +1 al inocente que voto a un impostor). El impostor rota parejo
+  entre los jugadores. Un partido son 3 rondas. Ver el `CLAUDE.md` de `impostor`.
 - `src/games/telefonocortado.ts` — `TelefonoCortadoSim`: telefono descompuesto con dibujos.
   Corre las fases (`writing` -> `drawing` -> `guessing` -> `reveal`) con `setTimeout` propio,
   reparte las cadenas rotando los asientos (dibujas la frase del anterior, adivinas el dibujo

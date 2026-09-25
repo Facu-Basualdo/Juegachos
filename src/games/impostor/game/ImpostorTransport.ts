@@ -37,7 +37,8 @@ export type ImOutcomeKind = "impostor-survived" | "impostor-guessed" | "impostor
 export interface ImOutcome {
   kind: ImOutcomeKind;
   guess: string | null;
-  scores: { player: string; points: number }[];
+  /** `votedRight`: inocente que voto a un impostor (su bonus ya esta en `points`). */
+  scores: { player: string; points: number; votedRight: boolean }[];
   winners: "impostores" | "inocentes";
 }
 
@@ -70,7 +71,13 @@ export interface ImYou {
 }
 
 export interface ImGameover {
+  /** `place` compartido en los empates (1, 1, 3). */
   ranking: { nickname: string; place: number; total: number }[];
+}
+
+/** La pista no se acepto (repetida o canta la palabra); el turno sigue siendo tuyo. */
+export interface ImReject {
+  reason: string;
 }
 
 export interface ImpostorTransport {
@@ -78,6 +85,8 @@ export interface ImpostorTransport {
   /** Dirigido: el rol privado del jugador (palabra o impostor). No viaja en im:state. */
   onYou(cb: (you: ImYou) => void): void;
   onGameover(cb: (result: ImGameover) => void): void;
+  /** Dirigido: la pista propia fue rechazada. */
+  onReject(cb: (msg: ImReject) => void): void;
   sendClue(word: string): void;
   sendVote(target: string): void;
   sendGuess(word: string): void;
