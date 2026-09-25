@@ -1035,3 +1035,63 @@ export interface LrServerToClient {
   /** La muñeca amaga con darse vuelta (solo animacion; no cambia la luz). */
   "lr:tease": (msg: { n: number }) => void;
 }
+
+// ============================================================================
+// Pista Loca (namespace `/pistaloca`, prefijo `pl:`). Block Party en sala.
+// ============================================================================
+
+/**
+ * El server es duenio de la pista (el dibujo de cada ronda), del ritmo y del orden de
+ * eliminacion; el movimiento lo simula cada cliente y aca se reenvia. El cliente
+ * juzga su propia caida (ver `games/pistaloca.ts`).
+ */
+
+export type PlPhase = "waiting" | "preroll" | "playing" | "over";
+/** Paso de la ronda: suena la musica, se pide un color, cae la pista, se rearma. */
+export type PlStep = "dance" | "choose" | "drop" | "reset";
+
+export interface PlState {
+  phase: PlPhase;
+  /** Ms para largar (solo en "preroll"). */
+  msLeft: number;
+  /** Ronda en curso (1..). */
+  round: number;
+  step: PlStep;
+  /** Duracion total del paso actual y lo que le queda (ms). */
+  stepDur: number;
+  stepLeft: number;
+  /** Color pedido (indice de la paleta), valido desde "choose". */
+  color: number;
+  /** Dibujo de la pista: un digito (color) por celda, fila por fila. */
+  pattern: string;
+  alive: boolean[];
+  /** Rondas completas aguantadas por asiento (-1 mientras sigue vivo). */
+  rounds: number[];
+  /** Ms desde la largada en que cayo cada asiento (-1 vivo). */
+  times: number[];
+  on: boolean[];
+}
+
+export interface PlInit extends PlState {
+  seat: number;
+  seats: string[];
+  grid: number;
+  spawn: { x: number; y: number; z: number; r: number } | null;
+}
+
+/** Cliente -> Server. */
+export interface PlClientToServer {
+  "pl:join": (msg: { code: string; nickname: string; roster: string[]; round: number }) => void;
+  /** f: 1 = en el piso, 2 = moviendose. */
+  "pl:pos": (msg: { x: number; y: number; z: number; r: number; f: number }) => void;
+  /** Me cai al vacio. */
+  "pl:dead": (msg: Record<string, never>) => void;
+}
+
+/** Server -> Cliente. */
+export interface PlServerToClient {
+  "pl:init": (msg: PlInit) => void;
+  "pl:state": (msg: PlState) => void;
+  /** Posiciones a 20 Hz, aplanadas: [asiento, x, y, z, rotY, flags, ...]. */
+  "pl:snap": (msg: { p: number[] }) => void;
+}

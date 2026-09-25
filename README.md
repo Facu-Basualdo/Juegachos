@@ -81,6 +81,7 @@ Hecho con **Vite + TypeScript** (sin framework) y desplegado como sitio estátic
 | Papa Caliente | Party | La papa pasa de mano en mano y explota cuando nadie sabe: el que la tiene en ese momento queda afuera. Para sacártela de encima tenés que marcar una secuencia de flechas, y no se la podés devolver al que te la pasó. El último en pie gana. Solo se juega en salas con amigos. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
 | Derrumbe | Party | Cuatro pisos de bloques colgados sobre la lava, al estilo TNT Run: cada bloque que pisás titila medio segundo y se cae. No te podés quedar quieto: corré, saltá los agujeros y rompele el piso a los demás. Gana el último que queda en pie. Solo en salas. | [matiasgzlez](https://github.com/matiasgzlez) |
 | Luz Roja, Luz Verde | Party | La cancha de Squid Game: la muñeca gigante canta de espaldas y vos corrés hacia la línea roja. Cuando se da vuelta y se le prenden los ojos, quedate quieto o quedás eliminado. La canción cambia de ritmo, a veces amaga y frenar no es instantáneo. 45 segundos para cruzar. Solo en salas. | [matiasgzlez](https://github.com/matiasgzlez) |
+| Pista Loca | Party | Una pista de baile de bloques de colores colgada en la nada, al estilo Block Party. Mientras suena la música bailás; cuando se corta, se pide un color y tenés unos segundos para pararte encima antes de que se caiga todo lo demás. Cada ronda hay menos tiempo. Gana el último en pie. Solo en salas. | [matiasgzlez](https://github.com/matiasgzlez) |
 
 ## Empezar
 

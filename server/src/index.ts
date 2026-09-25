@@ -13,6 +13,7 @@ import { registerPaintTurf } from "./games/paintturf.js";
 import { registerHotPotato } from "./games/hotpotato.js";
 import { registerDerrumbe } from "./games/derrumbe.js";
 import { registerLuzRoja } from "./games/luzroja.js";
+import { registerPistaLoca } from "./games/pistaloca.js";
 import { impostorWordCount } from "./words-impostor.js";
 
 /**
@@ -81,6 +82,7 @@ registerPaintTurf(io);
 registerHotPotato(io);
 registerDerrumbe(io);
 registerLuzRoja(io);
+registerPistaLoca(io);
 
 httpServer.listen(PORT, () => {
   console.log(
