@@ -1,83 +1,76 @@
-# Impostor — Direccion de arte: "Sala de interrogatorio"
+# Impostor — Direccion de arte: "Expediente noir"
 
-Impostor se ve como un **interrogatorio**: un cuarto a oscuras, un **foco cenital** sobre la
-mesa, y todos bajo sospecha hasta demostrar lo contrario. La tension no viene del motion ni del
-glow gratis, viene de **la palabra que tenes que proteger**, del **turno que corre** y del
-momento en que la mesa **senala** a alguien. Es el reverso de Basta (papel, recreo, luz de dia):
-aca es de noche y hay algo que ocultar.
+Evolucion de la "sala de interrogatorio" original (mismo cuarto, misma dupla ambar/rojo), llevada
+de una lista de cajas oscuras a una **puesta en escena**: un cuarto a oscuras con una lampara que
+cuelga sobre un escritorio, un **expediente** abierto en la mesa y **fichas policiales** de cada
+sospechoso. Todo se hace con CSS y SVG en linea: ningun asset, ninguna fuente externa, ningun emoji.
 
 ## Principio
 
-**La pantalla es la sala de interrogatorio.** Lo importante esta **iluminado**; el resto se
-hunde en el carbon. De un vistazo tenes que leer tres cosas segun la fase: **quien sos** (tu
-palabra, o que sos el impostor), **de que se esta hablando** (la categoria y las pistas), y
-**a quien esta por caerle la sospecha** (los votos). Cada fase ilumina una sola de esas cosas.
+**Todos son sospechosos y cada fase es una pieza del expediente.** La pantalla no es una app con
+paneles: es una mesa de detective. De un vistazo se leen tres cosas segun la fase y cada fase
+ilumina una sola: **quien sos** (el sobre confidencial con tu palabra, o el sello rojo de
+impostor), **que se declaro** (la hoja de declaraciones a maquina) y **a quien le cae la
+sospecha** (la rueda de reconocimiento).
 
-## Layout
+## La sala
 
-- **Escena** centrada (ancho de celular, `min(560px, 100%)`) sobre un fondo **carbon** con un
-  **foco** radial arriba al centro (calido, tenue). El chrome vive arriba, el foco abajo.
-- **Topbar** en dos filas: arriba la **ronda** y la **fase** (condensadas: la ronda tenue, la fase
-  en ambar — dice que esta midiendo el reloj) con el **roster** a la derecha, chips por jugador
-  (el de turno resaltado en rojo, un punto cuando ya dio su pista o voto, su puntaje si no); abajo
-  el **reloj** a lo ancho, una barra que se vacia de ambar a rojo. El reloj va abajo y la escena
-  deja aire arriba porque la franja de la sala ocupa el borde superior.
-- **Reveal**: una **ficha de rol** al centro, iluminada. Inocente: la **palabra secreta en ambar**,
-  grande, con la categoria arriba. Impostor: **SOS EL IMPOSTOR en rojo**, la categoria como unica
-  pista, y el complice si son dos.
-- **Clues**: la **categoria** como sello arriba, un recordatorio chico de tu rol, la **lista de
-  pistas** dadas (la tuya marcada; la **ultima entra iluminada**, que es la que hay que leer), y
-  abajo tu **input** cuando es tu turno (si no, "Turno de X"). Dada la ultima pista la mesa queda
-  unos segundos con todas las pistas a la vista antes de abrir la votacion: nadie tiene que
-  perderse lo que escribio el que cerro.
-- **Voting**: los jugadores como **sospechosos** en fichas apiladas — nombre, su pista, y el contador
-  de votos; tocar uno lo acusa (se marca en rojo). Vos mismo aparecas deshabilitado ("vos").
-- **Guess**: si te descubrieron, un cuarto en **rojo** con el input para adivinar la palabra; si no,
-  el aviso de que el acusado esta intentando adivinar.
-- **Result**: el **veredicto** (quien era el impostor, la palabra en ambar, quien gano) y los
-  **puntos** de la ronda con el rol de cada uno.
+- **Fondo**: carbon casi negro con una **lampara cenital** que tira un cono de luz calida hacia la
+  mesa, polvo que flota despacio adentro del cono, **viñeta** fuerte en los bordes y un **grano de
+  pelicula** sutil encima de todo (ruido SVG en linea). La lampara titila apenas de vez en cuando:
+  el cuarto esta vivo, no animado.
+- **La mesa**: el contenido vive sobre papeles con textura (manila y papel de maquina), levemente
+  girados, con sombra dura. Nada flota en el vacio.
+
+## Piezas
+
+- **Ficha policial** (`avatar.ts`): cada jugador tiene un retrato generado desde su nombre (la
+  misma cara en todas las pantallas): cabeza, pelo o sombrero, ojos, cejas, nariz, boca y algun
+  detalle (bigote, anteojos, cicatriz, aro). Va en blanco y negro calido, con la **regla de
+  altura** detras y la **pizarra de detenido** abajo (numero + nombre). Es el personaje del jugador
+  en todo el juego.
+- **Sobre CONFIDENCIAL** (reveal): un sobre manila con el sello rojo que se abre y deja ver la
+  tarjeta. Inocente: la categoria y **la palabra secreta en ambar**, escrita a maquina. Impostor: un
+  **sello rojo SOS EL IMPOSTOR** que golpea la tarjeta, con la categoria como unica pista.
+- **Hoja de declaraciones** (clues): papel de maquina con renglones; cada pista es una linea a
+  maquina con la mini ficha del que la dio. La ultima entra tipeandose. Tu turno es un renglon con
+  el cursor titilando y el boton **DECLARAR**.
+- **Rueda de reconocimiento** (voting): las fichas de todos en fila frente a la regla de altura.
+  Tocar una la **marca con un circulo rojo de fibron** y los votos aparecen como **chinches rojas**.
+  Vos mismo quedas atenuado con la marca "vos".
+- **Ultima chance** (guess): la luz se pone roja, el acusado en grande bajo el foco.
+- **Caso cerrado** (result): los **sellos golpean**: CULPABLE sobre el impostor, INOCENTE sobre un
+  acusado que no lo era, y CASO CERRADO sobre el expediente. La palabra se revela en ambar y los
+  puntos van como un **libro de registro** a maquina.
 
 ## Paleta
 
-- **Carbon** `#0d0e12` — el cuarto a oscuras; paneles `#16181f` / `#1e212b`, lineas `#2a2d38`.
-- **Tinta clara** `#ecebe4` — el texto principal; **apagado** `#8b8d97` para lo secundario.
-- **Ambar** `#e4b64c` — **la palabra secreta** y lo que el jugador protege (el foco, el reloj lleno,
-  el acento propio). Es lo unico "de valor" iluminado.
-- **Rojo sospecha** `#d23b45` (profundo `#8f2129`) — el impostor, el peligro, la acusacion, el
-  countdown, el reloj en el ultimo cuarto.
-- **Azul frio** `#57b6d6` — el equipo inocente en el resultado (contrapunto al rojo del impostor).
+- **Carbon** `#0a0a0c` — el cuarto.
+- **Manila** `#d9c294` / `#c8ad78` — los sobres y la carpeta; **papel** `#ece4d2` para las hojas.
+- **Tinta** `#1d1a15` sobre papel; **tinta clara** `#ecebe4` sobre el carbon; **apagado** `#8b8d97`.
+- **Ambar** `#e4b64c` — la luz de la lampara y **la palabra secreta**. Lo unico de valor iluminado.
+- **Rojo sello** `#c3262f` (profundo `#7d1419`) — el impostor, las acusaciones, los sellos, el
+  reloj en el ultimo cuarto.
+- **Azul frio** `#57b6d6` — el equipo inocente en el resultado.
 
-## Vocabulario visual
+## Tipografia (sin fuentes externas)
 
-- **Tipografia condensada en mayusculas** (`Bebas Neue` / `Oswald` / `Arial Narrow` / condensadas
-  del sistema, sin fuentes externas) para titulos, la palabra, la categoria, el countdown y los
-  botones — voz de expediente/carteleria. El cuerpo (pistas, ayudas, nombres) va en sans-serif del
-  sistema, mas humano.
-- **El foco cenital** como fondo: un radial calido arriba que cae al negro. Nada de flat uniforme.
-- **Iluminar, no recuadrar**: la ficha activa (rol, sospechoso votado, veredicto) se separa con luz
-  y un borde de color; lo inactivo queda en el carbon.
-- **La palabra en ambar**: el dato que se protege siempre brilla en ambar; el impostor y el riesgo
-  siempre en rojo. Esa dupla ambar/rojo es la lectura de un vistazo.
-- **Votar es senalar**: tocar un sospechoso lo marca en rojo con su contador. Sin pulgares ni
-  emojis (regla del repo); la acusacion es el resaltado rojo y el numero.
-- **Reloj como barra**, no un numero grande: discreto arriba, se vacia parejo y se pone rojo en el
-  ultimo cuarto.
+- **Maquina de escribir** (`"Courier New", Courier, monospace`): las pistas, la palabra, el registro.
+- **Carteleria condensada** (`Impact`, `"Arial Narrow"`, condensadas del sistema): titulos, sellos,
+  el countdown, los botones.
+- **Sans del sistema** para las ayudas chicas.
 
 ## Movimiento
 
-Sobrio y tenso: casi todo esta quieto bajo el foco. El **reloj** se vacia parejo. El **countdown
-3/2/1/YA** entra con un "pop" (la unica animacion elastica, como el resto del repo) en rojo con
-halo. El reveal del rol y el veredicto **aparecen** iluminados, sin rebotes. La urgencia la pone
-el reloj y el turno, no la interfaz.
+Sobrio, con **tres gestos fuertes** y nada mas: el **sobre que se abre** (reveal), la **linea que
+se tipea** (pista nueva) y el **sello que golpea** (acusacion y veredicto: cae grande, rebota una
+vez y queda torcido). El resto esta quieto bajo la lampara. El countdown 3/2/1/YA entra como un
+sello rojo.
 
 ## Que evitar
 
-- Convertirlo en **neon party** (cyan/magenta, glow por todos lados): rompe el tono de interrogatorio.
-  Esa es otra linea del roster, no la de Impostor.
-- **Emojis** (regla del repo): todo icono/acento va en color y tipografia, dibujado si hace falta.
-- **Revelar de mas**: la palabra y el impostor solo se iluminan cuando corresponde (tu ficha privada,
-  o el result). Nunca mostrar el rol de otro antes de tiempo — es la esencia del juego (y va en linea
-  con que el rol no viaja en el broadcast, ver CLAUDE.md).
-- Fuentes externas o assets: el clima sale de fondo, color y fuentes del sistema.
-- Tapar la lectura: reloj y roster son chrome, nunca compiten con la palabra, la categoria ni la
-  acusacion.
+- **Neon party** (cyan/magenta, glow por todos lados): es otra linea del roster.
+- **Emojis** (regla del repo): iconos, chinches y sellos se dibujan con CSS/SVG.
+- **Revelar de mas**: la palabra y el impostor solo se muestran en tu sobre o en el resultado.
+- **Tapar la lectura**: la lampara, el polvo y el grano son ambiente; nunca compiten con la
+  palabra, las declaraciones ni la acusacion.

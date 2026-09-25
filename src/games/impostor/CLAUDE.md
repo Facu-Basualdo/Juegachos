@@ -115,11 +115,22 @@ repetir en el partido. Se edita a mano; requiere redeploy del server. No se usa 
 - `game/Game.ts` — orquestador: detecta modo sala (`initRoomMode`), carteles, countdown 3/2/1/YA
   (dispara `connect()`), guarda el rol de `im:you`, renderiza `im:state` por fase, y reporta el
   puntaje en `im:gameover`. Sonido de "tu turno" al cambiar el turno a uno mismo en `clues`.
-- `game/Hud.ts` — DOM "sala de interrogatorio" (ver DESIGN.md). Cinco vistas segun fase: reveal
-  (ficha de rol), clues (categoria + pistas + input propio), voting (sospechosos), guess
-  (adivinanza), result (revelado + puntos). Topbar en **dos filas**: arriba ronda + fase +
-  roster, abajo el reloj (barra anclada a `performance.now()`, sin drift) a lo ancho.
-  Espera/resultados/tablero final los cubre el `RoomOverlay`.
+- `game/Hud.ts` — DOM "Expediente noir" (ver DESIGN.md). La sala (lampara, cono de luz, polvo,
+  viñeta, grano) es fija; cada fase arma una pieza del expediente: reveal (el **sobre
+  confidencial** que se abre con tu palabra o el sello de impostor), clues (la **hoja de
+  declaraciones** a maquina, la pista nueva se tipea), voting (la **rueda de reconocimiento**:
+  fichas policiales, circulo de fibron en tu acusacion, chinches por voto), guess (ultima chance,
+  la lampara en rojo via `data-phase` en la raiz) y result (**caso cerrado**: sellos CULPABLE /
+  PROFUGO / INOCENTE sobre las fichas y el registro de puntos). Topbar en **dos filas**: arriba
+  ronda + fase + roster (con mini retrato), abajo el reloj (barra anclada a `performance.now()`,
+  sin drift) a lo ancho. Espera/resultados/tablero final los cubre el `RoomOverlay`.
+  - **Gotcha (animaciones):** reveal y result **no** se rearman con cada broadcast del server
+    (`revealSig` / `resultSig`): el estado se re-difunde cada tanto y el sobre se volveria a abrir
+    y los sellos volverian a golpear. En clues, solo la pista que entro recien se tipea.
+  - **Gotcha (scroll):** el grano de pelicula es mas grande que la pantalla (para moverse), asi
+    que `.im__room` lleva `overflow: hidden` y los `input.focus()` van con `preventScroll`. Sin
+    eso, al tomar foco el campo de la pista el navegador desplazaba `.im` y la escena entera
+    quedaba corrida arriba a la izquierda.
   - **Gotcha:** en `clues` el panel **no** se reconstruye en cada snapshot (perderia el foco del
     input). Se keya en `turn|clues.length|myTurn` (`cluesSig`); mientras no cambie, solo se refresca
     reloj y roster. En `guess` con input propio tampoco se reconstruye (`panelMode === "guess"`).
@@ -135,12 +146,20 @@ repetir en el partido. Se edita a mano; requiere redeploy del server. No se usa 
     Solo actua con `panelMode === "clues"`.
   - Resultado: por jugador, rol + "lo vio" (voto bien) + votos recibidos + puntos; la fila del
     mas votado va resaltada (`is-accused`).
+- `game/avatar.ts` — retratos de ficha policial en SVG generados desde el nombre (`mugshot`):
+  cabeza, pelo o sombrero, ojos, cejas, boca y un detalle, deterministicos (la misma cara en todas
+  las pantallas sin viajar por la red). `bookingNumber` da el numero de la pizarra. El blanco y
+  negro calido lo pone el CSS (`.im-face`).
+- `game/devRoom.ts` — sala falsa **solo en dev** (`?dev=NICK&roster=A,B,C&code=X`) contra un game
+  server local, para probar con varias pestañas sin crear salas en Supabase. En el build
+  `import.meta.env.DEV` es false y queda eliminada.
 - `game/ImpostorTransport.ts` — interfaz de transporte + tipos que **espejan** `server/src/protocol.ts`
   (regla de decoupling; si cambia el protocolo, tocar ambos lados).
 - `game/SocketTransport.ts` — socket.io-client (import dinamico) contra `/impostor`. Anuncia
   `{code, nickname, roster}`; el server fija el orden de los jugadores con el roster.
 - `game/SoundEffects.ts` — Web Audio sintetizado en clave noir (countdown tick 750Hz obligatorio,
-  reveal, tu turno, apertura de voto, sting de acusacion, ganar/perder), con su propio AudioContext.
+  reveal, tu turno, apertura de voto, sting de acusacion, **teclazos** de maquina con cada pista
+  nueva, **golpe de sello** en el resultado, ganar/perder), con su propio AudioContext.
 - `game/constants.ts` — countdown, `GAME_SERVER_URL`, `MAX_WORD_LEN`.
 
 ## Gotchas
