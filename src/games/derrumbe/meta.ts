@@ -8,7 +8,7 @@ export const meta: GameEntry = {
     "Cuatro pisos de bloques colgados sobre la lava y cada bloque que pisás se cae medio segundo después. No podés quedarte quieto: corré, saltá los agujeros y rompele el piso a los demás. Gana el último que queda en pie. Solo se juega en salas.",
   path: "/games/derrumbe/",
   controls:
-    "Corré con WASD o las flechas, saltá con ESPACIO y girá la cámara con Q / E o arrastrando el mouse (en el celu: joystick a la izquierda y botón SALTAR).",
+    "Corré con WASD o las flechas y saltá con ESPACIO (en el celu: arrastrá el dedo en cualquier lado y tocá SALTAR).",
   accent: "#d8463b",
   category: "Party",
   order: 990,

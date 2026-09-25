@@ -827,6 +827,75 @@ export interface MtServerToClient {
   "mt:gameover": (msg: MtGameover) => void;
 }
 
+/* ======================= PAPA CALIENTE (namespace /hotpotato) ======================= */
+
+/**
+ * Contrato de mensajes socket.io de Papa Caliente (namespace `/hotpotato`).
+ *
+ * La papa pasa de mano en mano y explota a un tiempo SECRETO que solo conoce el
+ * server: el que la tiene en ese instante queda afuera. Para pasarla hay que
+ * completar una secuencia de flechas, que el cliente resuelve localmente (cero
+ * red por tecla): solo viaja el pase terminado. El server compensa la latencia
+ * con el `at` del pase (hora del server que el cliente veia al completarlo),
+ * acotada a `LAG_COMP_MS`. La mecha NUNCA viaja en el estado.
+ */
+
+export interface HpPlayerView {
+  nickname: string;
+  alive: boolean;
+  connected: boolean;
+}
+
+/** `pause` = entre explosiones (y el preroll inicial); `burning` = la papa esta en juego. */
+export type HpPhase = "waiting" | "pause" | "burning" | "over";
+
+export interface HpState {
+  phase: HpPhase;
+  /** Reloj del server (epoch ms) al emitir; el cliente estima su offset con el. */
+  t: number;
+  holder: string | null;
+  /** Quien le paso la papa al holder (no se la puede devolver, salvo en el mano a mano). */
+  from: string | null;
+  /** Secuencia de flechas que tiene que completar el holder ("U" "D" "L" "R"). */
+  seq: string;
+  /** Contador de posesiones: sube en cada pase aceptado y en cada papa nueva. */
+  n: number;
+  /** Inicio de la papa actual (epoch del server), para el termometro. */
+  burnStart: number | null;
+  /** Tope de la mecha (publico): el termometro llena contra esto. */
+  fuseMaxMs: number;
+  /** Cuando arranca la proxima papa (en `pause`). */
+  nextBurnAt: number | null;
+  players: HpPlayerView[];
+  lastPass: { from: string; to: string; n: number } | null;
+  /** Ultima explosion; `k` sube en cada una. */
+  lastBoom: { player: string; k: number } | null;
+}
+
+export type HpRejectReason = "late" | "not-holder" | "stale" | "bad-seq" | "bad-target";
+
+export interface HpGameover {
+  ranking: { nickname: string; place: number }[];
+}
+
+/** Cliente -> Server. */
+export interface HpClientToServer {
+  "hp:join": (msg: { code: string; nickname: string; roster: string[]; round: number }) => void;
+  /** Pase completado. `n` = posesion con la que se jugo; `at` = hora del server
+   *  (epoch ms) que el cliente estimaba al completar la secuencia. */
+  "hp:pass": (msg: { n: number; to: string; keys: string; at: number }) => void;
+  /** Sondeo de reloj; el server contesta `hp:pong` con su hora. */
+  "hp:ping": (msg: { c: number }) => void;
+}
+
+/** Server -> Cliente. */
+export interface HpServerToClient {
+  "hp:state": (state: HpState) => void;
+  "hp:reject": (msg: { n: number; reason: HpRejectReason }) => void;
+  "hp:pong": (msg: { c: number; t: number }) => void;
+  "hp:gameover": (msg: HpGameover) => void;
+}
+
 // ============================================================================
 // Derrumbe (namespace `/derrumbe`, prefijo `dr:`). TNT Run en sala.
 // ============================================================================

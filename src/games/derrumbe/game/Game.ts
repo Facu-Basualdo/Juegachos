@@ -7,7 +7,6 @@ import {
   CAM_DISTANCE,
   CAM_FOV,
   CAM_PITCH,
-  CAM_YAW_SPEED,
   CELLS_PER_LAYER,
   COUNTDOWN_LABELS,
   COUNTDOWN_STEP,
@@ -19,6 +18,8 @@ import {
   POS_SEND_MS,
   PREROLL_MS,
   REMOTE_EASE,
+  SPECTATOR_BACK,
+  SPECTATOR_HEIGHT,
   SERVER_GRACE_MS,
   cellCenterX,
   seatColor,
@@ -98,9 +99,7 @@ export class Game {
   private myAvatar: Avatar | null = null;
   private readonly remotes = new Map<number, Remote>();
 
-  private yaw = 0;
   private camY = surfaceY(0);
-  private specYaw = 0.6;
   private specY = surfaceY(1);
   private posTimer = 0;
 
@@ -129,8 +128,6 @@ export class Game {
     this.hud = new Hud(container);
     this.input = new InputController(container);
     this.hud.onJump(() => this.input.requestJump());
-    // Clic derecho gira la camara igual que el izquierdo: sin esto abre el menu.
-    container.addEventListener("contextmenu", (e) => e.preventDefault());
 
     this.resize();
     window.addEventListener("resize", this.resize);
@@ -244,8 +241,6 @@ export class Game {
     if (this.mySeat >= 0 && init.spawn && this.state !== "dead" && this.state !== "over") {
       const { x, y, z, r } = init.spawn;
       this.player.place(x, y, z, r);
-      // Camara detras del muñeco, mirando hacia donde mira el.
-      this.yaw = r + Math.PI;
       this.camY = y;
     }
     // Un F5 en plena ronda: el server lo devuelve donde estaba, sin countdown.
@@ -413,7 +408,6 @@ export class Game {
     this.hud.setSpectating(true);
     if (this.myAvatar) this.myAvatar.visible = false;
     this.specY = this.camY;
-    this.specYaw = this.yaw;
     this.hud.banner(
       fell ? "&iexcl;Ca&iacute;ste a la lava!" : "Fuera de la partida",
       `Aguantaste ${formatSeconds(timeMs)} s. Mir&aacute; c&oacute;mo caen los dem&aacute;s.`,
@@ -508,21 +502,17 @@ export class Game {
     if (this.mySeat < 0) return;
     const playing = this.state === "playing";
 
-    this.yaw += this.input.consumeYawDelta() - this.input.keyYaw * CAM_YAW_SPEED * dt;
     const jump = this.input.consumeJump();
 
     let wx = 0;
     let wz = 0;
     if (playing) {
       if (jump) this.player.requestJump();
-      // Adelante es hacia donde mira la camara, proyectado al piso.
+      // Camara fija mirando hacia -Z: la pantalla y el mundo coinciden, "arriba" es
+      // siempre la misma direccion (derecha = +X, abajo = +Z).
       const dir = this.input.direction;
-      const fx = -Math.sin(this.yaw);
-      const fz = -Math.cos(this.yaw);
-      const rx = Math.cos(this.yaw);
-      const rz = -Math.sin(this.yaw);
-      wx = rx * dir.x - fx * dir.y;
-      wz = rz * dir.x - fz * dir.y;
+      wx = dir.x;
+      wz = dir.y;
     }
 
     const events = this.player.update(dt, wx, wz, this.arena);
@@ -617,7 +607,6 @@ export class Game {
 
   private updateCamera(dt: number): void {
     const following = (this.state === "countdown" || this.state === "playing") && this.mySeat >= 0;
-    this.floor.setGhostAbove(following ? this.player.y : null);
     if (following) {
       const p = this.player;
       // La camara sigue la altura con retraso: al caer se ve el piso de abajo
@@ -626,14 +615,13 @@ export class Game {
       const h = CAM_DISTANCE * Math.cos(CAM_PITCH);
       const v = CAM_DISTANCE * Math.sin(CAM_PITCH);
       const ty = this.camY + 1.1;
-      this.camera.position.set(p.x + Math.sin(this.yaw) * h, ty + v, p.z + Math.cos(this.yaw) * h);
+      this.camera.position.set(p.x, ty + v, p.z + h);
       this.camera.lookAt(p.x, ty, p.z);
       return;
     }
 
-    // Espectador (y de fondo en los carteles): orbita lenta alrededor del piso,
-    // a la altura de los que siguen en pie.
-    this.specYaw += dt * 0.12 + this.input.consumeYawDelta() - this.input.keyYaw * CAM_YAW_SPEED * dt;
+    // Espectador (y de fondo en los carteles): vista fija del piso entero desde el
+    // mismo lado que la camara de juego, a la altura de los que siguen en pie.
     this.input.consumeJump();
     let sum = 0;
     let n = 0;
@@ -644,8 +632,7 @@ export class Game {
     }
     const target = n > 0 ? sum / n : surfaceY(1);
     this.specY += (target - this.specY) * (1 - Math.exp(-1.5 * dt));
-    const radius = 27;
-    this.camera.position.set(Math.sin(this.specYaw) * radius, this.specY + 17, Math.cos(this.specYaw) * radius);
+    this.camera.position.set(0, this.specY + SPECTATOR_HEIGHT, SPECTATOR_BACK);
     this.camera.lookAt(0, this.specY - 1, 0);
   }
 

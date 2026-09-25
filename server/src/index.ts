@@ -10,6 +10,7 @@ import { registerImpostor } from "./games/impostor.js";
 import { registerTelefonoCortado } from "./games/telefonocortado.js";
 import { registerImitame } from "./games/imitame.js";
 import { registerPaintTurf } from "./games/paintturf.js";
+import { registerHotPotato } from "./games/hotpotato.js";
 import { registerDerrumbe } from "./games/derrumbe.js";
 import { impostorWordCount } from "./words-impostor.js";
 
@@ -76,6 +77,7 @@ registerTelefonoCortado(io);
 registerCarRace(io);
 registerImitame(io);
 registerPaintTurf(io);
+registerHotPotato(io);
 registerDerrumbe(io);
 
 httpServer.listen(PORT, () => {

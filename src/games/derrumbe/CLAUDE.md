@@ -1,6 +1,6 @@
 # Derrumbe (`derrumbe`)
 
-TNT Run para salas, en 3D (Three.js, camara en tercera persona). Cuatro pisos de
+TNT Run para salas, en 3D (Three.js, camara fija en tercera persona). Cuatro pisos de
 bloques circulares apilados sobre la lava; cada bloque que pisas titila medio
 segundo y se cae. No hay donde quedarse quieto: se corre, se saltan los agujeros y
 se le rompe el piso a los demas. Gana el ultimo en pie. **Solo se juega en salas**
@@ -54,7 +54,7 @@ Apoyo por **huella**: el muñeco se sostiene si cualquier bloque toca el circulo
 `FOOT_RADIUS` de sus pies, y **todos** los bloques que toca se prenden. Es la regla
 de TNT Run: se puede pararse en el filo de un agujero, pero el filo tambien se cae.
 Choque lateral solo contra la losa del piso que el cuerpo esta atravesando al caer;
-los pisos estan a `LAYER_GAP` (8) y no hay techo contra el que chocar. Coyote time
+los pisos estan a `LAYER_GAP` (11) y no hay techo contra el que chocar. Coyote time
 y buffer de salto para que el salto al borde perdone unos ms.
 
 ## Reglas de la partida (server)
@@ -100,10 +100,17 @@ partida, asi que `roomTimeLimitSec: 140` es solo la red por si el server se cae
   del server y la partida arranca de nuevo (lo generico de `registerGame`).
 - **`DISCONNECT_KILL_MS` era 6 s y no alcanzaba:** un headless lento tardaba mas en
   recargar + arrancar RoomMode + reconectar, y el server ya lo daba por caido.
-- **Pisos fantasma (`FloorView.setGhostAbove`).** Con la camara detras y arriba,
-  estando en un piso de abajo la losa de arriba tapaba todo (la camara quedaba
-  adentro). Los pisos por encima de los pies se dibujan al 22% de opacidad, que
-  ademas deja ver a los que siguen arriba.
+- **La camara es FIJA y eso ata la altura de los pisos.** Siempre detras (+Z) y
+  arriba del muñeco, nunca gira: W es siempre "arriba en la pantalla" y en el celu
+  el joystick puede apoyarse en cualquier lado (lo pidio el programador; antes se
+  giraba con Q/E, el mouse o el dedo derecho). Para ver alrededor sin girar, la
+  camara va alta (`CAM_PITCH` ~54 grados, `CAM_DISTANCE` 10), a ~9.3 sobre los pies,
+  y por eso `LAYER_GAP` es **11**: la camara tiene que quedar por debajo de la losa
+  del piso de arriba (`LAYER_GAP - 1`). Con los 8 de antes quedaba adentro del piso
+  de arriba y lo tenia delante de todo (la primera version lo tapaba volviendo
+  translucidos los pisos de arriba; con esta cuenta ya no hace falta). **Si se toca
+  la camara o `LAYER_GAP`, rehacer la cuenta** (esta en `constants.ts`). El
+  espectador tambien es fijo: todo el piso desde el mismo lado.
 - **`MAX_DT` es 0.1, no 1/20.** Con 1/20 la fisica se frenaba a los pocos FPS del
   headless (un jugador quieto tardaba 15 s en llegar a la lava en vez de ~6). La
   fisica igual se parte en pasos de `PHYSICS_STEP` (1/120).
@@ -127,8 +134,8 @@ y queda eliminado. Levantar el server con `PORT=8799 npx tsx src/index.ts` (en
 ## Movil
 
 `mobile: true`, verificado **en emulacion** (Playwright, iPhone 13, touch), no en un
-telefono real: el primer dedo en la mitad izquierda es un joystick flotante, un
-dedo en la mitad derecha gira la camara y el boton SALTAR (solo con
-`pointer: coarse`) va abajo a la derecha, con `pointerdown`. Los listeners cuelgan
+telefono real: un dedo en cualquier lado es un joystick flotante (no hay input de
+camara, que es fija) y el boton SALTAR (solo con `pointer: coarse`) va abajo a la
+derecha, con `pointerdown`. En la compu el mouse no hace nada. Los listeners cuelgan
 del container. No aplica el bug del "toque de arranque": la partida la larga
 RoomMode (`onStart`). En vertical se abre el FOV 14 grados.

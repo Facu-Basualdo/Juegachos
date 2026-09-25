@@ -11,8 +11,12 @@ export const GRID = 25;
 export const LAYERS = 4;
 /** El piso es un circulo: entra toda celda cuyo centro cae a esta distancia del medio. */
 export const ARENA_RADIUS = 12.4;
-/** Distancia vertical entre la tapa de un piso y la del siguiente. */
-export const LAYER_GAP = 8;
+/**
+ * Distancia vertical entre la tapa de un piso y la del siguiente. Es alta a
+ * proposito: la camara fija va arriba del muñeco y tiene que quedar SIEMPRE por
+ * debajo de la losa del piso de arriba (ver CAM_DISTANCE).
+ */
+export const LAYER_GAP = 11;
 export const CENTER = (GRID - 1) / 2;
 export const CELLS_PER_LAYER = GRID * GRID;
 export const CELL_COUNT = CELLS_PER_LAYER * LAYERS;
@@ -61,11 +65,25 @@ export const RESTORE_AFTER_MS = 1500;
 export const REMOTE_EASE = 14;
 
 // ---- Camara ----
-export const CAM_DISTANCE = 8.5;
-/** Inclinacion de la camara (rad): alta, para ver los agujeros del piso. */
-export const CAM_PITCH = 0.7;
+/**
+ * Camara FIJA: siempre detras (+Z) y arriba del muñeco, nunca gira. Asi "arriba" en
+ * la pantalla es siempre la misma direccion y el joystick del celu puede ir en
+ * cualquier lado.
+ *
+ * Restriccion: la altura de la camara sobre los pies (1.1 + DISTANCE * sin(PITCH),
+ * ~9.3) tiene que quedar por debajo de la losa del piso de arriba (LAYER_GAP - 1 =
+ * 10). Si no, estando en un piso de abajo la camara queda adentro del de arriba y
+ * lo tiene delante de todo. Con la inclinacion alta, el borde superior del cuadro
+ * sigue mirando hacia abajo (incluso con el FOV abierto del celu en vertical), asi
+ * que el piso de arriba nunca entra en pantalla.
+ */
+export const CAM_DISTANCE = 10;
+/** Inclinacion (rad, ~54 grados): alta, para ver el piso alrededor del muñeco. */
+export const CAM_PITCH = 0.95;
 export const CAM_FOV = 62;
-export const CAM_YAW_SPEED = 2.4;
+/** Espectador: vista fija de todo el piso desde el mismo lado. */
+export const SPECTATOR_BACK = 30;
+export const SPECTATOR_HEIGHT = 24;
 
 // ---- Countdown ----
 export const COUNTDOWN_LABELS = ["3", "2", "1", "YA"] as const;
