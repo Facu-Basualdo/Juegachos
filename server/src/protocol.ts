@@ -434,8 +434,9 @@ export interface ImOutcome {
   kind: ImOutcomeKind;
   /** Que escribio el impostor al intentar adivinar, o null. */
   guess: string | null;
-  /** Puntos ganados esta ronda por jugador. */
-  scores: { player: string; points: number }[];
+  /** Puntos ganados esta ronda por jugador. `votedRight`: inocente que voto a un impostor
+   *  (ya incluye su bonus en `points`). */
+  scores: { player: string; points: number; votedRight: boolean }[];
   winners: "impostores" | "inocentes";
 }
 
@@ -471,7 +472,13 @@ export interface ImState {
 }
 
 export interface ImGameover {
+  /** `place` compartido en los empates (1, 1, 3). */
   ranking: { nickname: string; place: number; total: number }[];
+}
+
+/** Motivo de rechazo de una pista, para mostrarselo al que la escribio. */
+export interface ImReject {
+  reason: string;
 }
 
 /** Rol privado que recibe cada jugador al empezar la ronda (y al reconectar). */
@@ -502,6 +509,8 @@ export interface ImServerToClient {
   /** Dirigido: el rol privado del jugador (palabra o impostor). No viaja en im:state. */
   "im:you": (msg: ImYou) => void;
   "im:gameover": (msg: ImGameover) => void;
+  /** Dirigido: la pista no se acepto (repetida o canta la palabra). El turno sigue. */
+  "im:reject": (msg: ImReject) => void;
 }
 
 /* ------------------------------------------------------------------ *

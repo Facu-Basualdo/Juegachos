@@ -47,9 +47,25 @@ secreta solo aparece en `im:state` en la fase `result` (ya termino la ronda, se 
    estan todos conectados o al vencer la gracia. Necesita >= 2 seats (para que haya un inocente).
 2. `reveal` — sortea categoria + palabra y reparte roles (`impostorCount`: 2 con 7+ jugadores,
    si no 1). `REVEAL_MS` (6s) para que cada uno lea su ficha privada (`im:you`).
+   - **El impostor sale entre los que menos veces lo fueron** (`pickImpostors`, contador
+     `impostorTimes`, desempate al azar). Al azar puro, en 3 rondas uno podia ser impostor dos
+     veces y otro ninguna, y como el impostor que gana suma mas, el sorteo decidia el partido.
+     Con 3+ jugadores ahora nadie repite hasta que todos lo fueron.
+   - **La categoria no se repite en rondas seguidas** (`pickWord(exclude, avoidCategory)`), y
+     una categoria con todas sus palabras usadas queda afuera del sorteo.
 3. `clues` — orden de turnos **barajado** (`CLUE_LAPS` = 1 vuelta). El jugador de turno escribe
    una palabra-pista (`im:clue`); el server la agrega y avanza. Tope por turno `CLUE_TURN_MS`
    (37.5s) -> pista vacia y pasa al siguiente. Los turnos de desconectados se saltean (pista vacia).
+   **Pistas rechazadas** (`clueProblem`, evento dirigido `im:reject {reason}`; el turno sigue
+   siendo del mismo jugador y el cliente le rehabilita el campo con el motivo en rojo):
+   - **repetida** (`sameClue`, sin acentos ni mayusculas): copiar la pista de otro era la salida
+     gratis del impostor;
+   - **canta la palabra** (`clueRevealsWord`: lo que valdria como adivinanza correcta — palabra,
+     alias, apellido — o la palabra metida adentro, "milanesas", desde 4 letras). **Solo a los
+     inocentes**: rechazarsela al impostor le avisaria que acerto la palabra.
+   **Si el de turno se desconecta**, su reloj se recorta a `ABSENT_TURN_MS` (5s) en vez de
+   esperarle los 37.5s. Si vuelve (F5) en su turno recupera `REJOIN_TURN_MS` (12s), **una sola
+   vez por turno** (`rejoinGranted`), para que recargar en loop no estire el turno.
    Dada la **ultima** pista no se salta a la votacion: la fase sigue en `clues` con `turn = null`
    durante `CLUES_RECAP_MS` (3.5s) para que la mesa alcance a leer lo que escribio el ultimo
    (`endClues`). **`currentTurn()` devuelve null cuando se agotaron los turnos**: sin ese corte el
@@ -61,20 +77,25 @@ secreta solo aparece en `im:state` en la fase `result` (ya termino la ronda, se 
    tambien se adelanta si el unico que faltaba votar se desconecta (`leave`). El mas
    votado es el **acusado**; empate o sin votos -> nadie acusado (el impostor zafa).
 5. `guess` — solo si el acusado **es** impostor. `GUESS_MS` (20s) para que **ese** impostor
-   escriba su adivinanza (`im:guess`); acierta si normaliza igual que la palabra secreta.
+   escriba su adivinanza (`im:guess`); acierta si normaliza igual que la palabra secreta. Mismo
+   recorte que las pistas: acusado desconectado -> `ABSENT_TURN_MS`, y si vuelve, `REJOIN_TURN_MS`.
 6. `result` — `RESULT_MS` (9s): revela impostor/es + palabra + desenlace + puntos de la ronda.
    Desenlaces (`ImOutcomeKind`): `impostor-survived` (no fue el mas votado), `impostor-guessed`
    (descubierto pero adivino), `impostor-caught` (descubierto y fallo). Luego: quedan rondas ->
    `reveal`; si no -> `over`.
 7. `over` — `im:gameover` con ranking por puntaje total; cada cliente reporta su placement.
+   **Los empates comparten puesto** (1, 1, 3): con el puesto por indice, dos jugadores con el
+   mismo total se llevaban distinto puntaje de sala segun el orden del roster.
 
 ## Puntaje (tuning, `server/src/games/impostor.ts`)
 
 Por equipo: si ganan los **impostores** (zafaron o adivinaron), cada impostor suma
 `IMPOSTOR_WIN_PTS` (3); si ganan los **inocentes** (descubrieron y el impostor no adivino),
-cada inocente suma `INNOCENT_WIN_PTS` (2). Los roles se rebarajan cada ronda, asi que el rol de
-impostor rota y los puntos se equilibran a lo largo del partido. (Se podria premiar solo a los
-inocentes que votaron bien; hoy es team-based por simplicidad.)
+cada inocente suma `INNOCENT_WIN_PTS` (2). Ademas, **cada inocente que voto a un impostor suma
+`CORRECT_VOTE_BONUS` (1), gane o pierda su equipo** ("lo vio" en el resultado,
+`ImOutcome.scores[].votedRight`, ya sumado en `points`): antes el que votaba a ciegas cobraba lo
+mismo que el que lo descubrio, y los totales empataban mucho. El impostor rota parejo (ver
+`reveal`), asi que los puntos de impostor se reparten a lo largo del partido.
 
 ## Banco de palabras
 
@@ -109,6 +130,11 @@ repetir en el partido. Se edita a mano; requiere redeploy del server. No se usa 
     arriba tiene que quedar fuera de esa franja.
   - En `clues` con `turn === null` (la pausa de lectura) el panel muestra la lista completa y
     "Ya estan todas las pistas. Empieza la votacion..." en vez de "Turno de X".
+  - Debajo del campo de la pista va la regla (`.im__cluenote`: no repetir ni cantar la palabra);
+    `showClueError` la reemplaza por el motivo del `im:reject` en rojo y rehabilita el campo.
+    Solo actua con `panelMode === "clues"`.
+  - Resultado: por jugador, rol + "lo vio" (voto bien) + votos recibidos + puntos; la fila del
+    mas votado va resaltada (`is-accused`).
 - `game/ImpostorTransport.ts` — interfaz de transporte + tipos que **espejan** `server/src/protocol.ts`
   (regla de decoupling; si cambia el protocolo, tocar ambos lados).
 - `game/SocketTransport.ts` — socket.io-client (import dinamico) contra `/impostor`. Anuncia
@@ -127,6 +153,8 @@ repetir en el partido. Se edita a mano; requiere redeploy del server. No se usa 
   clavados arriba de la escena**: la partida corre atras pero no se puede jugar. No sacar
   (Basta tenia el mismo bug; word-bomb y word-chain ya traian la regla). Si se agrega otro
   elemento que se apague con `hidden`, va adentro de `.im`.
+- `im:reject` es **dirigido** y solo existe en `clues`: la pista rechazada no se agrega ni se
+  difunde, asi que el resto de la mesa no se entera de que alguien casi canta la palabra.
 - Los tipos del protocolo estan **duplicados** en cliente y server a proposito (decoupling).
   Mantenerlos en sync a mano; requiere redeploy del server al tocarlos.
 - El rol **nunca** va en `im:state` (solo por `im:you`). No mover la palabra/impostor al broadcast:

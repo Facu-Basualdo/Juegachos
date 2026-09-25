@@ -143,6 +143,26 @@ export class Hud {
     this.countdownEl.classList.add("is-pop");
   }
 
+  /**
+   * El server rechazo la pista (repetida o canta la palabra): el turno sigue siendo
+   * nuestro, asi que se rehabilita el campo y el motivo reemplaza la regla de abajo.
+   */
+  showClueError(reason: string): void {
+    if (this.panelMode !== "clues") return;
+    const input = this.panelEl.querySelector<HTMLInputElement>(".im__clue-input");
+    const send = this.panelEl.querySelector<HTMLButtonElement>(".im__send");
+    const note = this.panelEl.querySelector<HTMLElement>(".im__cluenote");
+    if (!input || !send) return;
+    input.disabled = false;
+    send.disabled = false;
+    input.focus();
+    input.select();
+    if (note) {
+      note.textContent = reason;
+      note.classList.add("is-error");
+    }
+  }
+
   showStage(): void {
     this.overlay.hidden = true;
     this.stage.hidden = false;
@@ -264,7 +284,8 @@ export class Hud {
           <input class="im__clue-input" type="text" autocomplete="off" autocapitalize="none"
                  spellcheck="false" maxlength="${MAX_WORD_LEN}" placeholder="Tu pista (una palabra)" />
           <button class="im__send" type="submit">Enviar</button>
-        </form>`
+        </form>
+        <p class="im__cluenote">No vale repetir una pista ni cantar la palabra.</p>`
       : s.turn !== null
         ? `<div class="im__turnwait">Turno de <strong>${esc(s.turn)}</strong>...</div>`
         : `<div class="im__turnwait is-recap">Ya estan todas las pistas. Empieza la votaci&oacute;n...</div>`;
@@ -320,6 +341,7 @@ export class Hud {
     this.panelEl.innerHTML = `
       <div class="im__votewrap">
         <div class="im__votehead">Quien es el impostor?</div>
+        <p class="im__votesub">Toca de nuevo para sacar tu voto. Si hay empate, el impostor zafa.</p>
         <div class="im__suspects">${suspects}</div>
       </div>`;
 
@@ -382,14 +404,23 @@ export class Hud {
         : "";
 
     const scores = outcome?.scores ?? [];
+    const votes = s.votes ?? [];
     const scoreRows = s.players
       .map((p) => {
-        const pts = scores.find((x) => x.player === p.nickname)?.points ?? 0;
+        const row = scores.find((x) => x.player === p.nickname);
+        const pts = row?.points ?? 0;
         const isImp = impostors.includes(p.nickname);
+        const got = votes.filter((v) => v.target === p.nickname).length;
+        const cls = ["im__score"];
+        if (p.nickname === this.me) cls.push("is-me");
+        if (p.nickname === s.accused) cls.push("is-accused");
+        // "Lo vio": inocente que voto a un impostor (su bonus ya viene sumado en `pts`).
+        const eye = row?.votedRight ? `<span class="im__score-eye">lo vio</span>` : "";
         return `
-          <div class="im__score${p.nickname === this.me ? " is-me" : ""}">
+          <div class="${cls.join(" ")}">
             <span class="im__score-role ${isImp ? "is-impostor" : "is-crew"}">${isImp ? "impostor" : "inocente"}</span>
-            <span class="im__score-name">${esc(p.nickname)}</span>
+            <span class="im__score-name">${esc(p.nickname)}${eye}</span>
+            <span class="im__score-votes">${got > 0 ? `${got} ${got === 1 ? "voto" : "votos"}` : ""}</span>
             <span class="im__score-pts">${pts > 0 ? `+${pts}` : "0"}</span>
           </div>`;
       })

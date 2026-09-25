@@ -121,6 +121,7 @@ export class Game {
     transport.onState((s) => this.onState(s));
     transport.onYou((you) => this.onYou(you));
     transport.onGameover((r) => this.onGameover(r));
+    transport.onReject((m) => this.hud.showClueError(m.reason));
     this.transport = transport;
     void transport.connect();
   }
