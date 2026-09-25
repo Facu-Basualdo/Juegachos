@@ -4,7 +4,11 @@ La landing busca la portada de cada juego en `/covers/<id>.jpg` (este directorio
 La card muestra la imagen sola (el nombre va DENTRO de la imagen); si el archivo
 no existe, queda un fallback con el nombre del juego.
 
-- Formato: JPG (o renombrar a .jpg), cuadrado **1:1**, ideal 1024x1024.
+- Formato: JPG, cuadrado **1:1**. Se puede soltar tal cual sale del generador
+  (aunque sea PNG renombrado a .jpg) y despues correr
+  `python scripts/compress-covers.py` (requiere Pillow): la re-codifica como JPEG
+  real a 800x800, que es lo que pide la card en pantallas 2x. Sin ese paso cada
+  portada pesa 2-3 MB en vez de ~150 KB. El script saltea las ya comprimidas.
 - El CSS aplica los bordes redondeados: generar la imagen con esquinas rectas.
 - Cada bloque ya incluye estilo base + escena + titulo dentro de la imagen:
   **copiar y pegar tal cual** en el generador de imagenes.
