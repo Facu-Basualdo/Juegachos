@@ -2,7 +2,8 @@
 
 La papa pasa de mano en mano y explota a un tiempo **secreto**: el que la tiene en
 ese instante queda afuera. Para pasarla hay que marcar una secuencia de flechas
-(4 al principio, una mas cada 5 pases de la misma papa, tope 7), y no se la podes
+(siempre 4: antes crecia hasta 7 con los pases y con la papa caliente los pases se volvian
+lentos justo cuando tenian que ir y venir rapido), y no se la podes
 devolver al que te la paso (salvo en el mano a mano, donde no hay otro). Cada
 explosion elimina a uno; **gana el ultimo en pie.** Solo de sala, arbitrado por el
 game server (`server/src/games/hotpotato.ts`, namespace `/hotpotato`, eventos `hp:*`).
@@ -42,6 +43,14 @@ ping. Cuatro decisiones lo evitan, y las cuatro hacen falta:
    conexion movil tipica; por encima, el jugador pierde `RTT - 250` ms. Para que los pases
    que ya venian viajando puedan entrar, la explosion se resuelve `LAG_COMP_MS` despues
    de vencer la mecha. Como la mecha es secreta, ese margen no lo ve nadie.
+
+**El termometro explica la regla.** Sus franjas no son tercios: la crema va de 0 a
+`fuseMinMs` (zona segura, la papa no explota nunca) y el resto se reparte entre mostaza y
+tomate hasta `fuseMaxMs` (`Hud.setFuseWindow`). Debajo, `.hp__risk` lo dice en palabras
+(`Hud.setRisk`): en la zona segura, cuanto falta; despues, la chance de que explote en el
+proximo segundo. La mecha sale pareja entre el minimo y el tope, asi que pasado `t` esa chance
+es 1 s / (tope - t): sube sola, y es publica (no delata la mecha real). Los `controls` del
+`meta.ts` lo explican en el briefing.
 
 La mecha **nunca** viaja en `hp:state`. El termometro del centro llena contra
 `fuseMaxMs` (el tope publico), no contra la mecha real: es informacion que ya tiene
@@ -113,6 +122,6 @@ explosion para todos y nadie mira dos pantallas a la vez.
 
 ## Tuning (server, `hotpotato.ts`)
 
-`FUSE_MIN_MS` / `FUSE_MAX_MS` (9-20 s), `EXPLODE_PAUSE_MS` (3 s), `SEQ_BASE` /
-`SEQ_STEP` / `SEQ_MAX` (4 / 5 / 7), `LAG_COMP_MS` (250), `ABSENT_PASS_MS` (2.5 s),
+`FUSE_MIN_MS` / `FUSE_MAX_MS` (9-20 s; los dos viajan en `hp:state` como `fuseMinMs` /
+`fuseMaxMs`), `EXPLODE_PAUSE_MS` (3 s), `SEQ_LEN` (4, fija), `LAG_COMP_MS` (250), `ABSENT_PASS_MS` (2.5 s),
 `PREROLL_MS` (3 s), `START_GRACE_MS` (8 s). Tocar el server pide redeploy.

@@ -744,6 +744,7 @@ export type MtPhase =
   | "record"
   | "upload"
   | "playback"
+  | "summary"
   | "wheel"
   | "over";
 
@@ -806,8 +807,11 @@ export interface MtGameover {
 
 /** Cliente -> Server. */
 export interface MtClientToServer {
-  "mt:join": (msg: { code: string; nickname: string; roster: string[] }) => void;
+  /** `clips`: ids de la biblioteca de la comunidad (Supabase) para sumar al sorteo. */
+  "mt:join": (msg: { code: string; nickname: string; roster: string[]; clips?: string[] }) => void;
   /** La toma (mu-law, 1 byte por muestra) + el puntaje que calculo el cliente. */
+  /** Senalizacion WebRTC del chat de voz, para un jugador puntual. */
+  "mt:rtc": (msg: { to: string; data: unknown }) => void;
   "mt:take": (msg: {
     round: number;
     rate: number;
@@ -825,6 +829,8 @@ export interface MtServerToClient {
   /** Una toma, reenviada a todos al abrir la reproduccion (y al que reconecta en ella). */
   "mt:take": (msg: { round: number; nickname: string; rate: number; audio: Buffer }) => void;
   "mt:gameover": (msg: MtGameover) => void;
+  /** Senalizacion WebRTC reenviada, con el remitente estampado por el server. */
+  "mt:rtc": (msg: { from: string; data: unknown }) => void;
 }
 
 /* ======================= PAPA CALIENTE (namespace /hotpotato) ======================= */
@@ -863,6 +869,8 @@ export interface HpState {
   /** Inicio de la papa actual (epoch del server), para el termometro. */
   burnStart: number | null;
   /** Tope de la mecha (publico): el termometro llena contra esto. */
+  /** Minimo publico de la mecha: antes de esto la papa no explota nunca. */
+  fuseMinMs: number;
   fuseMaxMs: number;
   /** Cuando arranca la proxima papa (en `pause`). */
   nextBurnAt: number | null;
@@ -963,4 +971,127 @@ export interface DrServerToClient {
   "dr:init": (msg: DrInit) => void;
   "dr:state": (msg: DrState) => void;
   "dr:snap": (msg: DrSnap) => void;
+}
+
+// ============================================================================
+// Luz Roja, Luz Verde (namespace `/luzroja`, prefijo `lr:`).
+// ============================================================================
+
+/**
+ * El server es duenio del semaforo, del reloj y del resultado de cada jugador; el
+ * movimiento lo simula cada cliente y aca se reenvia. El cliente juzga su propia
+ * eliminacion en rojo (ver `games/luzroja.ts` para el porque).
+ */
+
+export type LrPhase = "waiting" | "preroll" | "playing" | "over";
+export type LrLight = "green" | "red";
+/** Corriendo, eliminado o llego. */
+export type LrStatus = "run" | "out" | "fin";
+
+export interface LrState {
+  phase: LrPhase;
+  /** Ms para largar ("preroll") o para que se acabe el tiempo ("playing"). */
+  msLeft: number;
+  /** Ms desde la largada. */
+  elapsed: number;
+  light: LrLight;
+  /** Sube en cada cambio de luz: el cliente reacciona al cambio, no al valor. */
+  lightSeq: number;
+  /** Duracion total de la luz actual (el cliente reparte la cancion en ella). */
+  lightDur: number;
+  /** Ms que le quedan a la luz actual. */
+  lightLeft: number;
+  status: LrStatus[];
+  /** Avance hacia la meta por asiento, 0-100. */
+  prog: number[];
+  /** Ms desde la largada en que cruzo cada asiento (-1 si no cruzo). */
+  finT: number[];
+  on: boolean[];
+}
+
+export interface LrInit extends LrState {
+  seat: number;
+  seats: string[];
+  spawn: { x: number; z: number; r: number } | null;
+}
+
+/** Cliente -> Server. */
+export interface LrClientToServer {
+  "lr:join": (msg: { code: string; nickname: string; roster: string[]; round: number }) => void;
+  /** m = 1 si se esta moviendo. */
+  "lr:pos": (msg: { x: number; z: number; r: number; m: number }) => void;
+  /** Me movi en rojo. */
+  "lr:out": (msg: Record<string, never>) => void;
+  /** Cruce la linea (se valida contra la ultima posicion). */
+  "lr:fin": (msg: Record<string, never>) => void;
+}
+
+/** Server -> Cliente. */
+export interface LrServerToClient {
+  "lr:init": (msg: LrInit) => void;
+  "lr:state": (msg: LrState) => void;
+  /** Posiciones a 20 Hz, aplanadas: [asiento, x, z, rotY, moviendose, ...]. */
+  "lr:snap": (msg: { p: number[] }) => void;
+  /** La muñeca amaga con darse vuelta (solo animacion; no cambia la luz). */
+  "lr:tease": (msg: { n: number }) => void;
+}
+
+// ============================================================================
+// Pista Loca (namespace `/pistaloca`, prefijo `pl:`). Block Party en sala.
+// ============================================================================
+
+/**
+ * El server es duenio de la pista (el dibujo de cada ronda), del ritmo y del orden de
+ * eliminacion; el movimiento lo simula cada cliente y aca se reenvia. El cliente
+ * juzga su propia caida (ver `games/pistaloca.ts`).
+ */
+
+export type PlPhase = "waiting" | "preroll" | "playing" | "over";
+/** Paso de la ronda: suena la musica, se pide un color, cae la pista, se rearma. */
+export type PlStep = "dance" | "choose" | "drop" | "reset";
+
+export interface PlState {
+  phase: PlPhase;
+  /** Ms para largar (solo en "preroll"). */
+  msLeft: number;
+  /** Ronda en curso (1..). */
+  round: number;
+  step: PlStep;
+  /** Duracion total del paso actual y lo que le queda (ms). */
+  stepDur: number;
+  stepLeft: number;
+  /** Color pedido (indice de la paleta), valido desde "choose". */
+  color: number;
+  /** Dibujo de la pista: un digito (color) por celda, fila por fila. */
+  pattern: string;
+  alive: boolean[];
+  /** Rondas completas aguantadas por asiento (-1 mientras sigue vivo). */
+  rounds: number[];
+  /** Ms desde la largada en que cayo cada asiento (-1 vivo). */
+  times: number[];
+  on: boolean[];
+}
+
+export interface PlInit extends PlState {
+  seat: number;
+  seats: string[];
+  grid: number;
+  spawn: { x: number; y: number; z: number; r: number } | null;
+}
+
+/** Cliente -> Server. */
+export interface PlClientToServer {
+  "pl:join": (msg: { code: string; nickname: string; roster: string[]; round: number }) => void;
+  /** f: 1 = en el piso, 2 = moviendose. */
+  "pl:pos": (msg: { x: number; y: number; z: number; r: number; f: number }) => void;
+  /** Me cai al vacio. */
+  "pl:dead": (msg: Record<string, never>) => void;
+}
+
+/** Server -> Cliente. */
+export interface PlServerToClient {
+  "pl:init": (msg: PlInit) => void;
+  "pl:state": (msg: PlState) => void;
+  /** Posiciones a 20 Hz, aplanadas: [asiento, x, y, z, rotY, flags, ...]. */
+  "pl:snap": (msg: { p: number[] }) => void;
 }

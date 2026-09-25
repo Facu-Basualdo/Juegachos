@@ -34,7 +34,20 @@ import type { DrInit, DrPhase, DrSnap, DrState } from "../protocol.js";
 // ---- Geometria (espejo de constants.ts del cliente) ----
 const GRID = 25;
 const LAYERS = 4;
+/** Radio del piso con la sala llena. La grilla es siempre de este tamaño. */
 const ARENA_RADIUS = 12.4;
+/**
+ * El piso se achica con menos gente: con dos jugadores en un circulo para ocho no se
+ * cruzan nunca y la partida es correr solo hasta que el piso se pudra. La grilla (y el
+ * protocolo) no cambia: al armar la ronda las celdas de afuera del radio arrancan
+ * CAIDAS, y el cliente las recibe como tales en el `doom` del `dr:init`.
+ */
+function radiusFor(players: number): number {
+  if (players <= 2) return 7.4;
+  if (players <= 4) return 9.4;
+  if (players <= 6) return 11;
+  return ARENA_RADIUS;
+}
 /** Alto a proposito: la camara fija del cliente tiene que caber debajo del piso de arriba. */
 const LAYER_GAP = 11;
 const CENTER = (GRID - 1) / 2;
@@ -267,7 +280,12 @@ export class DerrumbeSim implements RoomSim {
     }));
     this.cells = new Uint8Array(CELL_COUNT);
     this.removeAt = new Float64Array(CELL_COUNT);
-    for (const idx of MASK) this.cells[idx] = INTACT;
+    const radius = radiusFor(count);
+    for (const idx of MASK) {
+      const rest = idx % CELLS_PER_LAYER;
+      const inside = Math.hypot((rest % GRID) - CENTER, Math.floor(rest / GRID) - CENTER) <= radius;
+      this.cells[idx] = inside ? INTACT : REMOVED;
+    }
     this.pending = [];
     this.starters = 0;
     this.decayAcc = 0;
@@ -496,8 +514,10 @@ export class DerrumbeSim implements RoomSim {
 function spawnPos(seat: number, count: number): { x: number; y: number; z: number; r: number } {
   const n = Math.max(count, 1);
   const angle = (seat / n) * Math.PI * 2;
-  const x = Math.cos(angle) * 7;
-  const z = Math.sin(angle) * 7;
+  // Adentro del piso achicado (ver `radiusFor`), con margen al borde.
+  const ring = Math.min(7, radiusFor(n) - 2.4);
+  const x = Math.cos(angle) * ring;
+  const z = Math.sin(angle) * ring;
   return { x: round2(x), y: surfaceY(0), z: round2(z), r: round2(Math.atan2(-x, -z)) };
 }
 

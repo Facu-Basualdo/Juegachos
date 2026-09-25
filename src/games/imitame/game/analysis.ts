@@ -1,4 +1,4 @@
-import { pitchAt, soundDuration, type Sound } from "./sounds";
+import { pitchAt, soundDuration, type SynthSound } from "./sounds";
 
 /**
  * El "jurado": compara una toma de voz con la definicion del sonido de referencia.
@@ -138,7 +138,7 @@ export function analyzeTake(samples: Float32Array, rate: number): Frame[] {
 
 // ---------- Rasgos ----------
 
-export function featuresFromSound(sound: Sound): Features {
+export function featuresFromSound(sound: SynthSound): Features {
   const end = soundDuration(sound);
   const onsets = sound.notes.map((n) => n.t).sort((a, b) => a - b);
   const contour: (number | null)[] = [];

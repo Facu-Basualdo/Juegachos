@@ -192,7 +192,7 @@ export class RoomOverlay {
   // ── Briefing: firma + refs para actualizar el boton "Listo" y el contador
   // in-place (misma razon que la votacion: no reconstruir el DOM en cada sync).
   private briefSig: string | null = null;
-  private briefEls: { btn: HTMLButtonElement; count: HTMLDivElement } | null = null;
+  private briefEls: { btn: HTMLButtonElement; count: HTMLDivElement; start: HTMLButtonElement | null } | null = null;
 
   constructor() {
     ensureStyles();
@@ -483,10 +483,12 @@ export class RoomOverlay {
     totalPlayers: number;
     iAmReady: boolean;
     onReady: () => void;
+    /** Solo el capitan (host): "Empezar", habilitado con todos los presentes listos. */
+    host: { allReady: boolean; onStart: () => void } | null;
   }): void {
-    const sig = `${opts.round}:${opts.gameTitle}`;
+    const sig = `${opts.round}:${opts.gameTitle}:${opts.host ? "host" : ""}`;
     if (this.briefSig === sig && this.briefEls && this.root.style.display !== "none") {
-      this.updateBriefing(opts.readyCount, opts.totalPlayers, opts.iAmReady);
+      this.updateBriefing(opts.readyCount, opts.totalPlayers, opts.iAmReady, opts.host?.allReady ?? false);
       return;
     }
 
@@ -531,12 +533,22 @@ export class RoomOverlay {
     }, "primary");
     this.boxEl.append(btn);
 
+    let start: HTMLButtonElement | null = null;
+    if (opts.host) {
+      const onStart = opts.host.onStart;
+      start = this.makeButton("Empezar", () => {
+        if (start) start.disabled = true;
+        onStart();
+      });
+      this.boxEl.append(start);
+    }
+
     const count = document.createElement("div");
     count.className = "mg-room__ready-count";
     this.boxEl.append(count);
 
-    this.briefEls = { btn, count };
-    this.updateBriefing(opts.readyCount, opts.totalPlayers, opts.iAmReady);
+    this.briefEls = { btn, count, start };
+    this.updateBriefing(opts.readyCount, opts.totalPlayers, opts.iAmReady, opts.host?.allReady ?? false);
   }
 
   /** Marca el boton "Listo" como confirmado (optimista, antes de la DB). */
@@ -546,11 +558,18 @@ export class RoomOverlay {
     this.briefEls.btn.textContent = "Listo";
   }
 
-  /** Refresca boton + contador del briefing sin tocar el resto del DOM. */
-  private updateBriefing(readyCount: number, totalPlayers: number, iAmReady: boolean): void {
+  /** Refresca botones + contador del briefing sin tocar el resto del DOM. */
+  private updateBriefing(readyCount: number, totalPlayers: number, iAmReady: boolean, allReady: boolean): void {
     if (!this.briefEls) return;
     if (iAmReady) this.markReady();
-    this.briefEls.count.textContent = `${readyCount}/${totalPlayers} listos`;
+    const start = this.briefEls.start;
+    if (start) {
+      start.disabled = !allReady;
+      start.textContent = allReady ? "Empezar" : "Empezar (esperando que esten listos)";
+    }
+    this.briefEls.count.textContent = allReady && start
+      ? `${readyCount}/${totalPlayers} listos - arranca el capitan`
+      : `${readyCount}/${totalPlayers} listos`;
   }
 
   /** Votacion del proximo juego. */

@@ -1,6 +1,6 @@
 import { getAudio, resumeAudio } from "./audio";
 import type { EffectId } from "./ImitameTransport";
-import { soundDuration, type Note, type Sound, type Timbre } from "./sounds";
+import { soundDuration, type Note, type SynthSound, type Timbre } from "./sounds";
 
 /**
  * Sintesis de los sonidos de referencia y reproduccion de las tomas con los
@@ -156,14 +156,28 @@ function playNote(ctx: AudioContext, out: AudioNode, timbre: Timbre, note: Note,
   }
 }
 
-/** Reproduce un sonido de referencia. Devuelve su duracion en segundos. */
-export function playSound(sound: Sound): number {
+/** Reproduce un sonido de referencia sintetizado. Devuelve su duracion en segundos. */
+export function playSound(sound: SynthSound): number {
   const a = getAudio();
   if (!a) return 0;
   resumeAudio();
   const at = a.ctx.currentTime + 0.05;
   for (const note of sound.notes) playNote(a.ctx, a.bus, sound.timbre, note, at + note.t);
   return soundDuration(sound);
+}
+
+/** Reproduce un audio ya decodificado (un meme de referencia). Devuelve su duracion. */
+export function playBuffer(buffer: AudioBuffer, gain = 1): number {
+  const a = getAudio();
+  if (!a) return 0;
+  resumeAudio();
+  const src = a.ctx.createBufferSource();
+  const g = a.ctx.createGain();
+  g.gain.value = gain;
+  src.buffer = buffer;
+  src.connect(g).connect(a.bus);
+  src.start(a.ctx.currentTime + 0.05);
+  return buffer.duration;
 }
 
 // ---------- Tomas ----------

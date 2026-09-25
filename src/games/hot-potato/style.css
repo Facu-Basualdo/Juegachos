@@ -250,6 +250,20 @@ body {
   stroke: var(--muted);
 }
 
+.hp__risk {
+  font-size: clamp(0.68rem, 2.2vmin, 0.85rem);
+  font-weight: 700;
+  color: var(--cream);
+  background: var(--studio-deep);
+  border-radius: 999px;
+  padding: 2px 10px;
+  margin-bottom: 2px;
+}
+.hp__risk.is-hot {
+  color: var(--ink);
+  background: var(--mustard);
+}
+
 .hp__note {
   font-size: 0.8rem;
   font-weight: 700;

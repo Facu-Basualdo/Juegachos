@@ -48,6 +48,19 @@ const SOUND_IDS = [
   "palmas",
 ];
 
+/**
+ * Audios de la biblioteca de la comunidad (tabla `imitame_clips` de Supabase). El server
+ * no toca la DB: cada cliente lee los ids al conectar y los manda en el `mt:join`, y el
+ * server sortea entre la union. Viajan como `soundId = "clip:<uuid>"` y cada cliente baja
+ * el audio por su cuenta.
+ */
+const CLIP_PREFIX = "clip:";
+/** Con audios de la comunidad disponibles, que proporcion de las rondas es uno de ellos. */
+const CLIP_CHANCE = 0.5;
+/** Tope de ids por join (espeja el `INDEX_LIMIT` del cliente). */
+const MAX_CLIPS = 200;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Multiplicador y tipo de cada salida de la ruleta. Espeja `EFFECTS` del cliente. */
 const EFFECTS: Record<MtEffectId, { mult: number; kind: "bonus" | "sabotage" | "none" }> = {
   doble: { mult: 2, kind: "bonus" },
@@ -65,22 +78,32 @@ const EFFECT_IDS = Object.keys(EFFECTS) as MtEffectId[];
 const ROUNDS_PER_MATCH = 4;
 /** Espera desde el primer jugador para que se conecte el roster antes de arrancar. */
 const START_GRACE_MS = 8000;
-/** Cartel "Ronda N: el gato" (y el efecto que te dejo la ruleta). */
-const INTRO_MS = 3500;
-/** Suena la referencia. El sonido mas largo dura ~2.6s. */
-const LISTEN_MS = 3800;
-/** "3 / 2 / 1" antes de grabar. El cliente lo divide en pasos de 700ms. */
-const READY_MS = 2100;
+/*
+ * Ritmo. Todo va con aire a proposito: el chiste es escuchar la toma del otro y reirse,
+ * y con los tiempos apretados de la primera version no daba para nada.
+ */
+/** Cartel "Ronda N: el gato" (y el efecto que te dejo la ruleta). Mesa abierta. */
+const INTRO_MS = 5000;
+/** Suena la referencia (3s como mucho) y queda un respiro antes del 3/2/1. */
+const LISTEN_MS = 5000;
+/** "3 / 2 / 1" antes de grabar. **Espeja `READY_STEP_MS` x3 del cliente.** */
+const READY_MS = 3000;
 /** Ventana de grabacion. **Espeja `RECORD_MS` del cliente.** */
 const RECORD_MS = 4500;
 /** Tope para que lleguen las tomas despues de grabar (cierra antes si llegaron todas). */
 const UPLOAD_MAX_MS = 6000;
-/** Despues de que suena una toma: el tiempo de mostrar su puntaje. */
-const SLOT_PAD_MS = 2800;
+/** Antes de cada toma: el micro vuela a la cara del que le toca. **Espeja el cliente.** */
+const PRE_SLOT_MS = 1500;
+/** Despues de que suena una toma: el jurado va llenando las barras y suma los puntos. */
+const REVEAL_MS = 5500;
 /** Turno de alguien que no grabo nada. */
-const NO_TAKE_SLOT_MS = 1600;
+const NO_TAKE_SLOT_MS = 2500;
+/** Resumen de la ronda: cuanto sumo cada uno y la tabla. */
+const SUMMARY_MS = 7000;
 /** La ruleta gira ~4.2s en el cliente; el resto es para leer el resultado. */
-const WHEEL_MS = 7000;
+const WHEEL_MS = 8000;
+/** Tope de un mensaje de senalizacion del chat de voz (una SDP ronda 2-6 KB). */
+const RTC_MAX_BYTES = 20000;
 /** Tope de una toma (mu-law = 1 byte por muestra; ~7s a 11 kHz). Espeja el cliente. */
 const MAX_TAKE_BYTES = 80000;
 
@@ -111,6 +134,8 @@ class ImitameSim implements RoomSim {
   private round = 0;
   private soundId: string | null = null;
   private readonly usedSounds = new Set<string>();
+  /** ids de la biblioteca que anunciaron los clientes (union). */
+  private readonly clips = new Set<string>();
   private readonly totals = new Map<string, number>();
   /** Efectos que pesan sobre la ronda actual (salieron en la ruleta anterior). */
   private effects = new Map<string, MtEffectId>();
@@ -134,15 +159,21 @@ class ImitameSim implements RoomSim {
 
   // ---------- Ciclo de vida ----------
 
-  join(nickname: string, roster: string[]): void {
+  join(nickname: string, roster: string[], meta?: unknown): void {
     if (roster.length > 0) this.roster = roster;
+    const clips = meta && typeof meta === "object" ? (meta as { clips?: unknown }).clips : null;
+    if (Array.isArray(clips)) {
+      for (const id of clips.slice(0, MAX_CLIPS)) {
+        if (typeof id === "string" && UUID_RE.test(id)) this.clips.add(id);
+      }
+    }
     if (this.phase === "waiting") {
       if (this.startTimer === null) this.startTimer = setTimeout(() => this.start(), START_GRACE_MS);
       if (this.roster.length > 0 && this.roster.every((n) => this.room.isConnected(n))) this.start();
     }
     this.broadcastState();
     // Reconecta en plena reproduccion: necesita las tomas para escucharlas.
-    if (this.phase === "playback" || this.phase === "wheel") this.sendTakes(nickname);
+    if (this.phase === "playback" || this.phase === "summary" || this.phase === "wheel") this.sendTakes(nickname);
     if (this.phase === "over") this.room.emitTo(nickname, "mt:gameover", this.gameoverPayload());
   }
 
@@ -155,6 +186,20 @@ class ImitameSim implements RoomSim {
   message(nickname: string, event: string, payload: unknown): void {
     if (!this.seats.includes(nickname)) return;
     if (event === "mt:take") this.onTake(nickname, payload);
+    else if (event === "mt:rtc") this.onRtc(nickname, payload);
+  }
+
+  /**
+   * Senalizacion del chat de voz (WebRTC): el server solo la reenvia al destinatario, con
+   * el remitente estampado (nadie se hace pasar por otro). No mira el contenido.
+   */
+  private onRtc(from: string, payload: unknown): void {
+    if (!payload || typeof payload !== "object") return;
+    const p = payload as { to?: unknown; data?: unknown };
+    if (typeof p.to !== "string" || !this.seats.includes(p.to) || p.to === from) return;
+    const size = JSON.stringify(p.data ?? null).length;
+    if (size > RTC_MAX_BYTES) return;
+    this.room.emitTo(p.to, "mt:rtc", { from, data: p.data });
   }
 
   dispose(): void {
@@ -275,7 +320,7 @@ class ImitameSim implements RoomSim {
       const effect = this.effects.get(nick);
       let dur = (take.audio.length / take.rate) * 1000;
       if (effect === "helio") dur /= 1.5;
-      ms = Math.min(9000, dur + SLOT_PAD_MS);
+      ms = PRE_SLOT_MS + Math.min(4500, dur) + REVEAL_MS;
     }
     this.enter("playback", ms, () => this.nextSlot());
   }
@@ -289,8 +334,10 @@ class ImitameSim implements RoomSim {
       this.playSlot();
       return;
     }
-    if (this.round + 1 >= ROUNDS_PER_MATCH) this.finish();
-    else this.spinWheel();
+    this.enter("summary", SUMMARY_MS, () => {
+      if (this.round + 1 >= ROUNDS_PER_MATCH) this.finish();
+      else this.spinWheel();
+    });
   }
 
   /**
@@ -333,8 +380,11 @@ class ImitameSim implements RoomSim {
   }
 
   private pickSound(): string {
-    const pool = SOUND_IDS.filter((id) => !this.usedSounds.has(id));
-    const from = pool.length > 0 ? pool : SOUND_IDS;
+    const community = [...this.clips].map((id) => CLIP_PREFIX + id);
+    const useClip = community.length > 0 && Math.random() < CLIP_CHANCE;
+    const ids = useClip ? community : SOUND_IDS;
+    const pool = ids.filter((id) => !this.usedSounds.has(id));
+    const from = pool.length > 0 ? pool : ids;
     return from[Math.floor(Math.random() * from.length)];
   }
 
@@ -357,7 +407,7 @@ class ImitameSim implements RoomSim {
         .map((n) => this.results.get(n))
         .filter((r): r is MtResult => !!r);
     }
-    if (this.phase === "wheel" || this.phase === "over") return [...this.results.values()];
+    if (this.phase === "summary" || this.phase === "wheel" || this.phase === "over") return [...this.results.values()];
     return null;
   }
 
