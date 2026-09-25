@@ -218,8 +218,15 @@ export class Game {
     const place = mine?.place ?? result.ranking.length;
 
     // Puntaje placement-based (mayor = mejor), como el resto de los juegos de sala con
-    // server. El RoomOverlay toma la pantalla con el resultado; no va al ranking global.
-    if (this.room) this.room.reportScore(Math.max(0, result.ranking.length - place));
+    // server. El RoomOverlay toma la pantalla con el resultado.
+    // El puesto va aparte al ranking global, que en este juego cuenta victorias
+    // (el que no figura en el ranking, p.ej. entro tarde, no suma).
+    if (this.room) {
+      this.room.reportScore(
+        Math.max(0, result.ranking.length - place),
+        mine ? { place, players: result.ranking.length } : { ranked: false },
+      );
+    }
   }
 
   /** Puntaje en vivo para el parcial (si el jugador se va antes del gameover): el

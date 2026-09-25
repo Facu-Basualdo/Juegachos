@@ -62,7 +62,8 @@ mas es mejor:
   El puntaje es el total acumulado y va al ranking global via `hud.showRanking`.
 - **Sala:** una sola ronda; el puntaje se reparte por **cercania** al resultado
   (`max(0, 1000 - error * ROOM_PENALTY)`, exacto = 1000). El modo sala lo reporta
-  con `room.reportScore` (no va al ranking global).
+  con `room.reportScore` y **no** va al ranking global: es otro puntaje que el del
+  solitario, asi que `scoring` declara `roomRanked: false`.
 
 **Secuencia compartida en sala.** Para que la cercania sea justa, todos los
 jugadores ven la MISMA secuencia: se siembra el PRNG con

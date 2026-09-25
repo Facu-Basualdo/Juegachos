@@ -644,7 +644,7 @@ export class Game {
     if (this.room) {
       // La carrera de la ronda termino: un reload ya no debe retomarla.
       clearRoomRun(this.room, "car-race");
-      this.room.reportScore(ms);
+      this.room.reportScore(ms, { variant: this.track.def.id });
       return;
     }
 

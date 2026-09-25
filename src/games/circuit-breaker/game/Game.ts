@@ -608,7 +608,7 @@ export class Game {
     this.hud.showWin(this.elapsed, this.crashes, this.formatScore(this.best), isNewBest);
 
     if (this.room) {
-      this.room.reportScore(encoded);
+      this.room.reportScore(encoded, { variant: "general" });
       return;
     }
 

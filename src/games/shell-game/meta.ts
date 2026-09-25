@@ -16,6 +16,8 @@ export const meta: GameEntry = {
 };
 
 export const scoring: GameScoring = {
+  // Las partidas de sala no cuentan para el ranking global: en sala reporta otro puntaje que el nivel alcanzado del ranking solo.
+  roomRanked: false,
   direction: "higher",
   format: (n) => `Nivel ${n}`,
 };

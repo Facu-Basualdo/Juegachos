@@ -216,5 +216,4 @@ en `server/src/places.ts` (toponimos). El diccionario se arma al arrancar el pro
   decoupling del repo). Mantenerlos en sync a mano.
 - El anillo del cliente es solo visual: la verdad la tiene el server (el `setTimeout` del
   deadline). Si hay drift de reloj, el corte real lo decide el server.
-- El puntaje de sala es placement-based y **no** va al ranking global (como el resto de los
-  juegos de sala).
+- El puntaje de sala es placement-based, asi que **no** es una marca: el ranking global de este juego cuenta **victorias en sala** (`scoring.ranking: "wins"` en `meta.ts`; el game-over pasa `{ place, players }` a `reportScore`, y el que no figura en el ranking del server reporta `{ ranked: false }`). Ver "Global rankings" en el CLAUDE.md raiz.

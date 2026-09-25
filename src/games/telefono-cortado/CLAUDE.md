@@ -31,7 +31,7 @@ devtools y adivinar no valdria nada.
   `ranking.length - place`, con empates compartidos (dos primeros reportan lo mismo). El
   parcial (`getScore`, si alguien se va antes del gameover) usa **la misma escala**: el
   placement segun los totales del ultimo estado, no el total crudo (un parcial de 250
-  le ganaria a un final de 3). No va al ranking global.
+  le ganaria a un final de 3). El ranking global cuenta victorias en sala (`ranking: "wins"` en `meta.ts`): el puesto viaja aparte en `reportScore(score, { place, players })`.
 - **Game server** (`/telefonocortado`): frases, asignacion de cadenas, dibujos,
   validacion de las adivinanzas, puntaje y las transiciones de fase (todas con
   `setTimeout` propio, no dependen del host del room).
@@ -252,4 +252,4 @@ Una pestaña por jugador, todas con el mismo `code` y `roster`.
   con `textContent` se leia "Tel&eacute;fono" literal en pantalla.
 - La barra del reloj **no** tiene `transition` de ancho: ya se anima cuadro a cuadro,
   y la transicion de 1s la dejaba un segundo atrasada.
-- Puntaje de sala placement-based y **no** va al ranking global (como el resto de las salas).
+- El puntaje de sala es placement-based, asi que **no** es una marca: el ranking global de este juego cuenta **victorias en sala** (`scoring.ranking: "wins"` en `meta.ts`; el game-over pasa `{ place, players }` a `reportScore`, y el que no figura en el ranking del server — entro tarde — reporta `{ ranked: false }`). Ver "Global rankings" en el CLAUDE.md raiz.

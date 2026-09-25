@@ -25,7 +25,7 @@ Basta existe por el server. Aparece en la landing y en el picker/votacion de sal
 - **Supabase / RoomMode**: lobby, briefing, marcador acumulado, rejoin, deadline de
   ronda (corte duro). `initRoomMode("basta", {...})`; al terminar `room.reportScore(...)`
   en vez de `hud.showRanking(...)`. Puntaje de la ronda **placement-based** (mayor =
-  mejor): `ranking.length - place`. No va al ranking global.
+  mejor): `ranking.length - place`. El ranking global cuenta victorias en sala (`ranking: "wins"` en `meta.ts`): el puesto viaja aparte en `reportScore(score, { place, players })`.
 - **Game server** (`/basta`): letra, respuestas de cada jugador, votos, puntaje y las
   transiciones de fase (todas con `setTimeout` propio, no dependen del host del room).
 
@@ -171,4 +171,4 @@ no pisar lo que el jugador este tipeando en ese instante.
   tachado contaba solo: la mesa lee y discute la grilla entera antes de confirmar). Si se quiere
   permitir corregir, hay que sacar el `submittedVotes.has(voter)` del `onVote` **y** decidir que
   pasa con el cierre anticipado (hoy cierra apenas confirman todos).
-- Puntaje de sala placement-based y **no** va al ranking global (como el resto de las salas).
+- El puntaje de sala es placement-based, asi que **no** es una marca: el ranking global de este juego cuenta **victorias en sala** (`scoring.ranking: "wins"` en `meta.ts`; el game-over pasa `{ place, players }` a `reportScore`, y el que no figura en el ranking del server — entro tarde — reporta `{ ranked: false }`). Ver "Global rankings" en el CLAUDE.md raiz.

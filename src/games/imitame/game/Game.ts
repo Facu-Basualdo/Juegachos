@@ -600,8 +600,15 @@ export class Game {
     const place = mine?.place ?? result.ranking.length;
     if (place === 1) SoundEffects.playWin();
     else SoundEffects.playLose();
-    // Puntaje placement-based (mayor = mejor), como Basta. No va al ranking global.
-    if (this.room) this.room.reportScore(Math.max(0, result.ranking.length - place));
+    // Puntaje placement-based (mayor = mejor), como Basta.
+    // El puesto va aparte al ranking global, que en este juego cuenta victorias
+    // (el que no figura en el ranking, p.ej. entro tarde, no suma).
+    if (this.room) {
+      this.room.reportScore(
+        Math.max(0, result.ranking.length - place),
+        mine ? { place, players: result.ranking.length } : { ranked: false },
+      );
+    }
   }
 
   private liveScore(): number {

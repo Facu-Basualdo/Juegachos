@@ -70,7 +70,7 @@ largar.
   a ronda (116 BPM + 2.5 por ronda, hasta 150).
 - **La posicion de cada asiento se siembra con la largada**, como en Derrumbe.
 - **El HUD arranca en `top: 38px`** por la barra de la sala, y el `Hud` no monta el
-  `LeaderboardPanel` (en sala el puntaje nunca va al ranking global).
+  `LeaderboardPanel`: en sala solo se reporta a la ronda, pero la partida **terminada** igual entra al ranking global: la registra `RoomMode` (ver "Global rankings" en el CLAUDE.md raiz), y se ve desde el boton "Ranking" de la card en la landing.
 
 ## Probar sin Supabase (`devRoom.ts`)
 

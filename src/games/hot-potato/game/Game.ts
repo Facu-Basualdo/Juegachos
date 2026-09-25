@@ -443,7 +443,14 @@ export class Game {
     else SoundEffects.playLose();
 
     // Puntaje por puesto (mayor = mejor): sobrevivir mas suma mas.
-    if (this.room) this.room.reportScore(Math.max(0, result.ranking.length - place));
+    // El puesto va aparte al ranking global, que en este juego cuenta victorias
+    // (el que no figura en el ranking, p.ej. entro tarde, no suma).
+    if (this.room) {
+      this.room.reportScore(
+        Math.max(0, result.ranking.length - place),
+        mine ? { place, players: result.ranking.length } : { ranked: false },
+      );
+    }
   }
 
   /** Parcial para el corte por tiempo de la sala (no hay: la partida siempre

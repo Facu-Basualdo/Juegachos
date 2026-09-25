@@ -1,8 +1,8 @@
-import type { Direction, GameScoring } from "./scoring-core";
+import type { Direction, GameScoring, RankingMetric } from "./scoring-core";
 
 // Re-exporta el modulo hoja para que los importadores existentes (Game.ts,
 // Hud.ts, etc.) sigan usando `.../shared/scoring` sin cambios.
-export type { Direction, GameScoring } from "./scoring-core";
+export type { Direction, GameScoring, RankingMetric } from "./scoring-core";
 export {
   encodeTimeMoves,
   formatTimeMoves,
@@ -50,4 +50,14 @@ export function formatScore(gameId: string, score: number, variant?: string): st
   const s = getScoring(gameId);
   const fmt = (variant && s.variantFormat?.[variant]) ?? s.format;
   return fmt ? fmt(score) : String(score);
+}
+
+/** Que mide el ranking global del juego (ver `GameScoring.ranking`). */
+export function getRankingMetric(gameId: string): RankingMetric {
+  return getScoring(gameId).ranking ?? "best";
+}
+
+/** Si las partidas terminadas en sala cuentan para su ranking global. */
+export function isRoomRanked(gameId: string): boolean {
+  return getScoring(gameId).roomRanked ?? true;
 }

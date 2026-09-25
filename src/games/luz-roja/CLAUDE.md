@@ -70,8 +70,7 @@ despues de largar.
 - **Resuelto (eliminado o pasado), se sigue mirando la cancha** desde atras de la
   largada: `onReportedWaiting` devuelve true. Los caidos quedan tendidos con su
   mancha, que es parte de la puesta en escena.
-- **El `Hud` no monta el `LeaderboardPanel`:** en sala el puntaje nunca va al
-  ranking global.
+- **El `Hud` no monta el `LeaderboardPanel`:** en sala solo se reporta a la ronda, pero la partida **terminada** igual entra al ranking global: la registra `RoomMode` (ver "Global rankings" en el CLAUDE.md raiz), y se ve desde el boton "Ranking" de la card en la landing.
 - **El HUD arranca en `top: 38px`** para no quedar debajo de la barra de la sala.
 
 ## Probar sin Supabase (`devRoom.ts`)

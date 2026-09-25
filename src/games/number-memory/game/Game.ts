@@ -241,7 +241,7 @@ export class Game {
     this.state = "gameOver";
     SoundEffects.playFinish();
     this.hud.showGameOver(this.mode, this.score, this.bests, this.improvedThisRun);
-    if (this.room) this.room.reportScore(this.score);
+    if (this.room) this.room.reportScore(this.score, { variant: this.mode });
     else this.hud.showRanking("number-memory", this.score, this.mode);
   }
 

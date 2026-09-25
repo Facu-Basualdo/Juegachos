@@ -34,6 +34,6 @@ Cableado estandar ademas del contrato minimo: usa el contexto extendido de `Room
 
 ## Gotchas
 
-- El modo sala reporta pares (`direction: "higher"`, usado por `rankRound`), pero el ranking solo se ordena por tiempo (menor mejor). Se resuelve con una **variante** "solo" que sobrescribe la direccion a `"lower"` via `variantDirection` en el `scoring` declarado en su `meta.ts`, y codifica tiempo + movimientos en un puntaje con `encodeTimeMoves` (de `scoring-core.ts`, compartido con sliding-puzzle). El puntaje base del juego nunca recibe envios del modo solo.
+- El modo sala reporta pares (`direction: "higher"`, usado por `rankRound`), pero el ranking solo se ordena por tiempo (menor mejor). Se resuelve con una **variante** "solo" que sobrescribe la direccion a `"lower"` via `variantDirection` en el `scoring` declarado en su `meta.ts`, y codifica tiempo + movimientos en un puntaje con `encodeTimeMoves` (de `scoring-core.ts`, compartido con sliding-puzzle). El puntaje base del juego nunca recibe envios del modo solo. Los pares de sala tampoco entran al ranking global: `scoring` declara `roomRanked: false` (y aunque no lo hiciera, `RoomMode` no registra una partida de un juego con variantes que no diga a que tablero va).
 - `renderCards` es declarativo (clases segun estado); el "mostrar dos cartas que no eran par" se logra con la lista temporal `holdUp` en el caller, no con estado en el Hud.
 - El tablero se dimensiona con `--cols` / `--rows` en CSS para que 6x6 no desborde en pantallas bajas.
