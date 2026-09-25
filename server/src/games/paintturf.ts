@@ -65,7 +65,7 @@ const START_BLOB_RADIUS = 46;
 // ---- Reglas / timing ----
 const MAX_SEATS = 8;
 /** Duracion de la partida, ya con todos jugando. */
-const MATCH_MS = 90_000;
+const MATCH_MS = 45_000;
 /** Congelado inicial, para que coincida con el countdown 3/2/1/YA del cliente. */
 const PREROLL_MS = 3000;
 /** Espera desde el primer join a que llegue el resto del roster antes de largar. */

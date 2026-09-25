@@ -1,7 +1,7 @@
 # Manchon (`paint-turf`)
 
 Captura de territorio para salas: cada jugador es un pincel que pinta las celdas
-por las que pasa y le roba las que ya eran de otro. A los 90 s gana el que se
+por las que pasa y le roba las que ya eran de otro. A los 45 s gana el que se
 quedo con mas tablero. **Solo se juega en salas** y **necesita el game server**
 (como Bomba Palabra, Basta o Impostor).
 
@@ -89,7 +89,7 @@ dos lados.**
 | `SPLAT_COOLDOWN_MS` | 5000 | |
 | `STUN_MS` / `STUN_SPEED_FACTOR` | 1100 / 0.4 | aturdido no pinta y va lento |
 | `START_BLOB_RADIUS` | 46 | ~12 celdas (1.5%) para no largar en blanco |
-| `MATCH_MS` / `PREROLL_MS` | 90000 / 3000 | el preroll cubre el 3/2/1/YA |
+| `MATCH_MS` / `PREROLL_MS` | 45000 / 3000 | el preroll cubre el 3/2/1/YA (eran 90 s; se bajo a 45 porque se hacia largo) |
 | `TICK_MS` / `BROADCAST_MS` | 20 / 40 | 50 Hz de simulacion, 25 Hz de red |
 | `INPUT_INTERVAL` (cliente) | 33 ms | 30 Hz de subida; los giros salen en el acto (`INPUT_TURN_EPS`) |
 | `INPUT_BUFFER_MS` (server) | 30 ms | buffer de jitter de los inputs, ver abajo |
@@ -212,8 +212,8 @@ necesita Supabase.
   No es cosmetico: sin puntaje de este jugador la ronda queda colgada para toda la
   sala, porque el cierre anticipado solo cubre a los **desconectados de la sala**,
   no al que esta mirando un cartel de error.
-- **`roomTimeLimitSec: 120` es red de seguridad, no la duracion.** El server
-  termina la partida solo a los 90 s pase lo que pase (como Basta o Impostor), pero
+- **`roomTimeLimitSec: 75` es red de seguridad, no la duracion.** El server
+  termina la partida solo a los 45 s pase lo que pase (como Basta o Impostor), pero
   si se cae **despues** de que arranco, el cliente no ve nunca el `over`. El
   numero se muestra en el briefing, asi que tampoco conviene inflarlo.
 - **En vertical el tablero se dibuja ROTADO 90 grados** (`rotated` en `resize()`):
@@ -225,7 +225,7 @@ necesita Supabase.
 - **El HUD arranca en `top: 38px`** para no quedar debajo de la barra de la sala
   (`RoomOverlay`), que va arriba de todo y tapaba el reloj de la partida. El juego
   es solo de sala, asi que esa barra siempre esta.
-- **Hay dos relojes en pantalla y son distintos**: el de la partida (90 s, el
+- **Hay dos relojes en pantalla y son distintos**: el de la partida (45 s, el
   grande) y el de la sala (el tope de `roomTimeLimitSec`, en la barra de arriba).
 - **El `Hud` no monta el `LeaderboardPanel`.** Es solo de sala: en sala solo se reporta a la ronda, pero la partida **terminada** igual entra al ranking global: la registra `RoomMode` (ver "Global rankings" en el CLAUDE.md raiz), y se ve desde el boton "Ranking" de la card en la landing. La caida de conexion reporta `reportScore(0, { ranked: false })` para no meter un cero falso en el ranking.
 - **El Renderer mantiene su propia copia de duenios** (`setOwners`), a la que el
