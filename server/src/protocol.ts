@@ -511,7 +511,8 @@ export interface ImServerToClient {
  * Telefono descompuesto con dibujos. Cada jugador escribe una frase secreta; despues
  * le llega la frase de OTRO y la dibuja; despues le llega el dibujo de un TERCERO y
  * tiene que adivinar la frase original. Al final se revela cada cadena completa
- * (frase -> dibujo -> adivinanza).
+ * (frase -> dibujo -> adivinanza). Con 1-2 jugadores no hay fase de escritura: las
+ * frases salen de un banco del server (si no, el que adivina seria el que la escribio).
  *
  * Como Basta e Impostor, el server arbitra todo el flujo (fases + deadlines con
  * setTimeout propio) y NO usa el diccionario. Lo que le toca a cada jugador (la frase
@@ -565,6 +566,14 @@ export interface TcYou {
   submitted: string | null;
   /** Ya acertaste la frase (solo en guessing). */
   solved: boolean;
+  /**
+   * Intentos de adivinanza hechos (solo en guessing). Es lo que le avisa al cliente
+   * que el ultimo fallo: comparar `submitted` no alcanza, porque repetir el mismo
+   * intento no lo cambiaria.
+   */
+  attempts: number;
+  /** El ultimo intento fallido estuvo cerca (a pocas letras de la frase). */
+  close: boolean;
 }
 
 /** Una cadena completa, revelada al final. Se manda de a una (ver `tc:chain`). */
@@ -594,7 +603,8 @@ export interface TcGameover {
 
 /** Cliente -> Server. */
 export interface TcClientToServer {
-  "tc:join": (msg: { code: string; nickname: string; roster: string[] }) => void;
+  /** `round` = ronda de la sala: el estado del server es de esa ronda y de ninguna otra. */
+  "tc:join": (msg: { code: string; nickname: string; roster: string[]; round: number }) => void;
   /** La frase secreta propia (solo en writing). */
   "tc:phrase": (msg: { text: string }) => void;
   /** El dibujo terminado, dataURL (solo en drawing). */

@@ -6,12 +6,12 @@ export const meta: GameEntry = {
   description: "Escribi una frase, dibuja la de otro y adivina que quiso decir un tercero.",
   category: "Party",
   path: "/games/telefono-cortado/",
-  added: "2026-07-27",
+  // Volvio al roster (arreglado) en esta fecha; habia entrado el 2026-07-27 y se retiro.
+  added: "2026-09-25",
   mobile: true,
 
   order: 950,
-  controls: "Mouse o dedo para dibujar, teclado para escribir y adivinar.",
-  hidden: true,
+  controls: "Mouse o dedo para dibujar (con deshacer), teclado para escribir y adivinar.",
 };
 
 // Sin `scoring`: el puntaje de sala es placement-based, o sea el default
