@@ -299,8 +299,12 @@ function buildBrowsePanel(
       const meta = document.createElement("span");
       meta.className = "browse__meta";
       const games = room.settings.playlist
-        ? `${room.settings.playlist.length} juegos elegidos`
-        : `${room.settings.totalRounds} juegos a votar`;
+        ? room.settings.playlist.length === 1
+          ? "1 juego elegido"
+          : `${room.settings.playlist.length} juegos elegidos`
+        : room.settings.totalRounds === 1
+          ? "1 juego a votar"
+          : `${room.settings.totalRounds} juegos a votar`;
       meta.textContent = `${room.players}/${MAX_ROOM_PLAYERS} jugadores · ${games}`;
       info.append(name, meta);
 
@@ -469,7 +473,8 @@ function buildSettingsForm(
       btn.classList.toggle("is-picked", picked);
       // Al llegar al tope no se pueden agregar mas; los ya elegidos siguen
       // clickeables para poder sacarlos.
-      btn.classList.toggle("is-disabled", !picked && atCap);
+      // Con un solo juego no se bloquea nada: tocar otro reemplaza la eleccion.
+      btn.classList.toggle("is-disabled", !picked && atCap && totalRounds > 1);
       const badge = btn.querySelector<HTMLElement>(".playlist__order")!;
       badge.style.display = picked ? "" : "none";
       badge.textContent = String(idx + 1);
@@ -507,6 +512,10 @@ function buildSettingsForm(
       const idx = playlist.indexOf(game.id);
       if (idx >= 0) {
         playlist.splice(idx, 1);
+      } else if (totalRounds === 1) {
+        // Sala de un solo juego: la grilla se comporta como un selector unico,
+        // tocar otro juego reemplaza al elegido en vez de quedar bloqueado.
+        playlist.splice(0, playlist.length, game.id);
       } else {
         // No permitir elegir mas juegos que la cantidad marcada arriba.
         if (playlist.length >= totalRounds) return;
@@ -523,7 +532,7 @@ function buildSettingsForm(
   const playlistHint = document.createElement("p");
   playlistHint.className = "hint";
   playlistHint.textContent =
-    "Elegi en orden la misma cantidad de juegos que marcaste arriba. Si no elegis ninguno, despues de cada juego se vota el siguiente entre 5 al azar (puede repetirse alguno ya jugado).";
+    "Elegi en orden la misma cantidad de juegos que marcaste arriba. Si no elegis ninguno, despues de cada juego se vota el siguiente entre 5 al azar (puede repetirse alguno ya jugado). Con 1 juego, tocar otro cambia la eleccion.";
 
   wrap.append(
     roundsLabel,
@@ -1027,7 +1036,10 @@ function renderLobby(code: string, player: string): void {
       const settings = isHost && hostSettings ? hostSettings : state.room.settings;
       // O playlist completa o vacia (igual que al crear).
       if (settings.playlist && settings.playlist.length !== settings.totalRounds) {
-        settingsError.textContent = `Elegí ${settings.totalRounds} juegos o ninguno.`;
+        settingsError.textContent =
+          settings.totalRounds === 1
+            ? "Elegí 1 juego o ninguno."
+            : `Elegí ${settings.totalRounds} juegos o ninguno.`;
         return;
       }
       starting = true;

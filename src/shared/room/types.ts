@@ -102,9 +102,10 @@ export const DEFAULT_TOTAL_ROUNDS = 5;
  * Cuantos juegos dura una partida de sala. El tope alto es holgado a proposito:
  * la playlist no puede pasarse del roster (la grilla se bloquea en el tope), y
  * sin playlist `pickVoteOptions` sortea con repeticion, asi que ninguna ronda
- * puede quedarse sin candidatos.
+ * puede quedarse sin candidatos. El 1 es la sala de un solo juego: se elige (o
+ * se vota) ese juego, se juega una ronda y sale el tablero final.
  */
-export const TOTAL_ROUNDS_OPTIONS = [3, 5, 7, 10, 15, 20] as const;
+export const TOTAL_ROUNDS_OPTIONS = [1, 3, 5, 7, 10, 15, 20] as const;
 
 /** Tope de jugadores por sala. Se rechaza a los jugadores nuevos al llegar a
  * este numero; los ya registrados siempre pueden reingresar (rejoin). */

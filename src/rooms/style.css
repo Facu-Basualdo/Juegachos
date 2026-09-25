@@ -124,15 +124,16 @@ a {
 
 /* Lobby del host: aprovecha casi todo el ancho de pantalla para las dos columnas. */
 .rooms--wide {
-  max-width: min(1400px, 95vw);
+  max-width: min(1600px, 96vw);
 }
 
-/* Lobby en dos columnas: ajustes (izquierda, mas ancha para la grilla de juegos)
-   + codigo/jugadores (derecha). */
+/* Lobby en dos columnas: ajustes (izquierda, se queda con todo el ancho que
+   sobre para la grilla de juegos) + codigo/jugadores (derecha, angosta y fija:
+   la lista de 8 jugadores no necesita mas). */
 .lobby__columns {
   display: grid;
-  grid-template-columns: 1.9fr 1fr;
-  gap: 28px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  gap: 24px;
   align-items: start;
 }
 
@@ -141,6 +142,9 @@ a {
   flex-direction: column;
   gap: 20px;
   min-width: 0;
+  /* El codigo de sala se dimensiona contra el ancho de la columna (cqi), no
+     contra el de la pantalla: la columna derecha del host es angosta. */
+  container-type: inline-size;
 }
 
 /* Vista de invitado (o pantallas angostas): una sola columna. */
@@ -299,19 +303,20 @@ a {
 }
 
 /* ---------- Playlist (mini portadas) ---------- */
+/* Tarjetas compactas: ~6 columnas en un monitor comun, 3 en un celular. */
 .playlist {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 12px;
 }
 
 .playlist__item {
   --game-accent: #00f0ff;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 10px;
-  border-radius: 18px;
+  gap: 7px;
+  padding: 7px;
+  border-radius: 14px;
   border: 2px solid rgba(17, 17, 17, 0.2);
   background: #ffffff;
   color: var(--ink);
@@ -341,7 +346,7 @@ a {
 .playlist__cover {
   position: relative;
   aspect-ratio: 1 / 1;
-  border-radius: 12px;
+  border-radius: 9px;
   overflow: hidden;
   background:
     radial-gradient(120% 100% at 80% 15%, color-mix(in srgb, var(--game-accent) 75%, #ffffff), transparent 60%),
@@ -365,7 +370,7 @@ a {
 }
 
 .playlist__name {
-  font-size: 14px;
+  font-size: 12.5px;
   font-weight: 700;
   letter-spacing: -0.2px;
   text-align: center;
@@ -380,8 +385,8 @@ a {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  min-width: 46px;
-  height: 46px;
+  min-width: 38px;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -389,7 +394,7 @@ a {
   border: 3px solid var(--card);
   background: var(--ink);
   color: var(--card);
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 800;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
 }
@@ -429,6 +434,13 @@ a {
   margin-bottom: 14px;
 }
 
+@media (max-width: 480px) {
+  .playlist {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 8px;
+  }
+}
+
 /* ---------- Hint / error ---------- */
 .hint {
   font-size: 12px;
@@ -448,9 +460,10 @@ a {
 
 /* ---------- Lobby ---------- */
 .lobby__code {
-  font-size: clamp(40px, 10vw, 58px);
+  font-size: clamp(26px, 12cqi, 58px);
   font-weight: 900;
-  letter-spacing: 10px;
+  letter-spacing: clamp(4px, 2.5cqi, 10px);
+  white-space: nowrap;
   text-align: center;
   color: var(--ink);
   padding: 18px 10px;
