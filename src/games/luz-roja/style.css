@@ -1,0 +1,474 @@
+/*
+ * Luz Roja, Luz Verde. Ver DESIGN.md ("Patio Pintado"): el HUD habla con la voz
+ * del galpon (reloj digital rojo, cartel de la luz, regla de avance), paneles
+ * oscuros de bordes rectos y letra en negrita. Nada tapa a la muñeca.
+ */
+
+:root {
+  color-scheme: dark;
+  --sky: #8fcaf0;
+  --panel: rgba(12, 12, 14, 0.62);
+  --text: #ffffff;
+  --shadow: #2a2a2a;
+  --red: #e8232d;
+  --green: #1fa86a;
+  --teal: #1f8a7a;
+  --pink: #e0457b;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--sky);
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  color: var(--text);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+.game-canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.back-link {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 40;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 2px 2px 0 var(--shadow);
+  text-decoration: none;
+}
+
+.lr {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  font-weight: 700;
+  text-shadow: 2px 2px 0 var(--shadow);
+}
+
+/* ---------- Arriba: la luz, la cancion y el reloj ---------- */
+
+.lr__top {
+  position: absolute;
+  /* Debajo de la barra de la sala (RoomOverlay). */
+  top: 38px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.lr--playing .lr__top {
+  display: flex;
+}
+
+.lr__light {
+  min-width: 250px;
+  padding: 8px 18px 7px;
+  background: var(--panel);
+  border-bottom: 5px solid rgba(255, 255, 255, 0.25);
+  text-align: center;
+  transition: background 0.08s;
+}
+
+.lr__light--green {
+  background: rgba(20, 120, 76, 0.85);
+  border-bottom-color: var(--green);
+}
+
+.lr__light--red {
+  background: rgba(150, 18, 24, 0.85);
+  border-bottom-color: var(--red);
+}
+
+/* Los ojos ya estan prendidos: el cartel late. */
+.lr__light--watch {
+  animation: lr-watch 0.5s steps(2, end) infinite;
+}
+
+@keyframes lr-watch {
+  50% { background: rgba(232, 35, 45, 0.95); }
+}
+
+.lr__light-text {
+  font-size: 28px;
+  letter-spacing: 4px;
+}
+
+.lr__chant {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+
+.lr__chant span {
+  opacity: 0.3;
+  transition: opacity 0.05s;
+}
+
+.lr__chant span.is-sung {
+  opacity: 1;
+}
+
+.lr__side {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: var(--panel);
+}
+
+.lr__clock {
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 30px;
+  letter-spacing: 2px;
+  color: #ff3b3b;
+  text-shadow: 0 0 8px rgba(255, 40, 40, 0.6);
+  font-variant-numeric: tabular-nums;
+}
+
+.lr__clock--urgent {
+  animation: lr-blink 0.6s steps(2, end) infinite;
+}
+
+@keyframes lr-blink {
+  50% { opacity: 0.35; }
+}
+
+.lr__count {
+  font-size: 11px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+/* ---------- Regla de avance ---------- */
+
+.lr__track {
+  position: absolute;
+  right: 22px;
+  top: 150px;
+  bottom: 60px;
+  width: 8px;
+  display: none;
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: 2px 2px 0 var(--shadow);
+}
+
+.lr--playing .lr__track {
+  display: block;
+}
+
+.lr__track-goal {
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 5px;
+  background: var(--red);
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+.lr__dot {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, 50%);
+  padding: 1px 4px;
+  font-size: 10px;
+  color: #fff;
+  box-shadow: 2px 2px 0 var(--shadow);
+  transition: bottom 0.15s linear;
+}
+
+.lr__dot--mine {
+  outline: 2px solid #fff;
+  z-index: 2;
+}
+
+.lr__dot--out {
+  background: #555 !important;
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.lr__dot--fin {
+  outline: 2px solid #f2c230;
+}
+
+/* ---------- Avisos ---------- */
+
+.lr__feed {
+  position: absolute;
+  left: 12px;
+  top: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lr__feed-item {
+  padding: 4px 10px;
+  background: var(--panel);
+  font-size: 14px;
+  transition: opacity 0.4s;
+}
+
+.lr__feed-item.is-gone {
+  opacity: 0;
+}
+
+.lr__feed-out {
+  color: #ff6b6b;
+}
+
+.lr__feed-fin {
+  color: #7be0a8;
+}
+
+.lr__banner {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translateX(-50%);
+  padding: 12px 28px;
+  background: var(--panel);
+  text-align: center;
+  max-width: 92vw;
+}
+
+.lr__banner-title {
+  font-size: 38px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+.lr__banner--bad .lr__banner-title {
+  color: #ff5a5a;
+}
+
+.lr__banner--good .lr__banner-title {
+  color: #7be0a8;
+}
+
+.lr__banner-sub {
+  margin-top: 4px;
+  font-size: 15px;
+}
+
+/* ---------- Joystick ---------- */
+
+.lr-stick {
+  position: absolute;
+  left: -52px;
+  top: -52px;
+  width: 104px;
+  height: 104px;
+  border: 3px solid rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.lr-stick__knob {
+  position: absolute;
+  left: 32px;
+  top: 32px;
+  width: 34px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+/* ---------- Countdown ---------- */
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 25;
+  font-size: 150px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  color: #ffffff;
+  text-shadow: 8px 8px 0 var(--shadow);
+  opacity: 0;
+}
+
+.countdown.is-shown {
+  animation: countdown-pop 0.75s ease-out;
+}
+
+@keyframes countdown-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  20% { opacity: 1; transform: scale(1.12); }
+  40% { transform: scale(1); }
+  80% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+/* ---------- Carteles ---------- */
+
+.lr__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  pointer-events: auto;
+  z-index: 30;
+}
+
+.lr__overlay[hidden] {
+  display: none;
+}
+
+.lr__card {
+  width: min(430px, 100%);
+  padding: 22px 24px;
+  background: rgba(10, 10, 12, 0.8);
+  border: 3px solid var(--pink);
+  text-align: center;
+}
+
+.lr__card-title {
+  font-size: 30px;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+}
+
+.lr__card-body {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.lr__card-btn {
+  margin-top: 16px;
+  padding: 10px 20px;
+  border: 3px solid #ffffff;
+  background: var(--pink);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-shadow: 2px 2px 0 var(--shadow);
+  cursor: pointer;
+}
+
+.lr__results {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.lr__result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.07);
+  font-weight: 700;
+}
+
+.lr__result--mine {
+  outline: 2px solid #f2c230;
+  outline-offset: -2px;
+}
+
+.lr__result--out .lr__result-name {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.lr__result-pos {
+  width: 18px;
+}
+
+.lr__result-num {
+  padding: 1px 5px;
+  font-size: 12px;
+}
+
+.lr__result-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lr__result-value {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .lr__light {
+    min-width: 0;
+    padding: 6px 10px;
+  }
+
+  .lr__light-text {
+    font-size: 20px;
+    letter-spacing: 2px;
+  }
+
+  .lr__chant {
+    font-size: 10px;
+    gap: 3px;
+  }
+
+  .lr__clock {
+    font-size: 22px;
+  }
+
+  .lr__count {
+    font-size: 9px;
+  }
+
+  .lr__track {
+    right: 14px;
+    top: 170px;
+  }
+
+  .lr__feed {
+    top: 130px;
+  }
+
+  .lr__banner-title {
+    font-size: 26px;
+  }
+
+  .countdown {
+    font-size: 108px;
+  }
+}

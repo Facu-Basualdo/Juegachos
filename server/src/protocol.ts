@@ -964,3 +964,66 @@ export interface DrServerToClient {
   "dr:state": (msg: DrState) => void;
   "dr:snap": (msg: DrSnap) => void;
 }
+
+// ============================================================================
+// Luz Roja, Luz Verde (namespace `/luzroja`, prefijo `lr:`).
+// ============================================================================
+
+/**
+ * El server es duenio del semaforo, del reloj y del resultado de cada jugador; el
+ * movimiento lo simula cada cliente y aca se reenvia. El cliente juzga su propia
+ * eliminacion en rojo (ver `games/luzroja.ts` para el porque).
+ */
+
+export type LrPhase = "waiting" | "preroll" | "playing" | "over";
+export type LrLight = "green" | "red";
+/** Corriendo, eliminado o llego. */
+export type LrStatus = "run" | "out" | "fin";
+
+export interface LrState {
+  phase: LrPhase;
+  /** Ms para largar ("preroll") o para que se acabe el tiempo ("playing"). */
+  msLeft: number;
+  /** Ms desde la largada. */
+  elapsed: number;
+  light: LrLight;
+  /** Sube en cada cambio de luz: el cliente reacciona al cambio, no al valor. */
+  lightSeq: number;
+  /** Duracion total de la luz actual (el cliente reparte la cancion en ella). */
+  lightDur: number;
+  /** Ms que le quedan a la luz actual. */
+  lightLeft: number;
+  status: LrStatus[];
+  /** Avance hacia la meta por asiento, 0-100. */
+  prog: number[];
+  /** Ms desde la largada en que cruzo cada asiento (-1 si no cruzo). */
+  finT: number[];
+  on: boolean[];
+}
+
+export interface LrInit extends LrState {
+  seat: number;
+  seats: string[];
+  spawn: { x: number; z: number; r: number } | null;
+}
+
+/** Cliente -> Server. */
+export interface LrClientToServer {
+  "lr:join": (msg: { code: string; nickname: string; roster: string[]; round: number }) => void;
+  /** m = 1 si se esta moviendo. */
+  "lr:pos": (msg: { x: number; z: number; r: number; m: number }) => void;
+  /** Me movi en rojo. */
+  "lr:out": (msg: Record<string, never>) => void;
+  /** Cruce la linea (se valida contra la ultima posicion). */
+  "lr:fin": (msg: Record<string, never>) => void;
+}
+
+/** Server -> Cliente. */
+export interface LrServerToClient {
+  "lr:init": (msg: LrInit) => void;
+  "lr:state": (msg: LrState) => void;
+  /** Posiciones a 20 Hz, aplanadas: [asiento, x, z, rotY, moviendose, ...]. */
+  "lr:snap": (msg: { p: number[] }) => void;
+  /** La muñeca amaga con darse vuelta (solo animacion; no cambia la luz). */
+  "lr:tease": (msg: { n: number }) => void;
+}
