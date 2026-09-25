@@ -24,7 +24,7 @@ Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rh
 - `rooms/index.html` + `src/rooms/` — the multiplayer rooms page (create / join / lobby) at `/rooms/`. Not a game, so it lives outside `games/`.
 - `fame/index.html` + `src/fame/` — the **Salón de la fama** page at `/fame/` (podium of the players who lead the global ranking of the most games; see "Global rankings" > `leaders.ts`). Not a game either; reuses the landing's `src/style.css`.
 - `vite.config.ts` — auto-discovers every `games/*/index.html` via `node:fs` at config-load time and feeds them into `build.rollupOptions.input`. New games are picked up automatically; **no edit needed here** when adding a game. The only hand-registered extra entries are `rooms/index.html` and `fame/index.html`.
-- `public/` — static assets shared across all games (favicon, icons).
+- `public/` — static assets shared across all games (favicon, icons). Game covers live in `public/covers/<id>.jpg` (`coverUrl()` in `src/games.ts`); after adding or replacing one, run `python scripts/compress-covers.py` (Pillow) to re-encode it as a real 800x800 JPEG — straight from the image generator they are 2-3 MB PNGs renamed to `.jpg`, which is how the folder once reached 100 MB.
 - Each game folder under `src/games/<id>/` has its own `CLAUDE.md` with game-specific context (mechanics, gotchas, tuning knobs) and its `DESIGN.md` with the art direction (see Conventions).
 
 ## Commands
