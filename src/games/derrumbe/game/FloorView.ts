@@ -6,8 +6,6 @@ import { bottomTexture, sideTexture, topTexture } from "./textures";
 /** Bloques cayendo a la vez como maximo (el resto cae sin animacion). */
 const DEBRIS_POOL = 90;
 const DEBRIS_LIFE = 0.9;
-/** Opacidad de los pisos que quedaron arriba del jugador. */
-const GHOST_OPACITY = 0.22;
 
 interface Debris {
   mesh: THREE.Mesh;
@@ -40,7 +38,6 @@ export class FloorView {
   private readonly boxGeometry = new THREE.BoxGeometry(1, 1, 1);
   private readonly dummy = new THREE.Object3D();
   private readonly color = new THREE.Color();
-  private readonly ghosted: boolean[] = [];
 
   private readonly arena: Arena;
 
@@ -76,27 +73,6 @@ export class FloorView {
       mesh.visible = false;
       this.group.add(mesh);
       this.debris.push({ mesh, vy: 0, spinX: 0, spinZ: 0, life: 0 });
-    }
-  }
-
-  /**
-   * Los pisos por encima de los pies del jugador se vuelven fantasma: con la camara
-   * detras y arriba, estando en un piso de abajo la losa de arriba tapa todo. Asi
-   * ademas se ve a los que siguen corriendo arriba. `null` los vuelve solidos a
-   * todos (espectador).
-   */
-  setGhostAbove(feetY: number | null): void {
-    for (let layer = 0; layer < LAYERS; layer++) {
-      const ghost = feetY !== null && surfaceY(layer) > feetY + 1.5;
-      if (this.ghosted[layer] === ghost) continue;
-      this.ghosted[layer] = ghost;
-      for (const mat of new Set(this.materials[layer])) {
-        mat.transparent = ghost;
-        mat.opacity = ghost ? GHOST_OPACITY : 1;
-        mat.depthWrite = !ghost;
-        mat.needsUpdate = true;
-      }
-      this.meshes[layer].renderOrder = ghost ? 5 : 0;
     }
   }
 

@@ -35,7 +35,8 @@ import type { DrInit, DrPhase, DrSnap, DrState } from "../protocol.js";
 const GRID = 25;
 const LAYERS = 4;
 const ARENA_RADIUS = 12.4;
-const LAYER_GAP = 8;
+/** Alto a proposito: la camara fija del cliente tiene que caber debajo del piso de arriba. */
+const LAYER_GAP = 11;
 const CENTER = (GRID - 1) / 2;
 const CELLS_PER_LAYER = GRID * GRID;
 const CELL_COUNT = CELLS_PER_LAYER * LAYERS;

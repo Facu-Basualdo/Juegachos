@@ -1,11 +1,13 @@
 /**
  * Input de Derrumbe.
  *
- * - Compu: WASD / flechas para correr (relativo a la camara), ESPACIO para saltar,
- *   Q / E o arrastrar con el mouse para girar la camara.
- * - Celu: el primer dedo en la mitad izquierda es un joystick flotante (aparece
- *   donde apoyas), un dedo en la mitad derecha gira la camara, y el boton SALTAR va
- *   abajo a la derecha (lo maneja el Hud y llama a `requestJump`).
+ * - Compu: WASD / flechas para correr, ESPACIO para saltar.
+ * - Celu: un dedo en cualquier lado es un joystick flotante (aparece donde apoyas)
+ *   y el boton SALTAR va abajo a la derecha (lo maneja el Hud y llama a
+ *   `requestJump`).
+ *
+ * La camara es fija (ver constants.ts), asi que no hay input de camara: la
+ * direccion de pantalla es la direccion del mundo.
  *
  * Los listeners de puntero cuelgan del `container`, nunca del canvas: los carteles
  * del juego son overlays que lo tapan (el bug documentado en el CLAUDE.md raiz).
@@ -13,10 +15,6 @@
 
 const JOYSTICK_RANGE = 52;
 const JOYSTICK_DEAD = 8;
-/** Radianes de giro de camara por pixel arrastrado. */
-const DRAG_YAW = 0.0065;
-/** Fraccion del ancho de pantalla que ocupa la zona del joystick en el celu. */
-const JOYSTICK_ZONE = 0.55;
 
 export interface JoystickView {
   originX: number;
@@ -28,16 +26,12 @@ export interface JoystickView {
 export class InputController {
   private readonly keys = new Set<string>();
   private jumpPending = false;
-  private yawDelta = 0;
 
   private stickId: number | null = null;
   private originX = 0;
   private originY = 0;
   private curX = 0;
   private curY = 0;
-
-  private dragId: number | null = null;
-  private dragX = 0;
 
   private readonly target: HTMLElement;
 
@@ -90,18 +84,6 @@ export class InputController {
     return { originX: this.originX, originY: this.originY, x: this.curX, y: this.curY };
   }
 
-  /** Giro continuo de las teclas Q / E (-1, 0 o 1). */
-  get keyYaw(): number {
-    return (this.keys.has("KeyE") ? 1 : 0) - (this.keys.has("KeyQ") ? 1 : 0);
-  }
-
-  /** Giro acumulado por arrastre desde la ultima llamada (rad). */
-  consumeYawDelta(): number {
-    const d = this.yawDelta;
-    this.yawDelta = 0;
-    return d;
-  }
-
   consumeJump(): boolean {
     if (!this.jumpPending) return false;
     this.jumpPending = false;
@@ -126,44 +108,26 @@ export class InputController {
   private onBlur = (): void => {
     this.keys.clear();
     this.stickId = null;
-    this.dragId = null;
   };
 
   private onPointerDown = (e: PointerEvent): void => {
     const el = e.target as HTMLElement | null;
     if (el?.closest(".dr-controls, .dr__card, .leaderboard")) return;
 
-    if (e.pointerType === "mouse") {
-      if (e.button !== 0 && e.button !== 2) return;
-      this.dragId = e.pointerId;
-      this.dragX = e.clientX;
-      return;
-    }
-
-    if (this.stickId === null && e.clientX < window.innerWidth * JOYSTICK_ZONE) {
-      this.stickId = e.pointerId;
-      this.originX = this.curX = e.clientX;
-      this.originY = this.curY = e.clientY;
-      return;
-    }
-    if (this.dragId === null) {
-      this.dragId = e.pointerId;
-      this.dragX = e.clientX;
-    }
+    // En la compu se corre con el teclado: el mouse no hace nada.
+    if (e.pointerType === "mouse" || this.stickId !== null) return;
+    this.stickId = e.pointerId;
+    this.originX = this.curX = e.clientX;
+    this.originY = this.curY = e.clientY;
   };
 
   private onPointerMove = (e: PointerEvent): void => {
-    if (e.pointerId === this.stickId) {
-      this.curX = e.clientX;
-      this.curY = e.clientY;
-    } else if (e.pointerId === this.dragId) {
-      this.yawDelta -= (e.clientX - this.dragX) * DRAG_YAW;
-      this.dragX = e.clientX;
-    }
+    if (e.pointerId !== this.stickId) return;
+    this.curX = e.clientX;
+    this.curY = e.clientY;
   };
 
   private onPointerUp = (e: PointerEvent): void => {
     if (e.pointerId === this.stickId) this.stickId = null;
-    if (e.pointerId === this.dragId) this.dragId = null;
   };
 }
