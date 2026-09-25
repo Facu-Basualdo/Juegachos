@@ -16,7 +16,7 @@ dos personas reales** y el juego no se probo en un telefono (`mobile: false`).
 ## Reparto de responsabilidades
 
 - **Supabase / RoomMode**: lobby, briefing, marcador acumulado, rejoin. Puntaje de sala
-  placement-based (`ranking.length - place`), como Basta. No va al ranking global.
+  placement-based (`ranking.length - place`), como Basta. El ranking global cuenta victorias en sala (`ranking: "wins"` en `meta.ts`): el puesto viaja aparte en `reportScore(score, { place, players })`.
 - **Game server** (`/imitame`, `server/src/games/imitame.ts`): sortea el sonido, corre las
   fases con `setTimeout` propio, hace de **relay de las tomas** (binario, socket.io),
   aplica el multiplicador de la ruleta y lleva los totales.

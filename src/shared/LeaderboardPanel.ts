@@ -1,35 +1,26 @@
 import { getSupabase } from "./supabase";
-import { fetchTop, submitScore, type ScoreRow } from "./leaderboard";
-import { formatScore, getDirection } from "./scoring";
+import {
+  fetchTop,
+  formatWins,
+  monthLabel,
+  qualifies,
+  submitScore,
+  type RankPeriod,
+  type ScoreRow,
+} from "./leaderboard";
+import { formatScore, getRankingMetric } from "./scoring";
 import { getNickname, setNickname, NICKNAME_MAX } from "./nickname";
 
 const TOP_LIMIT = 10;
-
-/**
- * Decide si `score` entra al Top N ya cargado. Hay lugar si todavia no se
- * llenaron las N filas; si estan llenas, califica cuando iguala o supera al
- * peor puntaje del top (segun la direccion del juego).
- */
-function qualifiesForTop(
-  gameId: string,
-  score: number,
-  variant: string | undefined,
-  rows: ScoreRow[],
-): boolean {
-  if (rows.length < TOP_LIMIT) return true;
-  const worst = rows[rows.length - 1].score;
-  return getDirection(gameId, variant) === "lower"
-    ? score <= worst
-    : score >= worst;
-}
 
 interface RenderOpts {
   /** Variante del ranking (p.ej. tamano de sliding-puzzle). */
   variant?: string;
   /**
-   * Puntaje de la partida recien terminada. Si se pasa, el panel pide
-   * confirmar el nombre (prellenado con el ultimo usado), envia el puntaje y
-   * resalta la fila propia. Omitir en modo solo-lectura (landing).
+   * Puntaje de la partida recien terminada. Si se pasa, se registra en el
+   * historial (sin preguntar si ya hay un nombre guardado; la primera vez pide
+   * el nombre, y solo si la marca entra al Top del mes). Omitir en modo
+   * solo-lectura (landing).
    */
   score?: number;
 }
@@ -38,7 +29,11 @@ const STYLE_ID = "mg-leaderboard-styles";
 
 const CSS = `
 .mg-lb { width: 100%; max-width: 360px; margin: 0 auto; font-family: inherit; color: #fff; }
-.mg-lb__title { font-size: 0.85rem; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.7; text-align: center; margin: 0 0 0.6rem; }
+.mg-lb__title { font-size: 0.85rem; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.7; text-align: center; margin: 0 0 0.5rem; }
+.mg-lb__tabs { display: flex; justify-content: center; gap: 0.3rem; margin: 0 0 0.6rem; }
+.mg-lb__tab { padding: 0.25rem 0.7rem; border-radius: 999px; border: 1px solid rgba(255,255,255,0.25); background: transparent; color: inherit; font: inherit; font-size: 0.8rem; cursor: pointer; opacity: 0.7; }
+.mg-lb__tab:hover { opacity: 1; }
+.mg-lb__tab[aria-pressed="true"] { background: #fff; color: #111; border-color: #fff; opacity: 1; font-weight: 700; }
 .mg-lb__status { text-align: center; opacity: 0.6; font-size: 0.85rem; padding: 0.4rem 0; }
 .mg-lb__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .mg-lb__row { display: grid; grid-template-columns: 1.6rem 1fr auto; align-items: center; gap: 0.5rem; padding: 0.3rem 0.55rem; border-radius: 8px; background: rgba(255,255,255,0.05); font-size: 0.92rem; }
@@ -66,13 +61,25 @@ function ensureStyles(): void {
  * Componente DOM autocontenido para mostrar el Top N de un juego. Reutilizado
  * por cada juego (pantalla game-over) y por la landing (modal solo-lectura).
  * Inyecta su propio CSS una sola vez y no depende del estilo de cada juego.
+ *
+ * Dos pestanas: "Este mes" (default: es el tablero que un jugador puede pelear)
+ * e "Historico". Una fila por jugador, con su mejor marca o, en los juegos que
+ * rankean por victorias de sala, cuantas partidas gano.
  */
 export class LeaderboardPanel {
   readonly root: HTMLDivElement;
+  private readonly titleEl: HTMLDivElement;
+  private readonly tabButtons: Record<RankPeriod, HTMLButtonElement>;
   private readonly statusEl: HTMLDivElement;
   private readonly listEl: HTMLUListElement;
   private readonly formEl: HTMLFormElement;
   private readonly inputEl: HTMLInputElement;
+
+  /** Tablero que se esta mostrando (para cambiar de pestana sin re-render). */
+  private board: { gameId: string; variant?: string } | null = null;
+  private period: RankPeriod = "month";
+  /** Descarta respuestas viejas si se cambia de pestana/juego mientras cargaba. */
+  private requestId = 0;
 
   /** Contexto de la partida en curso mientras se pide el nickname. */
   private pending: { gameId: string; score: number; variant?: string } | null = null;
@@ -91,9 +98,26 @@ export class LeaderboardPanel {
     this.root.addEventListener("click", stop);
     this.root.addEventListener("touchstart", stop);
 
-    const title = document.createElement("div");
-    title.className = "mg-lb__title";
-    title.textContent = "Ranking global";
+    this.titleEl = document.createElement("div");
+    this.titleEl.className = "mg-lb__title";
+    this.titleEl.textContent = "Ranking global";
+
+    const tabs = document.createElement("div");
+    tabs.className = "mg-lb__tabs";
+    const makeTab = (period: RankPeriod, label: string): HTMLButtonElement => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "mg-lb__tab";
+      btn.textContent = label;
+      btn.addEventListener("click", () => this.setPeriod(period));
+      tabs.append(btn);
+      return btn;
+    };
+    this.tabButtons = {
+      month: makeTab("month", "Este mes"),
+      all: makeTab("all", "Historico"),
+    };
+    this.syncTabs();
 
     this.formEl = document.createElement("form");
     this.formEl.className = "mg-lb__form";
@@ -123,7 +147,7 @@ export class LeaderboardPanel {
     this.listEl = document.createElement("ul");
     this.listEl.className = "mg-lb__list";
 
-    this.root.append(title, this.formEl, this.statusEl, this.listEl);
+    this.root.append(this.titleEl, tabs, this.formEl, this.statusEl, this.listEl);
   }
 
   mount(container: HTMLElement): void {
@@ -136,7 +160,9 @@ export class LeaderboardPanel {
 
   /** Vacia y oculta el panel (p.ej. al volver a la pantalla de inicio). */
   clear(): void {
+    this.requestId++;
     this.pending = null;
+    this.board = null;
     this.formEl.style.display = "none";
     this.listEl.innerHTML = "";
     this.statusEl.textContent = "";
@@ -144,15 +170,19 @@ export class LeaderboardPanel {
   }
 
   /**
-   * Renderiza el ranking del juego. Si `opts.score` viene y el puntaje entra
-   * al Top 10, muestra el formulario de nombre (prellenado con el ultimo
-   * usado) y envia el puntaje recien cuando el jugador confirma. Si no
-   * califica, solo muestra el ranking sin pedir el nombre.
+   * Renderiza el ranking del juego. Si `opts.score` viene, registra la partida:
+   * con un nombre ya guardado se envia sin preguntar (es el historial, entra
+   * aunque no llegue al Top); sin nombre, pide uno solo si la marca entra al Top
+   * del mes, que es cuando vale la pena interrumpir al jugador.
    */
   async render(gameId: string, opts: RenderOpts = {}): Promise<void> {
     this.root.style.display = "";
     this.pending = null;
     this.formEl.style.display = "none";
+    this.board = { gameId, variant: opts.variant };
+    this.titleEl.textContent =
+      getRankingMetric(gameId) === "wins" ? "Victorias en salas" : "Ranking global";
+    this.tabButtons.month.title = monthLabel();
 
     if (!getSupabase()) {
       this.listEl.innerHTML = "";
@@ -160,77 +190,83 @@ export class LeaderboardPanel {
       return;
     }
 
-    this.statusEl.textContent = "Cargando...";
-    this.listEl.innerHTML = "";
-
-    const rows = await fetchTop(gameId, { variant: opts.variant });
-
-    // Partida terminada y el puntaje entra al Top 10: si ya hay un nombre
-    // guardado, se envia automaticamente sin preguntar. Solo la primera vez
-    // (sin nombre guardado todavia) se pide el nombre con el formulario.
     const hasScore = opts.score !== undefined && Number.isFinite(opts.score);
-    if (hasScore && qualifiesForTop(gameId, opts.score!, opts.variant, rows)) {
-      const saved = getNickname();
-      if (saved) {
-        void submitScore(gameId, opts.score!, { variant: opts.variant }).then(() =>
-          this.renderList(gameId, opts.variant, opts.score),
-        );
-      } else {
-        this.pending = { gameId, score: opts.score!, variant: opts.variant };
-        this.formEl.style.display = "flex";
-        this.inputEl.value = "";
-        this.inputEl.focus();
-      }
+    if (!hasScore) {
+      await this.renderList();
+      return;
     }
 
-    this.renderRows(gameId, rows, opts.variant, hasScore ? opts.score : undefined);
-  }
+    const score = opts.score!;
+    if (getNickname()) {
+      this.statusEl.textContent = "Cargando...";
+      this.listEl.innerHTML = "";
+      await submitScore(gameId, score, { variant: opts.variant });
+      await this.renderList();
+      return;
+    }
 
-  private async renderList(
-    gameId: string,
-    variant: string | undefined,
-    highlightScore: number | undefined,
-  ): Promise<void> {
+    const id = ++this.requestId;
     this.statusEl.textContent = "Cargando...";
     this.listEl.innerHTML = "";
-    const rows = await fetchTop(gameId, { variant });
-    this.renderRows(gameId, rows, variant, highlightScore);
+    const monthRows = await fetchTop(gameId, { variant: opts.variant, period: "month" });
+    if (id !== this.requestId) return;
+    if (qualifies(gameId, score, opts.variant, monthRows, TOP_LIMIT)) {
+      this.pending = { gameId, score, variant: opts.variant };
+      this.formEl.style.display = "flex";
+      this.inputEl.value = "";
+      this.inputEl.focus();
+    }
+    if (this.period === "month") this.renderRows(monthRows);
+    else await this.renderList();
   }
 
-  private renderRows(
-    gameId: string,
-    rows: ScoreRow[],
-    variant: string | undefined,
-    highlightScore: number | undefined,
-  ): void {
+  private setPeriod(period: RankPeriod): void {
+    if (period === this.period) return;
+    this.period = period;
+    this.syncTabs();
+    if (this.board) void this.renderList();
+  }
+
+  private syncTabs(): void {
+    for (const [period, btn] of Object.entries(this.tabButtons)) {
+      btn.setAttribute("aria-pressed", String(period === this.period));
+    }
+  }
+
+  private async renderList(): Promise<void> {
+    if (!this.board) return;
+    const { gameId, variant } = this.board;
+    const id = ++this.requestId;
+    this.statusEl.textContent = "Cargando...";
+    this.listEl.innerHTML = "";
+    const rows = await fetchTop(gameId, { variant, period: this.period, limit: TOP_LIMIT });
+    if (id !== this.requestId) return;
+    this.renderRows(rows);
+  }
+
+  private renderRows(rows: ScoreRow[]): void {
     this.listEl.innerHTML = "";
     if (rows.length === 0) {
-      this.statusEl.textContent = "Todavia no hay puntajes. Se el primero.";
+      const wins = getRankingMetric(this.board!.gameId) === "wins";
+      const when = this.period === "month" ? ` en ${monthLabel()}` : "";
+      this.statusEl.textContent = wins
+        ? `Nadie gano todavia una partida en sala${when}.`
+        : this.period === "month"
+          ? `Nadie entro todavia en ${monthLabel()}. Se el primero.`
+          : "Todavia no hay puntajes. Se el primero.";
       return;
     }
     this.statusEl.textContent = "";
 
+    // Una fila por jugador: la propia se resalta siempre que este en el Top.
     const me = getNickname();
-    let highlighted = false;
     rows.forEach((row, i) => {
-      const isMe =
-        !highlighted &&
-        me !== null &&
-        row.player === me &&
-        highlightScore !== undefined &&
-        row.score === highlightScore;
-      if (isMe) highlighted = true;
-      this.listEl.append(this.buildRow(gameId, row, i + 1, isMe, variant));
+      this.listEl.append(this.buildRow(row, i + 1, me !== null && row.player === me));
     });
   }
 
-  private buildRow(
-    gameId: string,
-    row: ScoreRow,
-    rank: number,
-    isMe: boolean,
-    variant: string | undefined,
-  ): HTMLLIElement {
+  private buildRow(row: ScoreRow, rank: number, isMe: boolean): HTMLLIElement {
+    const { gameId, variant } = this.board!;
     const li = document.createElement("li");
     li.className = "mg-lb__row" + (isMe ? " mg-lb__row--me" : "");
 
@@ -244,7 +280,10 @@ export class LeaderboardPanel {
 
     const valueEl = document.createElement("span");
     valueEl.className = "mg-lb__value";
-    valueEl.textContent = formatScore(gameId, row.score, variant);
+    valueEl.textContent =
+      getRankingMetric(gameId) === "wins"
+        ? formatWins(row.score)
+        : formatScore(gameId, row.score, variant);
 
     li.append(rankEl, nameEl, valueEl);
     return li;
@@ -261,8 +300,6 @@ export class LeaderboardPanel {
     const { gameId, score, variant } = this.pending;
     this.pending = null;
     this.formEl.style.display = "none";
-    void submitScore(gameId, score, { variant }).then(() =>
-      this.renderList(gameId, variant, score),
-    );
+    void submitScore(gameId, score, { variant }).then(() => this.renderList());
   };
 }

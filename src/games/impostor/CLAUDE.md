@@ -25,7 +25,7 @@ el picker/votacion de salas.
 
 - **Supabase / RoomMode**: lobby, briefing, marcador acumulado, rejoin. `initRoomMode("impostor",
   {...})`; al terminar `room.reportScore(...)` en vez de `hud.showRanking(...)`. Puntaje de la
-  ronda **placement-based** (mayor = mejor): `ranking.length - place`. No va al ranking global.
+  ronda **placement-based** (mayor = mejor): `ranking.length - place`. El ranking global cuenta victorias en sala (`ranking: "wins"` en `meta.ts`): el puesto viaja aparte en `reportScore(score, { place, players })`.
 - **Game server** (`/impostor`): roles (palabra / impostor), pistas por turno, votos, adivinanza,
   puntaje y todas las transiciones de fase (con `setTimeout` propio, no dependen del host del room).
 
@@ -162,4 +162,4 @@ repetir en el partido. Se edita a mano; requiere redeploy del server. No se usa 
 - Los votos viajan **crudos** en `im:state` (`votes: {voter,target}[]`), no como contador ni flag
   "mine": el cliente cuenta por sospechoso y deriva el propio (`voter === me`). A proposito, para que
   `im:state` sea un unico broadcast (no per-cliente).
-- Puntaje de sala placement-based y **no** va al ranking global (como el resto de las salas).
+- El puntaje de sala es placement-based, asi que **no** es una marca: el ranking global de este juego cuenta **victorias en sala** (`scoring.ranking: "wins"` en `meta.ts`; el game-over pasa `{ place, players }` a `reportScore`, y el que no figura en el ranking del server — entro tarde — reporta `{ ranked: false }`). Ver "Global rankings" en el CLAUDE.md raiz.

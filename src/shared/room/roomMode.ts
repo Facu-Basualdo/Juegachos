@@ -1,5 +1,6 @@
 import { games, roomGames, coverUrl } from "../../games";
-import { formatScore, getDirection } from "../scoring";
+import { formatScore, getDirection, getRankingMetric, getScoring, isRoomRanked } from "../scoring";
+import { submitScore as submitRanking } from "../leaderboard";
 import { getNickname } from "../nickname";
 import { getSupabase } from "../supabase";
 import {
@@ -38,10 +39,30 @@ import {
  *   //            else this.hud.showRanking("<id>", this.score);
  *
  * initRoomMode devuelve null sin `?room=` en la URL o sin Supabase, asi que
- * fuera del modo sala el juego no cambia en nada. En modo sala NO se envia el
- * puntaje al ranking global (las partidas cortadas por timeout lo
- * contaminarian).
+ * fuera del modo sala el juego no cambia en nada. En modo sala el puntaje va al
+ * ranking global SOLO si la partida termino por su cuenta (reportScore): los
+ * parciales cortados por el reloj de la sala no son comparables y no cuentan.
+ * Ver `RoomReportOpts` y `recordRanking`.
  */
+
+/** Datos extra de la partida para el ranking global (todos opcionales). */
+export interface RoomReportOpts {
+  /**
+   * Tablero (variante) del ranking al que va esta partida. Obligatorio en los
+   * juegos que declaran `variants` (salvo los de `ROOM_VARIANTS`, que ya lo
+   * tienen fijo): sin variante no se sabe a que tablero pertenece y no cuenta.
+   */
+  variant?: string;
+  /**
+   * Puesto final (1 = gano) y cuantos compitieron. Obligatorio en los juegos que
+   * rankean por victorias (`ranking: "wins"`): sin puesto no hay victoria que
+   * contar y la partida no entra al ranking.
+   */
+  place?: number;
+  players?: number;
+  /** false = esta partida no cuenta para el ranking (p.ej. se cayo la conexion). */
+  ranked?: boolean;
+}
 
 export interface RoomModeHooks {
   /** Puntaje actual de la partida en curso (para el parcial por timeout). */
@@ -66,7 +87,7 @@ export interface RoomModeHooks {
 export interface RoomMode {
   readonly active: true;
   /** Llamar en el game-over, donde fuera del modo sala va hud.showRanking. */
-  reportScore(finalScore: number): void;
+  reportScore(finalScore: number, opts?: RoomReportOpts): void;
 
   // Contexto para juegos de tablero compartido (p.ej. Memoria). Los juegos
   // "cada uno en su pantalla" siguen usando solo reportScore.
@@ -348,8 +369,8 @@ class RoomModeController implements RoomMode {
     }
   }
 
-  reportScore(finalScore: number): void {
-    void this.submitScore(finalScore, true);
+  reportScore(finalScore: number, opts: RoomReportOpts = {}): void {
+    void this.submitScore(finalScore, true, opts);
   }
 
   // ---------- Contexto para tableros compartidos ----------
@@ -582,7 +603,11 @@ class RoomModeController implements RoomMode {
     this.navigate(roomGameUrl(room.current_game ?? "", this.code));
   }
 
-  private async submitScore(score: number, finished: boolean): Promise<void> {
+  private async submitScore(
+    score: number,
+    finished: boolean,
+    rankOpts?: RoomReportOpts,
+  ): Promise<void> {
     // Un espectador no puntua nunca (no esta registrado en la sala).
     if (this.spectator) return;
     // Red de seguridad contra la partida largada antes de tiempo: si MI ronda
@@ -609,8 +634,36 @@ class RoomModeController implements RoomMode {
     if (ok) {
       this.reported = true;
       this.channel?.ping();
+      // Solo la primera escritura confirmada llega aca (`reported` se restaura de
+      // la DB al recargar), asi que un F5 no duplica la partida en el historial.
+      if (finished && rankOpts) this.recordRanking(score, rankOpts);
     }
     void this.refresh();
+  }
+
+  /**
+   * Registra la partida terminada en el historial / ranking global. Las reglas:
+   * juegos con `roomRanked: false` no cuentan (su modo sala mide otra cosa); los
+   * de victorias necesitan el puesto; los que tienen variantes necesitan saber a
+   * que tablero va. Ante la duda no se registra: un tablero con numeros que no
+   * se comparan es peor que una partida que no conto.
+   */
+  private recordRanking(score: number, opts: RoomReportOpts): void {
+    if (opts.ranked === false || !isRoomRanked(this.gameId)) return;
+
+    if (getRankingMetric(this.gameId) === "wins") {
+      const { place, players } = opts;
+      if (!place || !players || place < 1 || place > players) return;
+      void submitRanking(this.gameId, score, { source: "room", place, players });
+      return;
+    }
+
+    let variant = opts.variant ?? ROOM_VARIANTS[this.gameId];
+    if (variant === undefined) {
+      if (getScoring(this.gameId).variants?.length) return;
+      variant = "";
+    }
+    void submitRanking(this.gameId, score, { source: "room", variant });
   }
 
   private navigate(url: string): void {

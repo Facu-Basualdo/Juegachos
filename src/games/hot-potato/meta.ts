@@ -1,4 +1,5 @@
 import type { GameEntry } from "../../games";
+import type { GameScoring } from "../../shared/scoring-core";
 
 export const meta: GameEntry = {
   id: "hot-potato",
@@ -15,4 +16,11 @@ export const meta: GameEntry = {
   // La cruceta tactil esta, pero todavia no se probo en un telefono de verdad:
   // poner true despues de probarlo (ver "Jugable en celular" en el CLAUDE.md raiz).
   mobile: false,
+};
+
+// El puntaje de sala es el puesto (`jugadores - puesto`), que depende de cuantos
+// jugaron: no sirve como marca. El ranking global cuenta victorias en sala.
+export const scoring: GameScoring = {
+  direction: "higher",
+  ranking: "wins",
 };

@@ -75,7 +75,7 @@ explosion para todos y nadie mira dos pantallas a la vez.
 
 - **Supabase / RoomMode**: lobby, briefing, marcador, rejoin. `initRoomMode("hot-potato",
   { getScore, onStart })`; al terminar `room.reportScore(ranking.length - place)`
-  (mayor = mejor, el ultimo en pie suma mas). No va al ranking global.
+  (mayor = mejor, el ultimo en pie suma mas). El ranking global cuenta victorias en sala (`ranking: "wins"` en `meta.ts`): el puesto viaja aparte en `reportScore(score, { place, players })`.
 - **Game server**: asientos (los del roster conectados, en orden de `joined_at`), quien
   tiene la papa, la secuencia, la mecha secreta, las eliminaciones. Estado scopeado por
   **ronda** (`round` en `hp:join`), igual que Neon Drift: la sala puede repetir el juego

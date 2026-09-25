@@ -264,7 +264,7 @@ export class Game {
       "Sin conexi&oacute;n",
       "No se pudo conectar al game server. La ronda sigue con los dem&aacute;s.",
     );
-    this.room?.reportScore(0);
+    this.room?.reportScore(0, { ranked: false });
   }
 
   // ---------- Estado del server ----------

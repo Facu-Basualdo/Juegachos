@@ -129,10 +129,9 @@ Conecta 4.
 
 - Countdown 3/2/1/YA compartido (`COUNTDOWN_LABELS`/`COUNTDOWN_STEP`,
   `beginCountdown`, `Hud.showCountdown`, blip `playCountdownTick`).
-- Ranking global: scoring por defecto (`direction: "higher"`, mayor racha =
-  mejor), asi que `meta.ts` no exporta `scoring`. Solo el modo solo envia al
-  ranking (`hud.showRanking("tic-tac-toe", streak)`); el modo sala nunca (sus
-  1/0 quedan en la sala).
+- Ranking global: `direction: "higher"` (mayor racha = mejor). Solo el modo solo
+  envia al ranking (`hud.showRanking("tic-tac-toe", streak)`); el modo sala nunca (sus
+  1/0 quedan en la sala). Por eso `meta.ts` declara `scoring` con `roomRanked: false`: las partidas de sala no entran al ranking global (un 1/0 de duelo no es una racha).
 - Modo sala: `initRoomMode("tic-tac-toe", { getScore, onStart: beginCountdown })`;
   el reintento en game over se bloquea con `if (this.room) return`.
 

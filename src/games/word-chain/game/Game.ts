@@ -303,7 +303,14 @@ export class Game {
 
     // Puntaje placement-based (mayor = mejor): sobrevivir mas suma mas. El
     // RoomOverlay toma la pantalla con el resultado de la ronda.
-    if (this.room) this.room.reportScore(this.placementScore(result, place));
+    // El puesto va aparte al ranking global, que en este juego cuenta victorias
+    // (el que no figura en el ranking, p.ej. entro tarde, no suma).
+    if (this.room) {
+      this.room.reportScore(
+        this.placementScore(result, place),
+        mine ? { place, players: result.ranking.length } : { ranked: false },
+      );
+    }
   }
 
   // ---------- Puntaje ----------

@@ -1,5 +1,5 @@
 import { getSupabase } from "./supabase";
-import { getScoring, getDirection } from "./scoring";
+import { getScoring, getDirection, getRankingMetric } from "./scoring";
 import { games } from "../games";
 
 /**
@@ -34,6 +34,8 @@ interface Board {
   variant: string;
   /** true = menor es mejor (reaction-time, sliding-puzzle, ...). */
   ascending: boolean;
+  /** true = lidera el que mas partidas de sala gano (`ranking: "wins"`). */
+  wins: boolean;
 }
 
 interface LeaderQueryRow {
@@ -57,6 +59,7 @@ function representativeBoards(): Board[] {
       game_id: game.id,
       variant: variant ?? "",
       ascending: getDirection(game.id, variant) === "lower",
+      wins: getRankingMetric(game.id) === "wins",
     };
   });
 }
@@ -81,8 +84,10 @@ async function fetchLeadersPerBoard(boards: Board[]): Promise<LeaderQueryRow[]> 
   const supabase = getSupabase();
   if (!supabase) return [];
 
+  // Sin la migracion no hay puestos guardados: los tableros de victorias no
+  // tienen lider que resolver.
   const results = await Promise.all(
-    boards.map(async (board) => {
+    boards.filter((board) => !board.wins).map(async (board) => {
       const { data, error } = await supabase
         .from("scores")
         .select("player")

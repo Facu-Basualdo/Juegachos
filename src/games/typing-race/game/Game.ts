@@ -351,7 +351,7 @@ export class Game {
     // Ranking (global y sala): frases primero, ppm como desempate (score codificado).
     const ranked = encodeScore(score, wpm);
     if (this.room) {
-      this.room.reportScore(ranked);
+      this.room.reportScore(ranked, { variant: "final" });
       this.broadcastProgress(); // avisa a la sala que cai (dead=true)
     } else {
       this.hud.showRanking("typing-race", ranked, "final");

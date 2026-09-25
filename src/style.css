@@ -1717,3 +1717,13 @@ a {
   background: var(--ink);
   color: #efeee6;
 }
+
+.rank-modal__box .mg-lb__tab {
+  border-color: rgba(17, 17, 17, 0.35);
+}
+
+.rank-modal__box .mg-lb__tab[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #efeee6;
+}

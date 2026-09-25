@@ -208,8 +208,15 @@ export class Game {
     else SoundEffects.playLose();
 
     // Puntaje placement-based (mayor = mejor). El RoomOverlay toma la pantalla con el
-    // resultado de la ronda; no va al ranking global (como el resto de los juegos de sala).
-    if (this.room) this.room.reportScore(Math.max(0, result.ranking.length - place));
+    // resultado de la ronda.
+    // El puesto va aparte al ranking global, que en este juego cuenta victorias
+    // (el que no figura en el ranking, p.ej. entro tarde, no suma).
+    if (this.room) {
+      this.room.reportScore(
+        Math.max(0, result.ranking.length - place),
+        mine ? { place, players: result.ranking.length } : { ranked: false },
+      );
+    }
   }
 
   /** Puntaje en vivo para el parcial por timeout de Supabase (rara vez se usa: el

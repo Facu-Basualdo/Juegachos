@@ -27,7 +27,25 @@ export interface GameScoring {
   variantDirection?: Record<string, Direction>;
   /** Formato por variante (mismo criterio que variantDirection). */
   variantFormat?: Record<string, (score: number) => string>;
+  /**
+   * Que mide el ranking global. "best" (default): el mejor puntaje de cada
+   * jugador. "wins": cantidad de partidas de sala ganadas (1er puesto con al
+   * menos otro jugador). Lo usan los juegos solo-sala cuyo puntaje de sala es el
+   * puesto (`jugadores - puesto`): ese numero depende del tamano de la sala y no
+   * sirve como marca a batir.
+   */
+  ranking?: RankingMetric;
+  /**
+   * Si las partidas TERMINADAS en sala cuentan para el ranking global (default
+   * true). false en los juegos cuyo modo sala mide otra cosa que el modo solo
+   * (duelos 1v1 contra IA vs contra humanos, otra duracion, otro puntaje): ahi el
+   * mismo numero significaria dos cosas distintas en un mismo tablero.
+   */
+  roomRanked?: boolean;
 }
+
+/** Ver `GameScoring.ranking`. */
+export type RankingMetric = "best" | "wins";
 
 /**
  * Codifica tiempo (centisegundos) y movimientos en un unico puntaje para poder

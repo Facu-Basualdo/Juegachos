@@ -27,7 +27,7 @@ descubrirlo) y en el picker/votacion de salas como cualquier otro juego de sala.
   de ronda (corte duro). Igual que Ta-Te-Ti: `initRoomMode("word-bomb", {...})`,
   y al terminar `room.reportScore(...)` en vez de `hud.showRanking(...)`. El
   puntaje de la ronda es **placement-based** (mayor = mejor): `ranking.length -
-  place`, asi el ultimo en pie (place 1) suma mas. No va al ranking global.
+  place`, asi el ultimo en pie (place 1) suma mas. El ranking global cuenta victorias en sala (`ranking: "wins"` en `meta.ts`): el puesto viaja aparte en `reportScore(score, { place, players })`.
 - **Game server** (`/wordbomb`): turno actual, mecha (deadline absoluto), vidas,
   set de palabras usadas, validacion y orden de eliminacion. Difunde `wb:state`
   en cada cambio; el cliente anima la mecha localmente entre snapshots. Tambien
@@ -229,5 +229,4 @@ server en Railway** tras editar.
   (regla de decoupling del repo). Mantenerlos en sync a mano.
 - La mecha del cliente es solo visual: la verdad la tiene el server (el `setTimeout`
   del deadline). Si hay drift de reloj, el corte real lo decide el server.
-- El puntaje de sala es placement-based y **no** va al ranking global (como el
-  resto de los juegos de sala).
+- El puntaje de sala es placement-based, asi que **no** es una marca: el ranking global de este juego cuenta **victorias en sala** (`scoring.ranking: "wins"` en `meta.ts`; el game-over pasa `{ place, players }` a `reportScore`, y el que no figura en el ranking del server — entro tarde — reporta `{ ranked: false }`). Ver "Global rankings" en el CLAUDE.md raiz.

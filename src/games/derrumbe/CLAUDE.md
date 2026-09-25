@@ -133,8 +133,7 @@ pudriera. La grilla y el protocolo no cambian: al armar la ronda el server marca
   trabar la ronda. Caido, `onReportedWaiting` devuelve true y se sigue mirando la
   partida (camara orbital) en vez de la espera generica de la sala.
 - **El HUD arranca en `top: 38px`** para no quedar debajo de la barra de la sala.
-- **El `Hud` no monta el `LeaderboardPanel`:** en sala el puntaje nunca va al
-  ranking global.
+- **El `Hud` no monta el `LeaderboardPanel`:** en sala solo se reporta a la ronda, pero la partida **terminada** igual entra al ranking global: la registra `RoomMode` (ver "Global rankings" en el CLAUDE.md raiz), y se ve desde el boton "Ranking" de la card en la landing.
 
 ## Probar sin Supabase (`devRoom.ts`)
 

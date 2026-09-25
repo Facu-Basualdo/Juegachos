@@ -227,9 +227,7 @@ necesita Supabase.
   es solo de sala, asi que esa barra siempre esta.
 - **Hay dos relojes en pantalla y son distintos**: el de la partida (90 s, el
   grande) y el de la sala (el tope de `roomTimeLimitSec`, en la barra de arriba).
-- **El `Hud` no monta el `LeaderboardPanel`.** Es solo de sala, y en sala el
-  puntaje va a la ronda y nunca al ranking global, asi que el panel no tendria
-  nunca nada que mostrar.
+- **El `Hud` no monta el `LeaderboardPanel`.** Es solo de sala: en sala solo se reporta a la ronda, pero la partida **terminada** igual entra al ranking global: la registra `RoomMode` (ver "Global rankings" en el CLAUDE.md raiz), y se ve desde el boton "Ranking" de la card en la landing. La caida de conexion reporta `reportScore(0, { ranked: false })` para no meter un cero falso en el ranking.
 - **El Renderer mantiene su propia copia de duenios** (`setOwners`), a la que el
   juego le pasa **la misma instancia** del `Int8Array`. Sirve para repintar los
   vecinos cuando una celda cambia: el `clearRect` de una celda muerde el desborde

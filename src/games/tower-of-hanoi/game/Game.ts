@@ -278,7 +278,7 @@ export class Game {
     // El ranking global se ordena por movimientos (menos mejor) y el tiempo
     // desempata; el puntaje codifica ambos (ver encodeMovesTime).
     const rankedScore = encodeMovesTime(this.moves, this.elapsedTime);
-    if (this.room) this.room.reportScore(rankedScore);
+    if (this.room) this.room.reportScore(rankedScore, { variant: String(this.discs) });
     else this.hud.showRanking("tower-of-hanoi", rankedScore, this.discs);
   }
 

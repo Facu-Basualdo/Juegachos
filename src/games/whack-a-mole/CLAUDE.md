@@ -65,3 +65,6 @@ nunca). Diferencias cuando `this.room` esta activo:
   global; el reintento queda bloqueado (`onPrimary` retorna si hay sala, una
   sola partida por ronda) y el inicio lo dispara `onStart` para que todos
   arranquen juntos. `getScore` da el parcial si la ronda se corta por tiempo.
+  Como en sala la partida la corta el reloj de la ronda y en solo no, son dos
+  juegos distintos: `scoring` declara `roomRanked: false` y las partidas de sala
+  no entran al ranking global.

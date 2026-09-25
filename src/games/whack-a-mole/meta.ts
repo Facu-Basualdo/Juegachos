@@ -1,4 +1,5 @@
 import type { GameEntry } from "../../games";
+import type { GameScoring } from "../../shared/scoring-core";
 
 export const meta: GameEntry = {
   id: "whack-a-mole",
@@ -13,4 +14,10 @@ export const meta: GameEntry = {
   mobile: true,
 
   roomTimeLimitSec: 120,
+};
+
+export const scoring: GameScoring = {
+  direction: "higher",
+  // Las partidas de sala no cuentan para el ranking global: en sala la partida dura lo que marca `roomTimeLimitSec`, no es la misma que la del modo solo.
+  roomRanked: false,
 };

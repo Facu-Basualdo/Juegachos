@@ -1,4 +1,5 @@
 import type { GameEntry } from "../../games";
+import type { GameScoring } from "../../shared/scoring-core";
 
 export const meta: GameEntry = {
   id: "connect-four",
@@ -13,4 +14,10 @@ export const meta: GameEntry = {
   added: "2026-07-04",
   mobile: true,
 
+};
+
+export const scoring: GameScoring = {
+  direction: "higher",
+  // Las partidas de sala no cuentan para el ranking global: en sala son duelos 1v1 contra humanos y el puntaje es otro que la racha contra la IA del modo solo.
+  roomRanked: false,
 };

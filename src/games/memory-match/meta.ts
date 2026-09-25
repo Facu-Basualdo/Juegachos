@@ -16,6 +16,8 @@ export const meta: GameEntry = {
 };
 
 export const scoring: GameScoring = {
+  // Las partidas de sala no cuentan para el ranking global: en sala es un tablero compartido por turnos (pares propios), nada que ver con el contrarreloj solo.
+  roomRanked: false,
   // Base "higher" (pares) para el modo sala. El modo solo usa un unico
   // ranking "lower" (variante "solo") que codifica tiempo + movimientos en un
   // numero (encodeTimeMoves): se ordena por tiempo y los movimientos

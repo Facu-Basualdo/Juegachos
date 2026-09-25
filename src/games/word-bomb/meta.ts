@@ -1,4 +1,5 @@
 import type { GameEntry } from "../../games";
+import type { GameScoring } from "../../shared/scoring-core";
 
 export const meta: GameEntry = {
   id: "word-bomb",
@@ -13,4 +14,11 @@ export const meta: GameEntry = {
   added: "2026-07-07",
   mobile: true,
 
+};
+
+// El puntaje de sala es el puesto (`jugadores - puesto`), que depende de cuantos
+// jugaron: no sirve como marca. El ranking global cuenta victorias en sala.
+export const scoring: GameScoring = {
+  direction: "higher",
+  ranking: "wins",
 };
