@@ -1,0 +1,15 @@
+# Baile de Bloques
+
+Direccion de arte de Pista Loca. Cada decision visual de `FloorView.ts`, `Stage.ts`, `Avatar.ts`, `textures.ts` y del HUD responde a este documento. La referencia pedida es el Block Party de los servidores de Minecraft: una pista de baile de lana de colores que desaparece al ritmo de la musica. Es un homenaje al lenguaje voxel, **nunca** una copia de sus assets, logos ni tipografias; todo se dibuja por codigo. Es la hermana nocturna de Derrumbe: mismo pixel, otra hora del dia.
+
+El mundo sigue hecho de un solo material, el pixel. La pista es una grilla de bloques de lana: cada bloque lleva la misma textura de 16x16 en grises (el tejido, un borde apenas mas oscuro) y el color lo pone la instancia, asi toda la pista es una sola malla y los colores se cambian en un cuadro. Filtro `NearestFilter` siempre; nada liso, nada borroso. Los muñecos son los mismos de bloques de Derrumbe: cabeza cubica, remera del color del asiento.
+
+Es medianoche en una pista suspendida sobre la nada. El cielo es un azul casi negro con estrellas cuadradas; debajo de la pista no hay piso, solo un vacio que se va a negro. Esa oscuridad es lo que hace que los colores de la lana canten: la pista es la unica superficie clara del mundo y todo lo demas existe para enmarcarla.
+
+La luz es de boliche y tiene funcion. Una bola de espejos de bloques gira arriba del centro y reparte reflejos cuadrados que pasean sobre la pista mientras suena la musica. Cuando la musica se corta, los reflejos se apagan de golpe y la pista queda bajo una luz blanca plana: es el silencio visual del momento de buscar el color, y ahi nada puede moverse en pantalla salvo los jugadores. Esa quietud repentina es la señal mas fuerte del juego, junto con el corte de la musica.
+
+La paleta de la lana es de diez colores y todos tienen que distinguirse de un vistazo, incluso chicos y de lejos: rojo, naranja, amarillo, lima, verde, cian, azul, violeta, rosa y blanco. No hay dos tonos de la misma familia que se puedan confundir apurado (nada de rosa y magenta juntos). El color pedido se anuncia en el HUD con un bloque grande de ese color y su nombre, y ese es el unico lugar donde el HUD usa color saturado.
+
+La caida es la de Derrumbe: el bloque que no es del color pedido se hunde, cae girando y se encoge; los jugadores que no estaban sobre el color caen al vacio y se pierden en la oscuridad. Despues la pista entera vuelve a armarse con otro dibujo, bloque por bloque desde abajo, como un telon que sube.
+
+El HUD escribe como un juego voxel: letra en negrita con sombra dura desplazada, paneles negros traslucidos de bordes rectos, sin redondeos. Poca informacion y siempre la misma: la ronda, cuantos siguen, la musica o el color pedido con su barra de tiempo, y quien acaba de caer.
