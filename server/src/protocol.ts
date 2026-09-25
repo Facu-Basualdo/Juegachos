@@ -826,3 +826,72 @@ export interface MtServerToClient {
   "mt:take": (msg: { round: number; nickname: string; rate: number; audio: Buffer }) => void;
   "mt:gameover": (msg: MtGameover) => void;
 }
+
+// ============================================================================
+// Derrumbe (namespace `/derrumbe`, prefijo `dr:`). TNT Run en sala.
+// ============================================================================
+
+/**
+ * El PISO es autoritativo en el server; el MOVIMIENTO lo simula cada cliente y el
+ * server solo lo reenvia (ver `games/derrumbe.ts` para el porque). Los indices de
+ * celda son `capa * GRID * GRID + z * GRID + x`, con la capa 0 arriba de todo.
+ */
+
+export type DrPhase = "waiting" | "preroll" | "playing" | "lap" | "over";
+
+/** Estado de la partida: se difunde en cada cambio y una vez por segundo. */
+export interface DrState {
+  phase: DrPhase;
+  /** Ms para largar ("preroll"), para el final ("lap") o para el tope ("playing"). */
+  msLeft: number;
+  /** Ms desde la largada (0 antes). */
+  elapsed: number;
+  /** Por asiento: sigue en pie. */
+  alive: boolean[];
+  /** Por asiento: ms aguantados, o -1 mientras sigue vivo. */
+  times: number[];
+  /** Por asiento: conectado al server ahora mismo. */
+  on: boolean[];
+  /** El piso ya se empezo a pudrir solo. */
+  decay: boolean;
+}
+
+/** Al entrar o reconectar: geometria, asientos, el tablero completo y el estado. */
+export interface DrInit extends DrState {
+  /** Asiento propio, o -1 si no se esta jugando. */
+  seat: number;
+  seats: string[];
+  grid: number;
+  layers: number;
+  /** Tablero en hex, un bit por celda: prendido = pisada o caida. */
+  doom: string;
+  /** Donde aparece el jugador propio (la ultima posicion si vuelve de un F5). */
+  spawn: { x: number; y: number; z: number; r: number } | null;
+}
+
+/** Snapshot a 20 Hz. */
+export interface DrSnap {
+  /** Posiciones aplanadas: [asiento, x, y, z, rotY, flags, ...]; flags 1 = en el piso, 2 = moviendose. */
+  p: number[];
+  /** Celdas pisadas desde el snapshot anterior: caen FALL_DELAY_MS despues. */
+  f: number[];
+  /** Una vez por segundo, el tablero completo (mismo formato que `DrInit.doom`). */
+  doom?: string;
+}
+
+/** Cliente -> Server. */
+export interface DrClientToServer {
+  "dr:join": (msg: { code: string; nickname: string; roster: string[]; round: number }) => void;
+  "dr:pos": (msg: { x: number; y: number; z: number; r: number; f: number }) => void;
+  /** Celdas que el jugador acaba de pisar. */
+  "dr:step": (msg: { c: number[] }) => void;
+  /** Me cai a la lava. */
+  "dr:dead": (msg: Record<string, never>) => void;
+}
+
+/** Server -> Cliente. */
+export interface DrServerToClient {
+  "dr:init": (msg: DrInit) => void;
+  "dr:state": (msg: DrState) => void;
+  "dr:snap": (msg: DrSnap) => void;
+}
