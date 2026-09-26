@@ -1,0 +1,496 @@
+/*
+ * La Cuerda. Ver DESIGN.md ("Patio de Pastel"): letra en negrita con sombra dura
+ * desplazada, paneles ciruela traslucidos de bordes rectos, nada redondeado salvo lo
+ * que es informacion.
+ */
+
+:root {
+  color-scheme: dark;
+  --sky: #efd3e0;
+  --panel: rgba(59, 35, 70, 0.72);
+  --text: #ffffff;
+  --shadow: #3b2346;
+  --danger: #e0475f;
+  --good: #ffd966;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--sky);
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  color: var(--text);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+.game-canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.back-link {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 40;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.8);
+  text-shadow: 2px 2px 0 var(--shadow);
+  text-decoration: none;
+}
+
+.lc {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  font-weight: 700;
+  text-shadow: 2px 2px 0 var(--shadow);
+}
+
+/* ---------- Marcador ---------- */
+
+.lc__top {
+  position: absolute;
+  /* Debajo de la barra de la sala (RoomOverlay), que va arriba de todo. */
+  top: 38px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 18px;
+  padding: 8px 16px;
+  background: var(--panel);
+}
+
+.lc--playing .lc__top {
+  display: flex;
+}
+
+.lc__alive {
+  font-size: 16px;
+  letter-spacing: 2px;
+  white-space: nowrap;
+}
+
+.lc__clock {
+  font-size: 26px;
+  letter-spacing: 2px;
+  font-variant-numeric: tabular-nums;
+  min-width: 70px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.lc__decay {
+  position: absolute;
+  top: 92px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  background: var(--panel);
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+
+.lc__rope--near {
+  background: var(--danger);
+  animation: lc-blink 0.5s steps(2, end) infinite;
+}
+
+@keyframes lc-blink {
+  50% { opacity: 0.45; }
+}
+
+.lc__players {
+  position: absolute;
+  top: 38px;
+  right: 12px;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  min-width: 150px;
+}
+
+.lc--playing .lc__players {
+  display: flex;
+}
+
+.lc__player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.lc__player--mine {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: -2px;
+}
+
+.lc__player--out {
+  opacity: 0.5;
+}
+
+.lc__player--out .lc__player-name {
+  text-decoration: line-through;
+}
+
+.lc__player--offline .lc__player-name {
+  font-style: italic;
+}
+
+.lc__player-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  box-shadow: 2px 2px 0 var(--shadow);
+}
+
+.lc__player-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+.lc__player-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+/* ---------- Avisos ---------- */
+
+.lc__feed {
+  position: absolute;
+  left: 12px;
+  top: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lc__feed-item {
+  padding: 4px 10px;
+  background: var(--panel);
+  font-size: 14px;
+  transition: opacity 0.4s;
+}
+
+.lc__feed-item span {
+  opacity: 0.75;
+  font-size: 12px;
+}
+
+.lc__feed-item.is-gone {
+  opacity: 0;
+}
+
+.lc__banner {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  text-align: center;
+  padding: 12px 26px;
+  background: var(--panel);
+  max-width: 92vw;
+}
+
+.lc__banner-title {
+  font-size: 34px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.lc__banner--bad .lc__banner-title {
+  color: #ff8a6b;
+}
+
+.lc__banner--good .lc__banner-title {
+  color: var(--good);
+}
+
+.lc__banner-sub {
+  margin-top: 4px;
+  font-size: 15px;
+}
+
+/* ---------- Controles tactiles ---------- */
+
+.lc-controls {
+  position: absolute;
+  right: 22px;
+  bottom: 26px;
+  display: none;
+  align-items: flex-end;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+/* Los botones solo existen en pantallas tactiles; en la compu, ESPACIO y F. */
+@media (pointer: coarse) {
+  .lc--playing:not(.lc--spectating) .lc-controls {
+    display: flex;
+  }
+}
+
+.lc-controls__jump {
+  width: 96px;
+  height: 96px;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: 1px;
+  text-shadow: 2px 2px 0 var(--shadow);
+  touch-action: none;
+}
+
+.lc-controls__jump:active {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Empujar: mas chico y a la izquierda de SALTAR. El relleno de arriba es el enfriamiento. */
+.lc-controls__push {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-shadow: 2px 2px 0 var(--shadow);
+  touch-action: none;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.lc-controls__push::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(0, 0, 0, 0.55);
+  transform-origin: top;
+  transform: scaleY(var(--cd, 0));
+}
+
+.lc-controls__push.is-cooling {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.lc-controls__push:active {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.lc-stick {
+  position: absolute;
+  left: -52px;
+  top: -52px;
+  width: 104px;
+  height: 104px;
+  border: 3px solid rgba(255, 255, 255, 0.55);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.lc-stick__knob {
+  position: absolute;
+  left: 32px;
+  top: 32px;
+  width: 34px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* ---------- Countdown ---------- */
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 25;
+  font-size: 150px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  color: #ffffff;
+  text-shadow: 8px 8px 0 var(--shadow);
+  opacity: 0;
+}
+
+.countdown.is-shown {
+  animation: countdown-pop 0.75s ease-out;
+}
+
+@keyframes countdown-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  20% { opacity: 1; transform: scale(1.12); }
+  40% { transform: scale(1); }
+  80% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+/* ---------- Carteles ---------- */
+
+.lc__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  pointer-events: auto;
+  z-index: 30;
+}
+
+.lc__overlay[hidden] {
+  display: none;
+}
+
+.lc__card {
+  width: min(420px, 100%);
+  padding: 22px 24px;
+  background: rgba(59, 35, 70, 0.9);
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  text-align: center;
+}
+
+.lc__card-title {
+  font-size: 30px;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+}
+
+.lc__card-body {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.lc__card-btn {
+  margin-top: 16px;
+  padding: 10px 20px;
+  border: 3px solid #ffffff;
+  background: var(--danger);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-shadow: 2px 2px 0 var(--shadow);
+  cursor: pointer;
+}
+
+.lc__results {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.lc__result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.07);
+  font-weight: 700;
+}
+
+.lc__result--mine {
+  outline: 2px solid var(--good);
+  outline-offset: -2px;
+}
+
+.lc__result-pos {
+  width: 18px;
+}
+
+.lc__result-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lc__result-value {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .lc__top {
+    gap: 10px;
+    padding: 6px 10px;
+  }
+
+  .lc__alive {
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+
+  .lc__clock {
+    font-size: 18px;
+    min-width: 52px;
+  }
+
+  .countdown {
+    font-size: 108px;
+  }
+
+  .lc__banner-title {
+    font-size: 24px;
+  }
+
+  /* Angosto: la lista y los avisos bajan, debajo del marcador y del cartel de la cuerda. */
+  .lc__players {
+    top: 112px;
+    min-width: 0;
+  }
+
+  .lc__player-name {
+    max-width: 70px;
+  }
+
+  .lc__feed {
+    top: 112px;
+  }
+
+  .lc__decay {
+    top: 80px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .lc__rope-unit {
+    display: none;
+  }
+}
