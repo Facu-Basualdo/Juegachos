@@ -211,7 +211,7 @@ export class Candy {
 
     for (let b = 0; b < this.binCount; b++) {
       if (this.stress[b] >= 1) {
-        this.break(b);
+        this.breakAt(b);
         events.broke = b;
         return events;
       }
@@ -323,8 +323,28 @@ export class Candy {
     return best;
   }
 
-  /** La grieta: un zigzag sembrado que cruza la figura desde el tramo roto, con ramas. */
-  private break(b: number): void {
+  /**
+   * Tallado en niveles (0-3, un caracter por tramo) para mandarlo a los rivales:
+   * 140 caracteres por mensaje en vez de 140 numeros.
+   */
+  carveLevels(): string {
+    let out = "";
+    for (let b = 0; b < this.binCount; b++) out += String(Math.min(3, Math.floor(Math.min(1, this.carve[b]) * 3 + 1e-6)));
+    return out;
+  }
+
+  /** Aplica el tallado recibido de un rival (ver `carveLevels`). */
+  applyLevels(levels: string): void {
+    const n = Math.min(levels.length, this.binCount);
+    for (let b = 0; b < n; b++) this.carve[b] = Number(levels[b]) / 3;
+  }
+
+  /**
+   * La grieta: un zigzag sembrado que cruza la figura desde el tramo roto, con ramas.
+   * Solo depende del tramo y de la figura, asi la de un rival se dibuja igual en todas
+   * las pantallas mandando unicamente el numero de tramo.
+   */
+  breakAt(b: number): void {
     this.broken = b;
     const rand = mulberry32(b * 7919 + this.binCount);
     const i = this.midSample(b);

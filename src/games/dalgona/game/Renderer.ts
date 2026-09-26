@@ -1,10 +1,12 @@
 import { mulberry32, type Candy } from "./Candy";
 import { STRESS_WARN } from "./constants";
+import type { Rival } from "./Rivals";
 
 /** Paleta (DESIGN.md "Caramelo en la Lata"). */
 const SAND = "#eadbbd";
 const PINK = "#e0457b";
 const TEAL = "#1f8a7a";
+const RED = "#e8232d";
 const CANDY_LIGHT = "#f2b85c";
 const CANDY_MID = "#d98c34";
 const CANDY_EDGE = "#a4561c";
@@ -13,6 +15,7 @@ const CARVED = "#3f1c06";
 const TIN_LIGHT = "#e3e6ea";
 const TIN_MID = "#aab0b8";
 const TIN_DARK = "#7c838c";
+const FONT = '"Trebuchet MS", sans-serif';
 
 export type RenderPhase = "menu" | "choose" | "reveal" | "play" | "broken" | "done";
 
@@ -38,35 +41,65 @@ export interface RenderState {
   endT: number;
   needle: NeedleView;
   time: number;
+  /** Los demas jugadores de la sala (vacio fuera de sala). */
+  rivals: Rival[];
+  /** Quienes eligieron cada lata, para ponerles el nombre abajo. */
+  pickers: string[][];
+  /** Rivales sin noticias hace rato. */
+  isStale: (r: Rival) => boolean;
 }
+
+/** Donde y de que tamaño se dibuja una galleta (px CSS; `r` es el radio del caramelo). */
+interface View {
+  cx: number;
+  cy: number;
+  r: number;
+}
+
+type CandyMode = "play" | "broken" | "done";
 
 /**
  * Dibujo 2D de Dalgona. La camara esta arriba de la lata y no se mueve.
  *
- * Capas: el piso y la galleta con su figura estampada se pintan UNA vez por tamaño
- * de pantalla / figura en canvases aparte (los poros son miles de puntitos); cada
- * cuadro solo se dibuja lo que cambia: el tallado, las grietas, la aguja y el brillo
- * de la saliva.
+ * Todo se dibuja por "vistas" (centro + radio), asi la misma galleta se pinta en
+ * grande (la propia) y en miniatura (las de los rivales, al costado o en una fila
+ * arriba en el celu). Cuando la partida propia termina y los demas siguen, la
+ * pantalla pasa a una grilla con todos los rivales en grande (`watching`).
+ *
+ * Capas: el piso y cada galleta con su figura estampada se pintan UNA vez por tamaño
+ * en canvases aparte (los poros son miles de puntitos); cada cuadro solo se dibuja
+ * lo que cambia: el tallado, las grietas, las agujas y el brillo de la saliva.
  */
 export class Renderer {
+  private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly floor = document.createElement("canvas");
-  private readonly candyLayer = document.createElement("canvas");
-  private candyFor: Candy | null = null;
+  private readonly layers = new WeakMap<Candy, { canvas: HTMLCanvasElement; size: number }>();
   private w = 0;
   private h = 0;
   private dpr = 1;
-  /** Centro y radio de la galleta, en px CSS. */
-  cx = 0;
-  cy = 0;
-  r = 100;
-
-  private readonly canvas: HTMLCanvasElement;
+  private rivalCount = 0;
+  private watching = false;
+  /** La galleta propia. */
+  private main: View = { cx: 0, cy: 0, r: 100 };
+  private rivalViews: View[] = [];
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d")!;
     this.resize();
+  }
+
+  get cx(): number {
+    return this.main.cx;
+  }
+
+  get cy(): number {
+    return this.main.cy;
+  }
+
+  get r(): number {
+    return this.main.r;
   }
 
   resize(): void {
@@ -77,39 +110,40 @@ export class Renderer {
     this.canvas.height = Math.round(this.h * this.dpr);
     this.canvas.style.width = `${this.w}px`;
     this.canvas.style.height = `${this.h}px`;
-    // Franjas del HUD: arriba el reloj y el nombre, abajo el boton de lamer.
-    const top = 118;
-    const bottom = 118;
-    const avail = Math.max(160, this.h - top - bottom);
-    // En vertical el ancho es lo que limita: la galleta se come mas pantalla.
-    const widthShare = this.w < this.h ? 0.44 : 0.38;
-    this.r = Math.max(70, Math.min(this.w * widthShare, avail * 0.43));
-    this.cx = this.w / 2;
-    this.cy = top + avail / 2;
+    this.layout();
     this.paintFloor();
-    this.candyFor = null;
   }
 
-  /** Pantalla (px CSS) a galleta (radio 1). */
+  /** Cuantos rivales hay en la sala y si se los esta mirando en grande. */
+  setRivals(count: number, watching: boolean): void {
+    if (count === this.rivalCount && watching === this.watching) return;
+    this.rivalCount = count;
+    this.watching = watching;
+    this.layout();
+  }
+
+  /** Pantalla (px CSS) a galleta propia (radio 1). */
   toCandy(px: number, py: number): { x: number; y: number } {
-    return { x: (px - this.cx) / this.r, y: (py - this.cy) / this.r };
+    return { x: (px - this.main.cx) / this.main.r, y: (py - this.main.cy) / this.main.r };
   }
 
   /** Centro y radio de cada lata cerrada al elegir (en fila o 2x2 segun la pantalla). */
   tinSlots(): { x: number; y: number; r: number }[] {
     // Van un poco abajo del centro: el 3/2/1 se dibuja arriba (ver style.css).
+    const { cx, cy, r: cr } = this.main;
     const wide = this.w > this.h * 1.1;
     if (wide) {
-      const r = Math.min(this.r * 0.5, (this.w - 160) / 11);
+      const side = this.rivalCount > 0 ? this.sideWidth() * (this.rivalCount > 4 ? 2 : 1) : 0;
+      const r = Math.min(cr * 0.5, (this.w - 160 - side) / 11);
       const gap = r * 2.7;
-      const y = this.cy + this.r * 0.45;
-      return [0, 1, 2, 3].map((i) => ({ x: this.cx + (i - 1.5) * gap, y, r }));
+      const y = cy + cr * 0.45;
+      return [0, 1, 2, 3].map((i) => ({ x: cx + (i - 1.5) * gap, y, r }));
     }
-    const r = Math.min(this.r * 0.55, this.w / 5.6);
+    const r = Math.min(cr * 0.55, this.w / 5.6);
     const gap = r * 2.6;
-    const y0 = this.cy + r * 0.45;
+    const y0 = cy + r * 0.45;
     return [0, 1, 2, 3].map((i) => ({
-      x: this.cx + ((i % 2) - 0.5) * gap,
+      x: cx + ((i % 2) - 0.5) * gap,
       y: y0 + (Math.floor(i / 2) - 0.5) * gap,
       r,
     }));
@@ -123,42 +157,125 @@ export class Renderer {
     return -1;
   }
 
+  // ---------- Distribucion ----------
+
+  /** Ancho de cada columna de rivales en horizontal. */
+  private sideWidth(): number {
+    const perCol = this.rivalCount > 4 ? Math.ceil(this.rivalCount / 2) : this.rivalCount;
+    return this.sideRadius(perCol) * 2.5 + 30;
+  }
+
+  private sideRadius(perCol: number): number {
+    const avail = this.h - 118 - 30;
+    return Math.max(18, Math.min(58, avail / (perCol * 3.1)));
+  }
+
+  private layout(): void {
+    // Franjas del HUD: arriba el reloj y el nombre, abajo el boton de lamer.
+    const top = 118;
+    const bottom = 118;
+    const n = this.rivalCount;
+    const wide = this.w > this.h * 1.1;
+    this.rivalViews = [];
+
+    if (n > 0 && this.watching) {
+      // Mirando: grilla con todos los rivales en grande.
+      const rect = { x: 16, y: top, w: this.w - 32, h: this.h - top - 40 };
+      let best = { cols: 1, r: 0 };
+      for (let cols = 1; cols <= n; cols++) {
+        const rows = Math.ceil(n / cols);
+        const r = Math.min(rect.w / cols / 2.7, (rect.h / rows - 34) / 2.5);
+        if (r > best.r) best = { cols, r };
+      }
+      const rows = Math.ceil(n / best.cols);
+      const cellW = rect.w / best.cols;
+      for (let i = 0; i < n; i++) {
+        const row = Math.floor(i / best.cols);
+        const inRow = row === rows - 1 ? n - row * best.cols : best.cols;
+        const col = i - row * best.cols;
+        const offset = ((best.cols - inRow) * cellW) / 2;
+        this.rivalViews.push({
+          cx: rect.x + offset + cellW * (col + 0.5),
+          cy: rect.y + (rect.h / rows) * (row + 0.5) - 12,
+          r: best.r,
+        });
+      }
+      this.main = { cx: this.w / 2, cy: top + (this.h - top - bottom) / 2, r: best.r };
+      return;
+    }
+
+    if (n > 0 && wide) {
+      // Horizontal: una columna a la derecha (y otra a la izquierda desde 5 rivales).
+      const two = n > 4;
+      const perCol = two ? Math.ceil(n / 2) : n;
+      const mr = this.sideRadius(perCol);
+      const colW = mr * 2.5 + 30;
+      const slot = (this.h - top - 50) / perCol;
+      for (let i = 0; i < n; i++) {
+        const left = two && i >= perCol;
+        const k = left ? i - perCol : i;
+        this.rivalViews.push({
+          cx: left ? 34 + colW / 2 : this.w - 34 - colW / 2,
+          cy: top + slot * (k + 0.5) - 8,
+          r: mr,
+        });
+      }
+      const avail = Math.max(160, this.h - top - bottom);
+      const free = this.w - (colW + 20) * (two ? 2 : 1) - 40;
+      const r = Math.max(70, Math.min(avail * 0.43, free / 2 / 1.2, this.w * 0.38));
+      const cx = two ? this.w / 2 : (this.w - colW - 20) / 2;
+      this.main = { cx, cy: top + avail / 2, r };
+      return;
+    }
+
+    if (n > 0) {
+      // Vertical: una fila de rivales debajo del HUD.
+      const mr = Math.max(14, Math.min(34, (this.w - 24) / (n * 2.55)));
+      const band = mr * 2.32 + 34;
+      const gap = (this.w - 24) / n;
+      for (let i = 0; i < n; i++) this.rivalViews.push({ cx: 12 + gap * (i + 0.5), cy: top + mr * 1.16 + 2, r: mr });
+      const t2 = top + band;
+      const avail = Math.max(160, this.h - t2 - bottom);
+      const r = Math.max(70, Math.min(this.w * 0.44, avail * 0.45));
+      this.main = { cx: this.w / 2, cy: t2 + avail / 2, r };
+      return;
+    }
+
+    const avail = Math.max(160, this.h - top - bottom);
+    // En vertical el ancho es lo que limita: la galleta se come mas pantalla.
+    const widthShare = this.w < this.h ? 0.44 : 0.38;
+    this.main = { cx: this.w / 2, cy: top + avail / 2, r: Math.max(70, Math.min(this.w * widthShare, avail * 0.43)) };
+  }
+
+  // ---------- Cuadro ----------
+
   draw(s: RenderState): void {
     const ctx = this.ctx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.drawImage(this.floor, 0, 0, this.w, this.h);
 
-    if (s.phase === "menu") {
-      this.drawTin(this.cx, this.cy, this.r * 1.16, 1, "", false);
+    if (this.watching && s.rivals.length > 0) {
+      s.rivals.forEach((r, i) => this.drawRival(this.rivalViews[i], r, s, true));
       return;
     }
-    if (s.phase === "choose") {
+
+    if (s.phase === "menu") {
+      this.drawTin(this.main.cx, this.main.cy, this.main.r * 1.16, 1, "", false);
+    } else if (s.phase === "choose") {
       this.tinSlots().forEach((slot, i) => {
         const pulse = i === s.chosen ? 1 + Math.sin(s.time * 8) * 0.03 : i === s.hover ? 1.04 : 1;
         this.drawTin(slot.x, slot.y, slot.r * pulse, 1, String(i + 1), i === s.chosen);
+        this.drawPickers(slot, s.pickers[i] ?? []);
       });
-      return;
+    } else if (s.candy) {
+      if (s.phase === "reveal") this.drawReveal(s, s.candy);
+      else {
+        this.drawCandy(this.main, s.candy, s.phase, s.endT);
+        if (s.phase === "broken") this.drawFlash(s.endT);
+        if (s.phase === "play" && s.needle.visible) this.drawNeedle(s.needle, this.main.r, true);
+      }
     }
-    const candy = s.candy;
-    if (!candy) return;
-    if (this.candyFor !== candy) this.paintCandy(candy);
-
-    if (s.phase === "reveal") {
-      this.drawReveal(s);
-      return;
-    }
-
-    this.drawTin(this.cx, this.cy, this.r * 1.16, 0, "", false);
-    if (s.phase === "done") this.drawDone(candy, s.endT);
-    else ctx.drawImage(this.candyLayer, this.cx - this.r, this.cy - this.r, this.r * 2, this.r * 2);
-
-    if (s.phase !== "done") {
-      this.drawCarving(candy);
-      this.drawWarnings(candy);
-    }
-    if (candy.wet > 0.01) this.drawWet(candy.wet);
-    if (s.phase === "broken") this.drawBroken(candy, s.endT);
-    if (s.phase === "play" && s.needle.visible) this.drawNeedle(s.needle);
+    s.rivals.forEach((r, i) => this.drawRival(this.rivalViews[i], r, s, false));
   }
 
   // ---------- Capas fijas ----------
@@ -188,11 +305,12 @@ export class Renderer {
     g.strokeRect(m * 1.9, m * 1.9, this.w - m * 3.8, this.h - m * 3.8);
   }
 
-  /** La galleta con poros, brillo y la figura estampada, en su propio canvas. */
-  private paintCandy(candy: Candy): void {
-    this.candyFor = candy;
-    const size = Math.round(this.r * 2 * this.dpr);
-    const c = this.candyLayer;
+  /** La galleta con poros, brillo y la figura estampada, cacheada por tamaño. */
+  private layerFor(candy: Candy, r: number): HTMLCanvasElement {
+    const size = Math.max(8, Math.round(r * 2 * this.dpr));
+    const cached = this.layers.get(candy);
+    if (cached && cached.size === size) return cached.canvas;
+    const c = cached?.canvas ?? document.createElement("canvas");
     c.width = size;
     c.height = size;
     const g = c.getContext("2d")!;
@@ -209,9 +327,9 @@ export class Renderer {
     g.fill();
     g.save();
     g.clip();
-    // Poros del bicarbonato.
+    // Poros del bicarbonato (menos en las miniaturas: no se ven y cuestan).
     const rand = mulberry32(candy.binCount * 31 + 7);
-    const pores = Math.round(900 + this.r * 4);
+    const pores = Math.round(Math.min(900 + r * 4, r * r * 0.25));
     for (let i = 0; i < pores; i++) {
       const a = rand() * Math.PI * 2;
       const d = Math.sqrt(rand());
@@ -240,14 +358,16 @@ export class Renderer {
     g.save();
     g.translate(0.008, 0.01);
     trace();
-    g.lineWidth = 0.018;
+    g.lineWidth = r < 60 ? 0.03 : 0.018;
     g.strokeStyle = "rgba(255,226,165,0.7)";
     g.stroke();
     g.restore();
     trace();
-    g.lineWidth = 0.011;
+    g.lineWidth = r < 60 ? 0.025 : 0.011;
     g.strokeStyle = GROOVE;
     g.stroke();
+    this.layers.set(candy, { canvas: c, size });
+    return c;
   }
 
   // ---------- Lata ----------
@@ -257,7 +377,7 @@ export class Renderer {
     ctx.save();
     ctx.translate(x, y);
     ctx.beginPath();
-    ctx.arc(4, 7, r * 1.02, 0, Math.PI * 2);
+    ctx.arc(r * 0.035, r * 0.06, r * 1.02, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(70,45,20,0.28)";
     ctx.fill();
     const body = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.1, 0, 0, r);
@@ -286,7 +406,7 @@ export class Renderer {
       ctx.lineWidth = r * 0.03;
       ctx.stroke();
       if (label) {
-        ctx.font = `900 ${Math.round(r * 0.75)}px "Trebuchet MS", sans-serif`;
+        ctx.font = `900 ${Math.round(r * 0.75)}px ${FONT}`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillStyle = "rgba(255,255,255,0.7)";
@@ -299,25 +419,44 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(0, 0, r * 1.12, 0, Math.PI * 2);
       ctx.strokeStyle = PINK;
-      ctx.lineWidth = Math.max(4, r * 0.08);
+      ctx.lineWidth = Math.max(3, r * 0.08);
       ctx.stroke();
     }
     ctx.restore();
   }
 
-  /** La lata elegida va al centro y la tapa sale deslizandose. */
-  private drawReveal(s: RenderState): void {
+  /** Nombres de los rivales que eligieron esta lata, abajo de ella. */
+  private drawPickers(slot: { x: number; y: number; r: number }, names: string[]): void {
+    if (names.length === 0) return;
     const ctx = this.ctx;
-    const slots = this.tinSlots();
-    const from = slots[Math.max(0, s.chosen)];
+    const shown = names.slice(0, 3);
+    const extra = names.length - shown.length;
+    const text = shown.join(", ") + (extra > 0 ? ` +${extra}` : "");
+    const size = Math.max(11, Math.round(slot.r * 0.2));
+    ctx.font = `700 ${size}px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    const y = slot.y + slot.r * 1.2;
+    const tw = Math.min(ctx.measureText(text).width, slot.r * 2.4);
+    ctx.fillStyle = "rgba(12,12,14,0.72)";
+    ctx.fillRect(slot.x - tw / 2 - 6, y - 3, tw + 12, size + 7);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(text, slot.x, y, slot.r * 2.4);
+  }
+
+  /** La lata elegida va al centro y la tapa sale deslizandose. */
+  private drawReveal(s: RenderState, candy: Candy): void {
+    const ctx = this.ctx;
+    const from = this.tinSlots()[Math.max(0, s.chosen)];
     const t = s.revealT;
     const move = easeOut(Math.min(1, t / 0.45));
-    const x = from.x + (this.cx - from.x) * move;
-    const y = from.y + (this.cy - from.y) * move;
-    const r = from.r + (this.r * 1.16 - from.r) * move;
+    const m = this.main;
+    const x = from.x + (m.cx - from.x) * move;
+    const y = from.y + (m.cy - from.y) * move;
+    const r = from.r + (m.r * 1.16 - from.r) * move;
     this.drawTin(x, y, r, 0, "", false);
-    const k = r / (this.r * 1.16);
-    ctx.drawImage(this.candyLayer, x - this.r * k, y - this.r * k, this.r * 2 * k, this.r * 2 * k);
+    const cr = r / 1.16;
+    ctx.drawImage(this.layerFor(candy, m.r), x - cr, y - cr, cr * 2, cr * 2);
     const slide = easeIn(Math.max(0, (t - 0.45) / 0.55));
     ctx.save();
     ctx.globalAlpha = 1 - slide * 0.6;
@@ -325,40 +464,52 @@ export class Renderer {
     ctx.restore();
   }
 
-  // ---------- Tallado y grietas ----------
+  // ---------- Galleta (propia o de un rival) ----------
 
-  private binPath(candy: Candy, b: number): void {
+  private drawCandy(v: View, candy: Candy, mode: CandyMode, endT: number): void {
+    this.drawTin(v.cx, v.cy, v.r * 1.16, 0, "", false);
+    if (mode === "done") this.drawDone(v, candy, endT);
+    else this.ctx.drawImage(this.layerFor(candy, v.r), v.cx - v.r, v.cy - v.r, v.r * 2, v.r * 2);
+    if (mode !== "done") {
+      this.drawCarving(v, candy);
+      this.drawWarnings(v, candy);
+    }
+    if (candy.wet > 0.01) this.drawWet(v, candy.wet);
+    if (mode === "broken") this.drawBroken(v, candy, endT);
+  }
+
+  private binPath(v: View, candy: Candy, b: number): void {
     const ctx = this.ctx;
     const a = candy.binStart[b];
     const e = Math.min(candy.sx.length, candy.binStart[b + 1] + 1);
-    ctx.moveTo(this.cx + candy.sx[a] * this.r, this.cy + candy.sy[a] * this.r);
+    ctx.moveTo(v.cx + candy.sx[a] * v.r, v.cy + candy.sy[a] * v.r);
     for (let i = a + 1; i <= e; i++) {
       const j = i % candy.sx.length;
-      ctx.lineTo(this.cx + candy.sx[j] * this.r, this.cy + candy.sy[j] * this.r);
+      ctx.lineTo(v.cx + candy.sx[j] * v.r, v.cy + candy.sy[j] * v.r);
     }
   }
 
-  private drawCarving(candy: Candy): void {
+  private drawCarving(v: View, candy: Candy): void {
     const ctx = this.ctx;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.beginPath();
-    for (let b = 0; b < candy.binCount; b++) if (candy.carve[b] >= 1) this.binPath(candy, b);
-    ctx.lineWidth = Math.max(3, this.r * 0.03);
+    for (let b = 0; b < candy.binCount; b++) if (candy.carve[b] >= 1) this.binPath(v, candy, b);
+    ctx.lineWidth = Math.max(1.6, v.r * 0.03);
     ctx.strokeStyle = CARVED;
     ctx.stroke();
     for (let b = 0; b < candy.binCount; b++) {
       const c = candy.carve[b];
       if (c <= 0 || c >= 1) continue;
       ctx.beginPath();
-      this.binPath(candy, b);
-      ctx.lineWidth = Math.max(1.8, this.r * (0.012 + 0.016 * c));
+      this.binPath(v, candy, b);
+      ctx.lineWidth = Math.max(1.1, v.r * (0.012 + 0.016 * c));
       ctx.strokeStyle = `rgba(63,28,6,${0.3 + 0.6 * c})`;
       ctx.stroke();
     }
   }
 
-  private drawWarnings(candy: Candy): void {
+  private drawWarnings(v: View, candy: Candy): void {
     const ctx = this.ctx;
     ctx.lineCap = "round";
     for (let b = 0; b < candy.binCount; b++) {
@@ -369,8 +520,8 @@ export class Renderer {
         const n = Math.max(2, Math.round(line.length * (0.4 + 0.6 * a)));
         ctx.beginPath();
         for (let i = 0; i < n; i++) {
-          const px = this.cx + line[i][0] * this.r;
-          const py = this.cy + line[i][1] * this.r;
+          const px = v.cx + line[i][0] * v.r;
+          const py = v.cy + line[i][1] * v.r;
           if (i === 0) ctx.moveTo(px, py);
           else ctx.lineTo(px, py);
         }
@@ -384,7 +535,7 @@ export class Renderer {
     }
   }
 
-  private drawBroken(candy: Candy, t: number): void {
+  private drawBroken(v: View, candy: Candy, t: number): void {
     const ctx = this.ctx;
     const grow = Math.min(1, t / 0.18);
     ctx.lineCap = "round";
@@ -393,37 +544,41 @@ export class Renderer {
       const n = Math.max(2, Math.round(line.length * grow));
       ctx.beginPath();
       for (let i = 0; i < n; i++) {
-        const px = this.cx + line[i][0] * this.r;
-        const py = this.cy + line[i][1] * this.r;
+        const px = v.cx + line[i][0] * v.r;
+        const py = v.cy + line[i][1] * v.r;
         if (i === 0) ctx.moveTo(px, py);
         else ctx.lineTo(px, py);
       }
-      ctx.lineWidth = Math.max(3, this.r * 0.022);
+      ctx.lineWidth = Math.max(1.6, v.r * 0.022);
       ctx.strokeStyle = "#2a1204";
       ctx.stroke();
-      ctx.lineWidth = Math.max(1.2, this.r * 0.008);
+      ctx.lineWidth = Math.max(0.8, v.r * 0.008);
       ctx.strokeStyle = "rgba(255,240,205,0.85)";
       ctx.stroke();
     }
-    // El caramelo pierde el color y un destello rojo cierra el intento.
+    // El caramelo pierde el color.
     ctx.beginPath();
-    ctx.arc(this.cx, this.cy, this.r, 0, Math.PI * 2);
+    ctx.arc(v.cx, v.cy, v.r, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(70,50,40,${0.35 * Math.min(1, t / 0.5)})`;
     ctx.fill();
+  }
+
+  /** Destello rojo de pantalla completa: solo para la galleta propia. */
+  private drawFlash(t: number): void {
     const flash = Math.max(0, 1 - t / 0.6);
-    if (flash > 0) {
-      ctx.fillStyle = `rgba(232,35,45,${0.35 * flash})`;
-      ctx.fillRect(0, 0, this.w, this.h);
-    }
+    if (flash <= 0) return;
+    this.ctx.fillStyle = `rgba(232,35,45,${0.35 * flash})`;
+    this.ctx.fillRect(0, 0, this.w, this.h);
   }
 
   /** La figura sale: el sobrante se parte en seis gajos que se van y la figura sube. */
-  private drawDone(candy: Candy, t: number): void {
+  private drawDone(v: View, candy: Candy, t: number): void {
     const ctx = this.ctx;
     const o = candy.shape.outline;
+    const layer = this.layerFor(candy, v.r);
     const shapePath = () => {
-      ctx.moveTo(this.cx + o[0][0] * this.r, this.cy + o[0][1] * this.r);
-      for (let i = 1; i < o.length; i++) ctx.lineTo(this.cx + o[i][0] * this.r, this.cy + o[i][1] * this.r);
+      ctx.moveTo(v.cx + o[0][0] * v.r, v.cy + o[0][1] * v.r);
+      for (let i = 1; i < o.length; i++) ctx.lineTo(v.cx + o[i][0] * v.r, v.cy + o[i][1] * v.r);
       ctx.closePath();
     };
     const out = easeOut(Math.min(1, t / 0.9));
@@ -433,23 +588,23 @@ export class Renderer {
       const mid = (a0 + a1) / 2;
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - out * 1.3);
-      ctx.translate(Math.cos(mid) * out * this.r * 0.5, Math.sin(mid) * out * this.r * 0.5);
+      ctx.translate(Math.cos(mid) * out * v.r * 0.5, Math.sin(mid) * out * v.r * 0.5);
       ctx.beginPath();
-      ctx.moveTo(this.cx, this.cy);
-      ctx.arc(this.cx, this.cy, this.r, a0, a1);
+      ctx.moveTo(v.cx, v.cy);
+      ctx.arc(v.cx, v.cy, v.r, a0, a1);
       ctx.closePath();
       shapePath();
       ctx.clip("evenodd");
-      ctx.drawImage(this.candyLayer, this.cx - this.r, this.cy - this.r, this.r * 2, this.r * 2);
+      ctx.drawImage(layer, v.cx - v.r, v.cy - v.r, v.r * 2, v.r * 2);
       ctx.restore();
     }
     const lift = 1 + 0.08 * out;
     ctx.save();
-    ctx.translate(this.cx, this.cy);
+    ctx.translate(v.cx, v.cy);
     ctx.scale(lift, lift);
-    ctx.translate(-this.cx, -this.cy);
+    ctx.translate(-v.cx, -v.cy);
     ctx.save();
-    ctx.translate(6 * out, 10 * out);
+    ctx.translate(v.r * 0.027 * out, v.r * 0.044 * out);
     ctx.beginPath();
     shapePath();
     ctx.fillStyle = `rgba(60,35,15,${0.35 * out})`;
@@ -458,62 +613,66 @@ export class Renderer {
     ctx.beginPath();
     shapePath();
     ctx.clip();
-    ctx.drawImage(this.candyLayer, this.cx - this.r, this.cy - this.r, this.r * 2, this.r * 2);
+    ctx.drawImage(layer, v.cx - v.r, v.cy - v.r, v.r * 2, v.r * 2);
     ctx.restore();
   }
 
-  private drawWet(wet: number): void {
+  private drawWet(v: View, wet: number): void {
     const ctx = this.ctx;
-    const g = ctx.createRadialGradient(this.cx - this.r * 0.2, this.cy - this.r * 0.25, this.r * 0.1, this.cx, this.cy, this.r);
+    const g = ctx.createRadialGradient(v.cx - v.r * 0.2, v.cy - v.r * 0.25, v.r * 0.1, v.cx, v.cy, v.r);
     g.addColorStop(0, `rgba(255,190,205,${0.42 * wet})`);
     g.addColorStop(1, `rgba(255,150,170,${0.12 * wet})`);
     ctx.beginPath();
-    ctx.arc(this.cx, this.cy, this.r, 0, Math.PI * 2);
+    ctx.arc(v.cx, v.cy, v.r, 0, Math.PI * 2);
     ctx.fillStyle = g;
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(this.cx - this.r * 0.05, this.cy - this.r * 0.05, this.r * 0.7, Math.PI * 1.1, Math.PI * 1.5);
+    ctx.arc(v.cx - v.r * 0.05, v.cy - v.r * 0.05, v.r * 0.7, Math.PI * 1.1, Math.PI * 1.5);
     ctx.strokeStyle = `rgba(255,255,255,${0.5 * wet})`;
-    ctx.lineWidth = this.r * 0.04;
+    ctx.lineWidth = v.r * 0.04;
     ctx.stroke();
   }
 
-  private drawNeedle(n: NeedleView): void {
+  private drawNeedle(n: NeedleView, scale: number, shadow: boolean): void {
     const ctx = this.ctx;
-    const len = Math.max(90, this.r * 0.95);
+    const len = Math.max(18, scale * 0.95);
     const dx = 0.42;
     const dy = -0.91;
     const ex = n.x + dx * len;
     const ey = n.y + dy * len;
+    const thick = scale < 60 ? 0.5 : 1;
     ctx.lineCap = "round";
-    // Sombra sobre el caramelo.
-    ctx.beginPath();
-    ctx.moveTo(n.x + 5, n.y + 8);
-    ctx.lineTo(ex + 22, ey + 30);
-    ctx.strokeStyle = "rgba(50,25,8,0.28)";
-    ctx.lineWidth = 4;
-    ctx.stroke();
+    if (shadow) {
+      ctx.beginPath();
+      ctx.moveTo(n.x + 5, n.y + 8);
+      ctx.lineTo(ex + 22, ey + 30);
+      ctx.strokeStyle = "rgba(50,25,8,0.28)";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+    }
     ctx.beginPath();
     ctx.moveTo(n.x, n.y);
     ctx.lineTo(ex, ey);
     ctx.strokeStyle = "#5b6068";
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 4 * thick;
     ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(n.x, n.y);
     ctx.lineTo(ex, ey);
     ctx.strokeStyle = "#e9edf2";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 * thick;
     ctx.stroke();
-    // Ojo de la aguja.
-    ctx.beginPath();
-    ctx.ellipse(ex - dx * 9, ey - dy * 9, 2, 5, Math.atan2(dy, dx) + Math.PI / 2, 0, Math.PI * 2);
-    ctx.strokeStyle = "#5b6068";
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
+    if (scale >= 60) {
+      // Ojo de la aguja.
+      ctx.beginPath();
+      ctx.ellipse(ex - dx * 9, ey - dy * 9, 2, 5, Math.atan2(dy, dx) + Math.PI / 2, 0, Math.PI * 2);
+      ctx.strokeStyle = "#5b6068";
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+    }
     if (n.pressed) {
       ctx.beginPath();
-      ctx.arc(n.x, n.y, 3, 0, Math.PI * 2);
+      ctx.arc(n.x, n.y, 3 * thick, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(40,18,4,0.6)";
       ctx.fill();
     }
@@ -524,6 +683,71 @@ export class Renderer {
       ctx.lineWidth = 2;
       ctx.stroke();
     }
+  }
+
+  // ---------- Rivales ----------
+
+  private drawRival(v: View | undefined, r: Rival, s: RenderState, big: boolean): void {
+    if (!v) return;
+    const ctx = this.ctx;
+    const stale = s.isStale(r);
+    ctx.save();
+    if (stale) ctx.globalAlpha = 0.45;
+    const candy = r.candy;
+    if (!candy || r.status === "choose" || r.status === "wait") {
+      this.drawTin(v.cx, v.cy, v.r * 1.16, 1, r.tin >= 0 ? String(r.tin + 1) : "?", r.tin >= 0);
+    } else {
+      const mode: CandyMode =
+        r.status === "broken" || r.status === "time" ? "broken" : r.status === "done" ? "done" : "play";
+      this.drawCandy(v, candy, mode, r.endT);
+      // La tension por tramo no viaja: un aro rojo avisa que esta por romperse.
+      if (mode === "play" && r.stress > 0.5) {
+        ctx.beginPath();
+        ctx.arc(v.cx, v.cy, v.r * 1.02, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(232,35,45,${0.35 + 0.5 * Math.min(1, (r.stress - 0.5) / 0.5)})`;
+        ctx.lineWidth = Math.max(2, v.r * 0.06);
+        ctx.stroke();
+      }
+      if (mode === "play" && r.needle) {
+        this.drawNeedle(
+          { visible: true, x: v.cx + r.nx * v.r, y: v.cy + r.ny * v.r, pressed: r.pressed, finger: null },
+          v.r,
+          big,
+        );
+      }
+    }
+    // Nombre y estado abajo de la lata.
+    const size = big ? Math.max(13, Math.min(18, v.r * 0.16)) : Math.max(10, Math.min(13, v.r * 0.3));
+    const y = v.cy + v.r * 1.2 + 3;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.font = `800 ${size}px ${FONT}`;
+    ctx.fillStyle = "#2a2118";
+    ctx.fillText(r.name, v.cx, y, v.r * 2.6);
+    const [text, color] = rivalLine(r, stale);
+    ctx.font = `700 ${Math.round(size * 0.85)}px ${FONT}`;
+    ctx.fillStyle = color;
+    ctx.fillText(text, v.cx, y + size + 1, v.r * 2.6);
+    ctx.restore();
+  }
+}
+
+function rivalLine(r: Rival, stale: boolean): [string, string] {
+  if (stale) return ["SIN SEÑAL", "#6b6259"];
+  const shape = r.candy?.shape.name ?? "";
+  switch (r.status) {
+    case "wait":
+      return ["...", "#6b6259"];
+    case "choose":
+      return [r.tin >= 0 ? `LATA ${r.tin + 1}` : "ELIGIENDO", "#6b6259"];
+    case "play":
+      return [`${shape} ${Math.round((r.candy?.progress ?? 0) * 100)}%`, "#8a4712"];
+    case "broken":
+      return ["ROTA", RED];
+    case "time":
+      return ["SIN TIEMPO", RED];
+    case "done":
+      return [`¡SALIÓ! ${r.score}`, TEAL];
   }
 }
 

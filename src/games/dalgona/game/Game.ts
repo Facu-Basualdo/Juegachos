@@ -1,4 +1,4 @@
-import { initRoomMode, type RoomMode } from "../../../shared/room/roomMode";
+import { initRoomMode } from "../../../shared/room/roomMode";
 import { Candy } from "./Candy";
 import {
   BEST_KEY,
@@ -12,8 +12,10 @@ import {
   TOL_CARVE,
   TOUCH_OFFSET_PX,
 } from "./constants";
+import { devRoom, type RoomLink } from "./devRoom";
 import { Hud } from "./Hud";
 import { Renderer, type RenderPhase } from "./Renderer";
+import { Rivals, parseLive, type DgLive, type RivalStatus } from "./Rivals";
 import { SHAPE_ORDER, SHAPES, type ShapeDef } from "./shapes";
 import { SoundEffects } from "./SoundEffects";
 
@@ -23,6 +25,13 @@ type State = "ready" | "countdown" | "reveal" | "playing" | "broken" | "done" | 
 const CREAKS = [0.5, 0.7, 0.85];
 /** Tiempo que se mira la galleta rota / la figura afuera antes del cartel final, en s. */
 const END_HOLD = 1.5;
+/**
+ * Cadencia del estado en vivo para los rivales (s) y el recordatorio si nada cambio.
+ * 4 por segundo por jugador: con 8 en la sala son 32 mensajes/s, lejos del tope de
+ * ~100 del canal de la sala (ver "Canales efimeros" en el CLAUDE.md raiz).
+ */
+const LIVE_SEND = 0.25;
+const LIVE_KEEPALIVE = 2;
 
 /**
  * Dalgona: la prueba de la galleta de azucar. Se elige una de cuatro latas a ciegas
@@ -36,7 +45,12 @@ const END_HOLD = 1.5;
 export class Game {
   private readonly hud: Hud;
   private readonly renderer: Renderer;
-  private readonly room: RoomMode | null;
+  private readonly room: RoomLink | null;
+  /** Los demas jugadores de la sala (null fuera de sala). */
+  private rivals: Rivals | null = null;
+  private liveTimer = 0;
+  private liveIdle = 0;
+  private lastLive = "";
 
   private state: State = "ready";
   private best: number | null = null;
@@ -88,9 +102,16 @@ export class Game {
       () => (this.buttonLick = false),
     );
 
-    this.room = initRoomMode("dalgona", {
-      getScore: () => this.score,
-      onStart: () => this.beginCountdown(),
+    this.room =
+      initRoomMode("dalgona", {
+        getScore: () => this.score,
+        onStart: () => this.beginCountdown(),
+        // Terminado, se siguen mirando las galletas de los demas en vez de la espera generica.
+        onReportedWaiting: () => this.rivals?.anyPlaying() ?? false,
+      }) ?? devRoom(() => this.beginCountdown());
+    this.room?.onLive((player, data) => {
+      const m = parseLive(data, this.room?.round() ?? 0);
+      if (m && this.rivals) this.rivals.apply(player, m);
     });
 
     window.addEventListener("keydown", this.onKeyDown);
@@ -210,6 +231,9 @@ export class Game {
     this.pointerId = null;
     // A ciegas: en cada partida las figuras cambian de lata.
     this.tins = shuffle(SHAPE_ORDER.map((id) => SHAPES[id]));
+    // La lista de la sala recien esta completa cuando arranca la ronda (onStart).
+    if (this.room && !this.rivals) this.rivals = new Rivals(this.room.players().filter((p) => p !== this.room?.me));
+    this.sendLive(true);
     this.hud.hideOverlay();
     this.hud.showPlaying(false);
     this.hud.showTop(false);
@@ -220,6 +244,7 @@ export class Game {
     if (this.state !== "countdown" || i === this.chosen) return;
     this.chosen = i;
     SoundEffects.playPick();
+    this.sendLive(true);
   }
 
   private startReveal(): void {
@@ -235,6 +260,7 @@ export class Game {
     this.hud.setStress(0);
     this.hud.showTop(true);
     SoundEffects.playLid();
+    this.sendLive(true);
   }
 
   private startPlaying(): void {
@@ -266,6 +292,7 @@ export class Game {
       }
     }
     this.hud.showPlaying(false);
+    this.sendLive(true);
   }
 
   private finish(): void {
@@ -287,9 +314,70 @@ export class Game {
       : candy && candy.broken >= 0
         ? `Te tocó el ${name} y se partió al ${Math.round(candy.progress * 100)}%.`
         : `Te tocó el ${name} y llegaste al ${Math.round((candy?.progress ?? 0) * 100)}%.`;
-    this.hud.showGameOver(title, detail, this.score, this.best, this.room !== null);
-    if (this.room) this.room.reportScore(this.score);
-    else this.hud.showRanking("dalgona", this.score);
+    if (this.room) {
+      // En sala no hay cartel propio: la pantalla pasa a mirar a los demas (o a la
+      // espera de la sala) y el resultado lo muestra el RoomOverlay.
+      this.room.reportScore(this.score);
+      this.sendLive(true);
+      return;
+    }
+    this.hud.showGameOver(title, detail, this.score, this.best, false);
+    this.hud.showRanking("dalgona", this.score);
+  }
+
+  /** Lo que ven los demas de esta partida. */
+  private liveStatus(): RivalStatus {
+    switch (this.state) {
+      case "countdown":
+        return "choose";
+      case "reveal":
+      case "playing":
+        return "play";
+      case "done":
+        return "done";
+      case "broken":
+      case "over":
+        return this.candy?.done ? "done" : this.candy && this.candy.broken >= 0 ? "broken" : this.candy ? "time" : "wait";
+      default:
+        return "wait";
+    }
+  }
+
+  /**
+   * Manda el estado propio a la sala. `force` al cambiar de paso (elegir lata, abrirla,
+   * romperse); si no, cada `LIVE_SEND` solo si algo cambio, y un recordatorio cada
+   * `LIVE_KEEPALIVE` para el que entro tarde o perdio un mensaje.
+   */
+  private sendLive(force: boolean): void {
+    if (!this.room) return;
+    const candy = this.candy;
+    const p = this.renderer.toCandy(this.tipX, this.tipY);
+    const msg: DgLive = {
+      g: "dg",
+      r: this.room.round(),
+      st: this.liveStatus(),
+      t: this.chosen,
+      sh: this.state === "countdown" ? "" : (candy?.shape.id ?? ""),
+      c: candy && this.state !== "countdown" ? candy.carveLevels() : "",
+      x: Math.round(p.x * 1000) / 1000,
+      y: Math.round(p.y * 1000) / 1000,
+      p: this.pressed && !this.licking ? 1 : 0,
+      v: this.hoverVisible && !this.licking && this.state === "playing" ? 1 : 0,
+      s: Math.round((candy?.maxStress ?? 0) * 100) / 100,
+      w: Math.round((candy?.wet ?? 0) * 10) / 10,
+      b: candy?.broken ?? -1,
+      pts: this.score,
+    };
+    const sig = JSON.stringify(msg);
+    if (!force && sig === this.lastLive && this.liveIdle < LIVE_KEEPALIVE) return;
+    this.lastLive = sig;
+    this.liveIdle = 0;
+    this.room.broadcastLive(msg);
+  }
+
+  /** Terminada la partida propia, si alguien sigue se miran sus galletas en grande. */
+  private get watching(): boolean {
+    return this.room !== null && this.state === "over" && (this.rivals?.anyPlaying() ?? false);
   }
 
   // ---------- Bucle ----------
@@ -332,6 +420,25 @@ export class Game {
         break;
     }
     this.hud.setLicking(this.state === "playing" && this.licking);
+
+    if (this.rivals) {
+      this.rivals.update(dt);
+      this.renderer.setRivals(this.rivals.list.length, this.watching);
+      if (this.room && this.state === "over") {
+        this.hud.banner(
+          this.watching ? `${this.score > 0 ? `${this.score} pts` : "ELIMINADO"} · MIRANDO A LOS DEMÁS` : "ESPERANDO EL RESULTADO",
+          this.score > 0 ? "good" : "bad",
+        );
+      }
+    }
+    if (this.room && this.state !== "ready") {
+      this.liveTimer -= dt;
+      this.liveIdle += dt;
+      if (this.liveTimer <= 0) {
+        this.liveTimer = LIVE_SEND;
+        this.sendLive(false);
+      }
+    }
   }
 
   private updatePlaying(dt: number): void {
@@ -406,6 +513,9 @@ export class Game {
         finger: this.touch && this.pressed ? { x: this.fingerX, y: this.fingerY } : null,
       },
       time,
+      rivals: this.rivals?.list ?? [],
+      pickers: this.rivals?.pickers() ?? [[], [], [], []],
+      isStale: (r) => this.rivals?.stale(r) ?? false,
     });
   }
 }

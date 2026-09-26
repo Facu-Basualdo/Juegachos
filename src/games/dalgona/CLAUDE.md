@@ -88,6 +88,45 @@ del `Game` desde un `requestAnimationFrame` de la pagina).
 400) mas `POINTS_PER_SECOND` (3) por segundo sobrante. Roto o sin tiempo: 0. En sala
 se reporta igual (entra al ranking global de sala: es el mismo numero que solo).
 
+## Ver a los demas (sala, pedido del programador)
+
+En sala cada uno ve las galletas de los otros **dibujadas de verdad**, en vivo: la lata
+que eligieron, la figura, el tallado, la aguja moviendose, el brillo si lamen y la
+grieta si se les rompe. Va por el broadcast efimero de la sala
+(`RoomMode.broadcastLive` / `onLive`), sin game server y sin tocar la DB.
+
+- **Trafico:** `LIVE_SEND` 0.25 s, o sea 4 mensajes/s por jugador y 32/s con la sala
+  llena, lejos del tope de ~100 del canal. Se manda solo si algo cambio (y un
+  recordatorio cada `LIVE_KEEPALIVE`, 2 s, para el que entro tarde), mas un envio
+  inmediato al cambiar de paso (elegir, abrir, romperse, terminar).
+- **Que viaja** (`DgLive` en `Rivals.ts`): estado, lata, figura, el tallado como **un
+  caracter 0-3 por tramo** (`Candy.carveLevels`, ~140 caracteres), la aguja en
+  coordenadas de galleta (y si se ve y si aprieta), la tension maxima, la humedad, el
+  tramo roto y los puntos. Marcado con `g: "dg"` y la ronda, porque el canal de la
+  sala es el mismo en todas las paginas.
+- **La grieta no viaja:** `Candy.breakAt(tramo)` es determinista (semilla = tramo +
+  figura), asi que con el numero de tramo cada pantalla dibuja la misma.
+- **La tension por tramo no viaja** (seria otro string por mensaje): en las galletas
+  ajenas no hay grietitas de aviso, las reemplaza un aro rojo cuando su tension maxima
+  pasa de 0.5.
+- La aguja ajena se suaviza hacia la ultima posicion (`NEEDLE_EASE`) y solo se dibuja
+  si su dueño la tiene en pantalla (`v`): sin eso, el que todavia no movio el puntero
+  mandaba la esquina (0, 0) y se dibujaba una aguja suelta afuera de su lata.
+- **Donde se ven:** al elegir, el nombre de cada uno debajo de la lata que agarro; al
+  tallar, en miniatura en una columna a la derecha (y otra a la izquierda desde 5
+  rivales) o en una fila debajo del HUD en el celu; al terminar la propia, si alguien
+  sigue, la pantalla pasa a una **grilla con todos en grande** (`watching`, via
+  `onReportedWaiting`) en vez de la espera generica de la sala. Sin noticias en
+  `RIVAL_STALE_MS` (8 s), el rival se atenua con "SIN SEÑAL".
+- En sala no hay cartel de fin propio: el resultado lo muestra el `RoomOverlay`.
+
+## Probar la sala sin Supabase (`devRoom.ts`)
+
+`/games/dalgona/?dev=Ana&roster=Ana,Beto&code=TEST` en **dev**, una pestaña por
+nickname con el mismo `code` y `roster`, **en el mismo navegador**: los mensajes en vivo
+viajan por un `BroadcastChannel` entre pestañas. Arranca sola al segundo y el puntaje
+va a la consola y a `window.__dalgonaScore`. En el build queda eliminado.
+
 ## Input
 
 - Puntero sobre el `container` (nunca el canvas: el overlay lo tapa). Mouse: apretar y

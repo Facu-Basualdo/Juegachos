@@ -27,6 +27,7 @@ export class Hud {
   private clockSig = "";
   private progressSig = -1;
   private stressSig = -1;
+  private bannerSig = "";
 
   constructor(container: HTMLElement) {
     this.root = document.createElement("div");
@@ -162,6 +163,9 @@ export class Hud {
   }
 
   banner(text: string | null, tone: "info" | "good" | "bad" = "info"): void {
+    const sig = text === null ? "" : `${tone}:${text}`;
+    if (sig === this.bannerSig) return;
+    this.bannerSig = sig;
     if (text === null) {
       this.bannerEl.hidden = true;
       return;
