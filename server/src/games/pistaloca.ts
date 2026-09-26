@@ -39,6 +39,12 @@ const MAX_ROUNDS = 20;
 const DROP_MS = 2000;
 const RESET_MS = 600;
 const DISCONNECT_KILL_MS = 10_000;
+/** Empujon: alcance, apertura hacia adelante (rad), fuerza, cuanto levanta y enfriamiento. */
+const PUSH_RANGE = 1.9;
+const PUSH_ARC = 1.2;
+const PUSH_FORCE = 11;
+const PUSH_LIFT = 4.5;
+const PUSH_COOLDOWN_MS = 1200;
 const TICK_MS = 50;
 const STATE_SYNC_MS = 1000;
 
@@ -74,6 +80,8 @@ interface Seat {
   time: number;
   pos: Pos;
   killTimer: ReturnType<typeof setTimeout> | null;
+  /** Momento (Date.now) del ultimo empujon, para el enfriamiento. */
+  lastPush: number;
 }
 
 export class PistaLocaSim implements RoomSim {
@@ -156,6 +164,45 @@ export class PistaLocaSim implements RoomSim {
       return;
     }
     if (event === "pl:dead" && this.phase === "playing" && seat.alive) this.kill(seat);
+    if (event === "pl:push" && this.phase === "playing" && seat.alive) this.push(seat, readNumber(payload, "r"));
+  }
+
+  /**
+   * Empujon: alcanza a los que estan cerca (`PUSH_RANGE`) y adelante del que empuja
+   * (dentro de `PUSH_ARC` de hacia donde mira), a la misma altura. A cada uno se le
+   * manda, dirigido, el impulso a aplicar (`pl:shove`): el movimiento lo simula cada
+   * cliente, asi que el empujado es el que sale volando en su pantalla. A todos se les
+   * avisa quien empujo (`pl:pushfx`) para la animacion. Con enfriamiento del lado del
+   * server: el cliente no puede ametrallar empujones.
+   */
+  private push(seat: Seat, yaw: number | null): void {
+    const now = Date.now();
+    if (now - seat.lastPush < PUSH_COOLDOWN_MS) return;
+    seat.lastPush = now;
+    const facing = yaw ?? seat.pos.r;
+    const fx = Math.sin(facing);
+    const fz = Math.cos(facing);
+    const index = this.seats.indexOf(seat);
+    this.room.broadcast("pl:pushfx", { i: index });
+    for (const other of this.seats) {
+      if (other === seat || !other.alive) continue;
+      const dx = other.pos.x - seat.pos.x;
+      const dz = other.pos.z - seat.pos.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > PUSH_RANGE || Math.abs(other.pos.y - seat.pos.y) > 1.3) continue;
+      // Adelante: el angulo entre hacia donde mira y hacia donde esta el otro.
+      if (dist > 0.3 && (dx * fx + dz * fz) / dist < Math.cos(PUSH_ARC)) continue;
+      const nx = dist > 0.3 ? dx / dist : fx;
+      const nz = dist > 0.3 ? dz / dist : fz;
+      // Mas fuerte de cerca: el que esta pegado sale disparado.
+      const power = PUSH_FORCE * (1 - (dist / PUSH_RANGE) * 0.35);
+      this.room.emitTo(other.nickname, "pl:shove", {
+        vx: round2(nx * power),
+        vz: round2(nz * power),
+        vy: PUSH_LIFT,
+        from: index,
+      });
+    }
   }
 
   dispose(): void {
@@ -183,6 +230,7 @@ export class PistaLocaSim implements RoomSim {
       // Sembrada con la largada, para que nadie sea invisible durante el countdown.
       pos: { ...spawnPos(i, list.length), f: 1 },
       killTimer: null,
+      lastPush: 0,
     }));
     this.round = 0;
     this.step = "dance";

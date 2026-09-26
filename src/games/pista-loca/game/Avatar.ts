@@ -11,6 +11,9 @@ const LEG_H = 0.72;
 const BODY_H = 0.72;
 const HEAD = 0.46;
 
+/** Duracion de la animacion del empujon, en s. */
+const PUSH_ANIM = 0.32;
+
 let sharedShadow: THREE.CanvasTexture | null = null;
 
 /**
@@ -31,6 +34,8 @@ export class Avatar {
   private readonly rightLeg = new THREE.Group();
   private readonly label: THREE.Sprite | null = null;
   private phase = 0;
+  /** Segundos que quedan de la animacion del empujon. */
+  private pushT = 0;
 
   constructor(seat: number, name: string | null) {
     const shirt = seatColor(seat);
@@ -89,7 +94,8 @@ export class Avatar {
       const { texture, aspect } = nameTexture(name, shirt);
       this.label = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false }));
       this.label.renderOrder = 10;
-      this.label.scale.set(0.42 * aspect, 0.42, 1);
+      // Grande: la camara muestra la pista entera desde lejos.
+      this.label.scale.set(0.62 * aspect, 0.62, 1);
       this.label.position.y = LEG_H + BODY_H + HEAD + 0.5;
       this.root.add(this.label);
     }
@@ -117,11 +123,28 @@ export class Avatar {
     if (this.label) (this.label.material as THREE.SpriteMaterial).opacity = offline ? 0.35 : 1;
   }
 
+  /** Empujon: los dos brazos al frente de golpe y vuelven. */
+  push(): void {
+    this.pushT = PUSH_ANIM;
+  }
+
   /**
    * Animacion por procedimiento: al correr brazos y piernas se balancean en
-   * oposicion, en el aire se abren, y cayendo rapido los brazos van arriba.
+   * oposicion, en el aire se abren, y cayendo rapido los brazos van arriba. El
+   * empujon pisa a los brazos de todo lo anterior mientras dura.
    */
   animate(dt: number, speed: number, grounded: boolean, vy: number): void {
+    this.animateBody(dt, speed, grounded, vy);
+    if (this.pushT <= 0) return;
+    this.pushT = Math.max(0, this.pushT - dt);
+    // Sale rapido (el primer tercio) y vuelve despacio.
+    const t = 1 - this.pushT / PUSH_ANIM;
+    const reach = t < 0.3 ? t / 0.3 : 1 - (t - 0.3) / 0.7;
+    this.leftArm.rotation.x = this.rightArm.rotation.x = -1.55 * reach;
+    this.leftArm.rotation.z = this.rightArm.rotation.z = 0;
+  }
+
+  private animateBody(dt: number, speed: number, grounded: boolean, vy: number): void {
     const amount = Math.min(1, speed / SPEED);
     if (grounded) {
       this.phase += dt * (6 + speed * 1.6);

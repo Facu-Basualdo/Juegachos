@@ -1109,6 +1109,8 @@ export interface PlClientToServer {
   "pl:pos": (msg: { x: number; y: number; z: number; r: number; f: number }) => void;
   /** Me cai al vacio. */
   "pl:dead": (msg: Record<string, never>) => void;
+  /** Empujo hacia donde miro (`r`, rad). El server decide a quien alcanza. */
+  "pl:push": (msg: { r: number }) => void;
 }
 
 /** Server -> Cliente. */
@@ -1117,6 +1119,10 @@ export interface PlServerToClient {
   "pl:state": (msg: PlState) => void;
   /** Posiciones a 20 Hz, aplanadas: [asiento, x, y, z, rotY, flags, ...]. */
   "pl:snap": (msg: { p: number[] }) => void;
+  /** Dirigido: te empujaron; aplica este impulso (m/s). `from` = asiento del que empujo. */
+  "pl:shove": (msg: { vx: number; vz: number; vy: number; from: number }) => void;
+  /** A todos: el asiento `i` empujo (para la animacion). */
+  "pl:pushfx": (msg: { i: number }) => void;
 }
 
 // ============================================================================

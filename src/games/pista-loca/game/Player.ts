@@ -8,6 +8,8 @@ import {
   JUMP_BUFFER,
   JUMP_VELOCITY,
   PHYSICS_STEP,
+  SHOVE_ACCEL,
+  SHOVE_STUN,
   SPEED,
   TERMINAL_VELOCITY,
   cellCenter,
@@ -39,6 +41,8 @@ export class Player {
   grounded = false;
   private coyote = 0;
   private jumpBuffer = 0;
+  /** Segundos que quedan de aturdimiento por un empujon. */
+  private stun = 0;
 
   place(x: number, y: number, z: number, yaw: number): void {
     this.x = x;
@@ -47,6 +51,21 @@ export class Player {
     this.yaw = yaw;
     this.vx = this.vy = this.vz = 0;
     this.grounded = false;
+    this.stun = 0;
+  }
+
+  /**
+   * Te empujaron: el envion reemplaza a la velocidad horizontal, te levanta un poco
+   * del piso y por `SHOVE_STUN` casi no se controla el muñeco (si no, el joystick lo
+   * frena en el acto y el empujon no mueve a nadie).
+   */
+  shove(vx: number, vy: number, vz: number): void {
+    this.vx = vx;
+    this.vz = vz;
+    this.vy = Math.max(this.vy, vy);
+    this.grounded = false;
+    this.coyote = 0;
+    this.stun = SHOVE_STUN;
   }
 
   requestJump(): void {
@@ -74,7 +93,9 @@ export class Player {
   }
 
   private step(dt: number, dirX: number, dirZ: number, floor: Floor, events: PlayerEvents): void {
-    const k = 1 - Math.exp(-(this.grounded ? GROUND_ACCEL : AIR_ACCEL) * dt);
+    this.stun = Math.max(0, this.stun - dt);
+    const accel = this.stun > 0 ? SHOVE_ACCEL : this.grounded ? GROUND_ACCEL : AIR_ACCEL;
+    const k = 1 - Math.exp(-accel * dt);
     this.vx += (dirX * SPEED - this.vx) * k;
     this.vz += (dirZ * SPEED - this.vz) * k;
 

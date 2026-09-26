@@ -35,6 +35,8 @@ export class Hud {
   private readonly countdownEl: HTMLDivElement;
   private readonly overlayEl: HTMLDivElement;
   private readonly jumpBtn: HTMLButtonElement;
+  private readonly pushBtn: HTMLButtonElement;
+  private pushSig = -1;
   private readonly stickRing: HTMLDivElement;
   private readonly stickKnob: HTMLDivElement;
   private playersSig = "";
@@ -79,7 +81,11 @@ export class Hud {
     this.jumpBtn.type = "button";
     this.jumpBtn.className = "pl-controls__jump";
     this.jumpBtn.textContent = "SALTAR";
-    controls.append(this.jumpBtn);
+    this.pushBtn = document.createElement("button");
+    this.pushBtn.type = "button";
+    this.pushBtn.className = "pl-controls__push";
+    this.pushBtn.textContent = "EMPUJAR";
+    controls.append(this.pushBtn, this.jumpBtn);
 
     this.stickRing = document.createElement("div");
     this.stickRing.className = "pl-stick";
@@ -115,6 +121,22 @@ export class Hud {
       e.preventDefault();
       cb();
     });
+  }
+
+  onPush(cb: () => void): void {
+    this.pushBtn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      cb();
+    });
+  }
+
+  /** Enfriamiento del empujon: 0 = listo, 1 = recien usado. El boton se llena de abajo. */
+  setPushCooldown(left: number): void {
+    const q = Math.round(left * 40);
+    if (q === this.pushSig) return;
+    this.pushSig = q;
+    this.pushBtn.style.setProperty("--cd", String(q / 40));
+    this.pushBtn.classList.toggle("is-cooling", q > 0);
   }
 
   showHud(visible: boolean): void {

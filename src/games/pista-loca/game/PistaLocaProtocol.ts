@@ -37,3 +37,11 @@ export interface PlSnap {
 
 export const FLAG_GROUNDED = 1;
 export const FLAG_MOVING = 2;
+
+/** Dirigido: te empujaron. Impulso a aplicar en m/s; `from` = asiento del que empujo. */
+export interface PlShove {
+  vx: number;
+  vz: number;
+  vy: number;
+  from: number;
+}

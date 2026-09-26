@@ -375,8 +375,10 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   colores) y lo manda como string de 576 digitos; elige un color que este en al menos el 3% de
   la pista. **La caida la juzga cada cliente**: arranca su cuenta con el `choose` y hace caer su
   pista con el `drop`, que le llegan con la misma latencia. Puntaje: rondas completas aguantadas;
-  termina cuando queda uno (con 2+ largando), se caen todos o se llega a 20 rondas. Ver el
-  `CLAUDE.md` de `pista-loca`.
+  termina cuando queda uno (con 2+ largando), se caen todos o se llega a 20 rondas. Tambien
+  resuelve el **empujon** (`pl:push`): con enfriamiento propio, mide quien esta cerca y adelante
+  del que empuja y le manda a cada uno, dirigido, el impulso (`pl:shove`); el vuelo lo simula el
+  empujado. Ver el `CLAUDE.md` de `pista-loca`.
 - `src/games/marealava.ts` — `MareaLavaSim`: Marea de Lava. Manda la **semilla** de la torre
   (cada cliente la genera identica, sin mandar ni una plataforma) y el `elapsed`; la altura de
   la lava es una funcion del tiempo (`lavaY`) duplicada en el cliente. Lleva el resultado de
