@@ -96,6 +96,8 @@ export class LuzRojaSim implements RoomSim {
   private readonly room: GameRoom;
 
   private round = -1;
+  /** Deadline de la ronda (epoch ms) que manda el cliente: identifica la partida. */
+  private match = -1;
   private phase: LrPhase = "waiting";
   private seats: Seat[] = [];
 
@@ -118,12 +120,18 @@ export class LuzRojaSim implements RoomSim {
 
   join(nickname: string, roster: string[], meta?: unknown): void {
     const round = readInt(meta, "round") ?? 0;
-    // Entre rondas el GameRoom puede sobrevivir con la partida anterior adentro.
-    if (round > this.round) {
+    const match = readInt(meta, "match") ?? 0;
+    // Entre rondas el GameRoom puede sobrevivir con la partida anterior adentro:
+    // basta un socket que siga conectado (alguien mirando el tablero final). La
+    // ronda sola no la distingue, porque tras "Volver a la sala" la revancha vuelve
+    // a ser la ronda 1 y encontraba la partida vieja terminada. El `match` (deadline
+    // de la ronda) crece con cada ronda que arranca, asi que manda sobre la ronda.
+    if (match > this.match || (match === this.match && round > this.round)) {
+      this.match = match;
       this.round = round;
       this.reset(roster);
     }
-    if (round !== this.round) return;
+    if (round !== this.round || match !== this.match) return;
 
     const seat = this.seatOf(nickname);
     if (seat?.killTimer) {

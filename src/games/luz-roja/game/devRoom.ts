@@ -1,7 +1,7 @@
 import type { RoomMode } from "../../../shared/room/roomMode";
 
 /** Lo unico de la sala que usa Luz Roja. */
-export type RoomLink = Pick<RoomMode, "code" | "me" | "players" | "round" | "reportScore">;
+export type RoomLink = Pick<RoomMode, "code" | "me" | "players" | "round" | "deadline" | "reportScore">;
 
 /**
  * Sala falsa SOLO para desarrollo: `?dev=NICK&roster=A,B,C&code=TEST` juega contra
@@ -25,6 +25,8 @@ export function devRoom(onStart: () => void): RoomLink | null {
     me,
     players: () => roster,
     round: () => round,
+    // Sin deadline el server scopea solo por ronda (match 0), como antes.
+    deadline: () => null,
     reportScore: (score: number) => {
       console.info(`[luz-roja dev] ${me} reporta ${score}`);
       (window as unknown as { __luzRojaScore?: number }).__luzRojaScore = score;
