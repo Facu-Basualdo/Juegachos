@@ -57,6 +57,15 @@ despues de largar.
 
 ## Gotchas
 
+- **El estado del server se scopea por partida, no solo por ronda.** El `GameRoom`
+  vive mientras quede un socket conectado (alguien mirando el tablero final), y
+  tras "Volver a la sala" la revancha vuelve a ser la ronda 1: con la ronda sola, el
+  join nuevo encontraba la partida anterior en `over` y la ronda terminaba al
+  instante con los puntajes viejos. Por eso el `lr:join` manda tambien `match` = el
+  deadline de la ronda en epoch ms (lo escribe el host al pasar a `playing`, es el
+  mismo para todos y crece con cada ronda que arranca) y el server resetea cuando
+  llega un `match` mas nuevo, aunque la ronda se repita. Depende de que el juego
+  declare `roomTimeLimitSec`: sin tope no hay deadline y el `match` cae a 0.
 - **La muñeca le da la ESPALDA a la cancha con el cuerpo** y solo gira la cabeza,
   como en la serie. En `Doll.ts` el `root` esta rotado PI y el angulo de la cabeza
   es local: 0 = hacia el arbol, PI = hacia la cancha.
