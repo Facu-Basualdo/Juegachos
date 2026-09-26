@@ -185,7 +185,14 @@ export class Game {
       this.giveUp();
       return;
     }
-    const socket = new LuzRojaSocket(url, this.room.code, this.room.me, this.room.players(), this.room.round());
+    const socket = new LuzRojaSocket(
+      url,
+      this.room.code,
+      this.room.me,
+      this.room.players(),
+      this.room.round(),
+      this.room.deadline()?.getTime() ?? 0,
+    );
     socket.onInit((init) => this.onInit(init));
     socket.onState((s) => this.onState(s));
     socket.onSnap((snap) => this.onSnap(snap));

@@ -1180,3 +1180,63 @@ export interface MlServerToClient {
   /** Posiciones a 20 Hz, aplanadas: [asiento, x, y, z, rotY, flags, ...]. */
   "ml:snap": (msg: { p: number[] }) => void;
 }
+
+// ============================================================================
+// La Cuerda (namespace `/lacuerda`, prefijo `lc:`).
+// ============================================================================
+
+/**
+ * El server es duenio del reloj y del resultado de cada uno, y resuelve los
+ * empujones; el movimiento lo simula cada cliente y aca se reenvia. El angulo de cada
+ * cuerda es una funcion del tiempo que cada lado calcula con `elapsed` (ver
+ * `games/lacuerda.ts`).
+ */
+
+export type LcPhase = "waiting" | "preroll" | "playing" | "over";
+/** Cruzando, afuera (cuerda o caida), o llego a la meta. */
+export type LcStatus = "run" | "dead" | "goal";
+
+export interface LcState {
+  phase: LcPhase;
+  /** Ms para largar ("preroll") o para el tope ("playing"). */
+  msLeft: number;
+  /** Ms desde la largada (la cuerda sale de aca). */
+  elapsed: number;
+  status: LcStatus[];
+  /** Mejor avance por asiento (m). */
+  best: number[];
+  /** Ms en que cada asiento llego a la meta (-1 si no llego). */
+  goalT: number[];
+  on: boolean[];
+}
+
+export interface LcInit extends LcState {
+  seat: number;
+  seats: string[];
+  spawn: { x: number; y: number; z: number; r: number } | null;
+}
+
+/** Cliente -> Server. */
+export interface LcClientToServer {
+  "lc:join": (msg: { code: string; nickname: string; roster: string[]; round: number }) => void;
+  /** f: 1 = en el piso, 2 = moviendose. */
+  "lc:pos": (msg: { x: number; y: number; z: number; r: number; f: number }) => void;
+  /** Empujon hacia `r` (rad, hacia donde mira el muñeco). */
+  "lc:push": (msg: { r: number }) => void;
+  /** Me agarro una cuerda o me cai. */
+  "lc:dead": (msg: Record<string, never>) => void;
+  /** Llegue a la meta (se valida contra la ultima posicion). */
+  "lc:goal": (msg: Record<string, never>) => void;
+}
+
+/** Server -> Cliente. */
+export interface LcServerToClient {
+  "lc:init": (msg: LcInit) => void;
+  "lc:state": (msg: LcState) => void;
+  /** Posiciones a 20 Hz, aplanadas: [asiento, x, y, z, rotY, flags, ...]. */
+  "lc:snap": (msg: { p: number[] }) => void;
+  /** Dirigido al empujado: el impulso a aplicar y quien empujo. */
+  "lc:shove": (msg: { vx: number; vz: number; vy: number; from: number }) => void;
+  /** A todos: quien empujo (para la animacion de brazos). */
+  "lc:pushfx": (msg: { i: number }) => void;
+}

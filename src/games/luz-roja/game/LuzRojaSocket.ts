@@ -3,8 +3,8 @@ import type { LrInit, LrSnap, LrState } from "./LuzRojaProtocol";
 
 /**
  * Transporte socket.io contra el namespace `/luzroja`. La lib se carga con import
- * dinamico y el join anuncia {code, nickname, roster, round} (la ronda scopea el
- * estado del server). Al reconectar se vuelve a mandar el join y el server responde
+ * dinamico y el join anuncia {code, nickname, roster, round, match} (ronda + partida
+ * scopean el estado del server; ver `match` en el constructor). Al reconectar se vuelve a mandar el join y el server responde
  * con un `lr:init` completo.
  */
 export class LuzRojaSocket {
@@ -19,13 +19,20 @@ export class LuzRojaSocket {
   private readonly nickname: string;
   private readonly roster: string[];
   private readonly round: number;
+  private readonly match: number;
 
-  constructor(serverUrl: string, code: string, nickname: string, roster: string[], round: number) {
+  /**
+   * `match` identifica la partida: el deadline de la ronda en epoch ms, que es el
+   * mismo para todos y cambia cada vez que una ronda arranca. La ronda sola no
+   * alcanza: tras "Volver a la sala" la revancha vuelve a ser la ronda 1.
+   */
+  constructor(serverUrl: string, code: string, nickname: string, roster: string[], round: number, match: number) {
     this.serverUrl = serverUrl;
     this.code = code;
     this.nickname = nickname;
     this.roster = roster;
     this.round = round;
+    this.match = match;
   }
 
   async connect(): Promise<void> {
@@ -34,7 +41,7 @@ export class LuzRojaSocket {
     const socket = io(`${base}/luzroja`, { transports: ["websocket"], reconnection: true });
     this.socket = socket;
     socket.on("connect", () => {
-      socket.emit("lr:join", { code: this.code, nickname: this.nickname, roster: this.roster, round: this.round });
+      socket.emit("lr:join", { code: this.code, nickname: this.nickname, roster: this.roster, round: this.round, match: this.match });
     });
     socket.on("lr:init", (init: LrInit) => this.initCb(init));
     socket.on("lr:state", (state: LrState) => this.stateCb(state));
