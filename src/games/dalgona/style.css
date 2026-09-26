@@ -1,0 +1,368 @@
+/*
+ * Dalgona. Ver DESIGN.md ("Caramelo en la Lata"): la voz del galpon de Luz Roja,
+ * reloj digital rojo, paneles oscuros de bordes rectos y letra en negrita. Nada tapa
+ * la galleta.
+ */
+
+:root {
+  color-scheme: light;
+  --sand: #eadbbd;
+  --panel: rgba(12, 12, 14, 0.72);
+  --text: #ffffff;
+  --ink: #2a2118;
+  --shadow: #2a2a2a;
+  --red: #e8232d;
+  --teal: #1f8a7a;
+  --pink: #e0457b;
+  --amber: #d98c34;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--sand);
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  color: var(--text);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+.game-canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.back-link {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 40;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.dg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  font-weight: 700;
+  text-shadow: 2px 2px 0 var(--shadow);
+}
+
+/* ---------- Arriba: reloj, figura, tallado y crujido ---------- */
+
+.dg__top {
+  position: absolute;
+  /* Debajo de la barra de la sala (RoomOverlay). */
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: stretch;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--panel);
+  max-width: calc(100vw - 24px);
+}
+
+.dg--top .dg__top,
+.dg--playing .dg__top {
+  display: flex;
+}
+
+.dg__clock {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background: #140404;
+  color: var(--red);
+  font-family: "Courier New", monospace;
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(232, 35, 45, 0.7);
+}
+
+.dg__clock.is-low {
+  animation: dg-blink 0.5s steps(1) infinite;
+}
+
+@keyframes dg-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.dg__info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  min-width: 190px;
+}
+
+.dg__shape {
+  font-size: 18px;
+  letter-spacing: 3px;
+}
+
+.dg__bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dg__meter {
+  display: grid;
+  grid-template-columns: 70px 1fr 38px;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.dg__meter-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dg__track {
+  height: 9px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+.dg__fill {
+  width: 100%;
+  height: 100%;
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+.dg__fill--carve {
+  background: var(--amber);
+}
+
+.dg__fill--stress {
+  background: #f2e3c2;
+}
+
+.dg__meter.is-danger .dg__fill--stress {
+  background: var(--red);
+}
+
+.dg__meter.is-danger .dg__meter-label {
+  color: var(--red);
+}
+
+/* ---------- Abajo: lamer ---------- */
+
+.dg__bottom {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  pointer-events: auto;
+}
+
+.dg--playing .dg__bottom {
+  display: block;
+}
+
+.dg__lick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 150px;
+  padding: 12px 22px;
+  border: 3px solid var(--pink);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 18px;
+  letter-spacing: 3px;
+  text-shadow: 2px 2px 0 var(--shadow);
+  touch-action: none;
+  cursor: pointer;
+}
+
+.dg__lick.is-on {
+  background: var(--pink);
+}
+
+.dg__lick-key {
+  font-size: 10px;
+  letter-spacing: 1px;
+  opacity: 0.7;
+}
+
+@media (pointer: coarse) {
+  .dg__lick-key {
+    display: none;
+  }
+}
+
+/* ---------- Carteles ---------- */
+
+.dg__banner {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  background: var(--panel);
+  font-size: 22px;
+  letter-spacing: 4px;
+  white-space: nowrap;
+}
+
+.dg__banner--good {
+  color: #7be0b0;
+}
+
+.dg__banner--bad {
+  color: var(--red);
+}
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(90px, 22vw, 200px);
+  font-weight: 900;
+  color: var(--pink);
+  text-shadow: 5px 5px 0 var(--ink);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 30;
+}
+
+/* Arriba y no al centro: al elegir lata, las latas ocupan el medio de la pantalla. */
+.countdown {
+  align-items: flex-start;
+  padding-top: 14vh;
+}
+
+.countdown.is-shown {
+  animation: countdown-pop 0.75s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes countdown-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+/* ---------- Overlay (inicio / final) ---------- */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  background: rgba(20, 14, 10, 0.72);
+  text-align: center;
+  overflow-y: auto;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay__title {
+  font-size: clamp(40px, 9vw, 76px);
+  font-weight: 900;
+  letter-spacing: 6px;
+  color: var(--amber);
+  text-shadow: 4px 4px 0 var(--ink);
+}
+
+.overlay__subtitle {
+  max-width: 460px;
+  font-size: 16px;
+  line-height: 1.45;
+  font-weight: 700;
+}
+
+.overlay__score {
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--text);
+  padding: 4px 16px;
+  border: 3px solid var(--pink);
+}
+
+.overlay__hint {
+  font-size: 13px;
+  letter-spacing: 2px;
+  opacity: 0.8;
+  animation: dg-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes dg-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (max-width: 640px) {
+  .dg__clock {
+    font-size: 26px;
+    padding: 0 8px;
+  }
+
+  .dg__info {
+    min-width: 160px;
+  }
+
+  .dg__shape {
+    font-size: 15px;
+  }
+
+  .dg__banner {
+    font-size: 17px;
+  }
+}
