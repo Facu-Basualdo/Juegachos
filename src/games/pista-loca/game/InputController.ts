@@ -1,10 +1,10 @@
 /**
  * Input de Pista Loca (copiado del de Derrumbe).
  *
- * - Compu: WASD / flechas para correr, ESPACIO para saltar.
+ * - Compu: WASD / flechas para correr, ESPACIO para saltar, F o clic para empujar.
  * - Celu: un dedo en cualquier lado es un joystick flotante (aparece donde apoyas)
- *   y el boton SALTAR va abajo a la derecha (lo maneja el Hud y llama a
- *   `requestJump`).
+ *   y los botones SALTAR y EMPUJAR van abajo a la derecha (los maneja el Hud y
+ *   llaman a `requestJump` / `requestPush`).
  *
  * La camara es fija (ver constants.ts), asi que no hay input de camara: la
  * direccion de pantalla es la direccion del mundo.
@@ -26,6 +26,7 @@ export interface JoystickView {
 export class InputController {
   private readonly keys = new Set<string>();
   private jumpPending = false;
+  private pushPending = false;
 
   private stickId: number | null = null;
   private originX = 0;
@@ -94,9 +95,20 @@ export class InputController {
     this.jumpPending = true;
   }
 
+  consumePush(): boolean {
+    if (!this.pushPending) return false;
+    this.pushPending = false;
+    return true;
+  }
+
+  requestPush(): void {
+    this.pushPending = true;
+  }
+
   private onKeyDown = (e: KeyboardEvent): void => {
     if (e.code === "Space" || e.code.startsWith("Arrow")) e.preventDefault();
     if (e.code === "Space" && !this.keys.has("Space")) this.jumpPending = true;
+    if (e.code === "KeyF" && !this.keys.has("KeyF")) this.pushPending = true;
     this.keys.add(e.code);
   };
 
@@ -114,8 +126,12 @@ export class InputController {
     const el = e.target as HTMLElement | null;
     if (el?.closest(".pl-controls, .pl__card, .leaderboard")) return;
 
-    // En la compu se corre con el teclado: el mouse no hace nada.
-    if (e.pointerType === "mouse" || this.stickId !== null) return;
+    // En la compu se corre con el teclado: el clic empuja.
+    if (e.pointerType === "mouse") {
+      if (e.button === 0) this.pushPending = true;
+      return;
+    }
+    if (this.stickId !== null) return;
     this.stickId = e.pointerId;
     this.originX = this.curX = e.clientX;
     this.originY = this.curY = e.clientY;

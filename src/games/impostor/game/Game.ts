@@ -1,6 +1,7 @@
-import { initRoomMode, isRoomMode, type RoomMode } from "../../../shared/room/roomMode";
+import { initRoomMode, isRoomMode } from "../../../shared/room/roomMode";
 import { isGameServerConfigured, resolveGameServerUrl } from "../../../shared/server-status";
 import { COUNTDOWN_LABELS, COUNTDOWN_STEP } from "./constants";
+import { devRoom, type RoomLink } from "./devRoom";
 import { Hud } from "./Hud";
 import { SocketTransport } from "./SocketTransport";
 import { SoundEffects } from "./SoundEffects";
@@ -18,7 +19,7 @@ export class Game {
   private readonly hud: Hud;
   private state: State = "message";
 
-  private readonly room: RoomMode | null;
+  private readonly room: RoomLink | null;
   private transport: SocketTransport | null = null;
   /** Guarda contra doble conexion mientras `connect()` resuelve la URL. */
   private connecting = false;
@@ -27,6 +28,7 @@ export class Game {
   private latest: ImState | null = null;
   private prevPhase: ImPhase | null = null;
   private prevTurn: string | null = null;
+  private prevClues = 0;
 
   constructor(root: HTMLElement) {
     this.hud = new Hud(root);
@@ -34,10 +36,11 @@ export class Game {
     this.hud.onVote((target) => this.transport?.sendVote(target));
     this.hud.onGuess((word) => this.transport?.sendGuess(word));
 
-    this.room = initRoomMode("impostor", {
-      getScore: () => this.liveScore(),
-      onStart: () => this.beginCountdown(),
-    });
+    this.room =
+      initRoomMode("impostor", {
+        getScore: () => this.liveScore(),
+        onStart: () => this.beginCountdown(),
+      }) ?? devRoom(() => this.beginCountdown());
 
     if (!this.room) {
       if (isRoomMode()) {
@@ -142,6 +145,12 @@ export class Game {
       this.playPhaseSound(s.phase);
       this.prevPhase = s.phase;
     }
+    // Cada pista nueva entra tipeandose (ver el Hud): suena la maquina.
+    if (s.phase === "clues" && s.clues.length > this.prevClues) {
+      const last = s.clues[s.clues.length - 1];
+      if (last.word.trim()) SoundEffects.playType(last.word.trim().length);
+    }
+    this.prevClues = s.phase === "clues" ? s.clues.length : 0;
     if (s.phase === "clues" && s.turn === this.room?.me && this.prevTurn !== s.turn) {
       SoundEffects.playYourTurn();
     }
@@ -159,6 +168,11 @@ export class Game {
         break;
       case "guess":
         SoundEffects.playSting();
+        break;
+      case "result":
+        // Los sellos del veredicto caen con un poco de retraso (ver el CSS).
+        window.setTimeout(() => SoundEffects.playStamp(), 380);
+        window.setTimeout(() => SoundEffects.playStamp(), 950);
         break;
       default:
         break;

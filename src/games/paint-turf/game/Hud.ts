@@ -39,7 +39,7 @@ export class Hud {
 
     this.clockEl = document.createElement("div");
     this.clockEl.className = "pt__clock";
-    this.clockEl.textContent = "1:30";
+    this.clockEl.textContent = "0:45";
 
     this.barEl = document.createElement("div");
     this.barEl.className = "pt__bar";

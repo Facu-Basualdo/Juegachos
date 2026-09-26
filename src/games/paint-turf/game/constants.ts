@@ -24,7 +24,7 @@ export const SPLAT_COOLDOWN_MS = 5000;
 export const STUN_SPEED_FACTOR = 0.4;
 
 // ---- Tiempos (espejo del server) ----
-export const MATCH_MS = 90_000;
+export const MATCH_MS = 45_000;
 
 export const MAX_DT = 0.05;
 

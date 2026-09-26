@@ -3,9 +3,14 @@ import { initRoomMode, isRoomMode } from "../../../shared/room/roomMode";
 import { isGameServerConfigured, resolveGameServerUrl } from "../../../shared/server-status";
 import { Avatar } from "./Avatar";
 import {
-  CAM_DISTANCE,
+  CAM_BOTTOM_PX,
+  CAM_BOTTOM_PX_PORTRAIT,
   CAM_FOV,
+  CAM_MARGIN,
   CAM_PITCH,
+  CAM_PITCH_PORTRAIT,
+  CAM_TOP_PX,
+  CENTER,
   CONFIRM_MS,
   COUNTDOWN_LABELS,
   COUNTDOWN_STEP,
@@ -14,10 +19,9 @@ import {
   MAX_DT,
   POS_SEND_MS,
   PREROLL_MS,
+  PUSH_COOLDOWN_MS,
   REMOTE_EASE,
   SERVER_GRACE_MS,
-  SPECTATOR_BACK,
-  SPECTATOR_HEIGHT,
   seatColor,
   worldToCell,
 } from "./constants";
@@ -27,10 +31,17 @@ import { FloorView } from "./FloorView";
 import { Hud, escapeHtml, type PlayerRow } from "./Hud";
 import { InputController } from "./InputController";
 import { Player } from "./Player";
-import { FLAG_GROUNDED, FLAG_MOVING, type PlInit, type PlSnap, type PlState } from "./PistaLocaProtocol";
+import {
+  FLAG_GROUNDED,
+  FLAG_MOVING,
+  type PlInit,
+  type PlShove,
+  type PlSnap,
+  type PlState,
+} from "./PistaLocaProtocol";
 import { PistaLocaSocket } from "./PistaLocaSocket";
 import { SoundEffects } from "./SoundEffects";
-import { Stage } from "./Stage";
+import { BALL_REACH, BALL_Y, Stage } from "./Stage";
 
 type State = "waiting" | "countdown" | "playing" | "dead" | "over";
 
@@ -95,8 +106,11 @@ export class Game {
 
   private readonly player = new Player();
   private myAvatar: Avatar | null = null;
+  /** Aro en el piso y flecha arriba de la cabeza: con la pista entera en pantalla, el muñeco propio es chico. */
+  private myMarker: { ring: THREE.Mesh; arrow: THREE.Mesh } | null = null;
   private readonly remotes = new Map<number, Remote>();
-  private camY = 0;
+  /** Momento (performance.now) desde el que se puede volver a empujar. */
+  private pushReadyAt = 0;
   private posTimer = 0;
   private fallSoundPlayed = false;
 
@@ -118,6 +132,7 @@ export class Game {
     this.hud = new Hud(container);
     this.input = new InputController(container);
     this.hud.onJump(() => this.input.requestJump());
+    this.hud.onPush(() => this.input.requestPush());
 
     this.resize();
     window.addEventListener("resize", this.resize);
@@ -178,6 +193,8 @@ export class Game {
     socket.onInit((init) => this.onInit(init));
     socket.onState((s) => this.onState(s));
     socket.onSnap((snap) => this.onSnap(snap));
+    socket.onShove((shove) => this.onShove(shove));
+    socket.onPushFx((seat) => this.onPushFx(seat));
     this.socket = socket;
     void socket.connect();
   }
@@ -206,7 +223,6 @@ export class Game {
     if (this.mySeat >= 0 && init.spawn && this.state === "countdown") {
       const { x, y, z, r } = init.spawn;
       this.player.place(x, y, z, r);
-      this.camY = y;
     }
     this.onState(init);
   }
@@ -217,6 +233,7 @@ export class Game {
         if (!this.myAvatar) {
           this.myAvatar = new Avatar(seat, null);
           this.scene.add(this.myAvatar.root, this.myAvatar.shadow);
+          this.myMarker = this.buildMarker(seat);
         }
         return;
       }
@@ -336,6 +353,44 @@ export class Game {
     }
   }
 
+  /** Te empujaron: el impulso lo calculo el server, el vuelo lo simula este cliente. */
+  private onShove(shove: PlShove): void {
+    if (this.state !== "playing") return;
+    this.player.shove(shove.vx, shove.vy, shove.vz);
+    SoundEffects.playShoved();
+    const name = this.seats[shove.from];
+    if (name) this.hud.feed(`<b style="color:${seatColor(shove.from)}">${escapeHtml(name)}</b> te empuj&oacute;`);
+  }
+
+  /** Alguien empujo: se anima su muñeco (el propio ya se animo al apretar). */
+  private onPushFx(seat: number): void {
+    if (seat === this.mySeat) return;
+    const r = this.remotes.get(seat);
+    if (!r || !r.avatar.visible) return;
+    r.avatar.push();
+    SoundEffects.playPushOther();
+  }
+
+  private buildMarker(seat: number): { ring: THREE.Mesh; arrow: THREE.Mesh } {
+    const color = new THREE.Color(seatColor(seat));
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.55, 0.72, 32),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.renderOrder = 3;
+    // Piramide de cuatro caras con la punta para abajo, arriba de la cabeza.
+    const arrow = new THREE.Mesh(
+      new THREE.ConeGeometry(0.32, 0.5, 4),
+      new THREE.MeshBasicMaterial({ color, depthTest: false }),
+    );
+    arrow.rotation.x = Math.PI;
+    arrow.renderOrder = 11;
+    ring.visible = arrow.visible = false;
+    this.scene.add(ring, arrow);
+    return { ring, arrow };
+  }
+
   // ---------- Transiciones ----------
 
   private startPlaying(): void {
@@ -414,7 +469,6 @@ export class Game {
     this.floorView.update(dt);
     this.stage.update(dt, (x, z) => this.floor.isSolid(worldToCell(x), worldToCell(z)));
     this.updateRemotes(dt);
-    this.updateCamera(dt);
     this.updateHud(now);
   }
 
@@ -441,10 +495,13 @@ export class Game {
     if (this.mySeat < 0) return;
     const playing = this.state === "playing";
     const jump = this.input.consumeJump();
+    // Se consume siempre: un clic del countdown no puede salir como empujon al largar.
+    const push = this.input.consumePush();
     let wx = 0;
     let wz = 0;
     if (playing) {
       if (jump) this.player.requestJump();
+      if (push) this.tryPush();
       // Camara fija mirando hacia -Z: la pantalla y el mundo coinciden.
       const dir = this.input.direction;
       wx = dir.x;
@@ -470,6 +527,22 @@ export class Game {
     }
 
     if (playing && this.player.y < DEATH_Y) this.die();
+  }
+
+  /**
+   * Empujon hacia donde mira el muñeco. Antes se manda la posicion del momento: el
+   * server mide el alcance con la ultima declarada y a 20 Hz puede tener 50 ms de atraso.
+   */
+  private tryPush(): void {
+    const now = performance.now();
+    if (now < this.pushReadyAt) return;
+    this.pushReadyAt = now + PUSH_COOLDOWN_MS;
+    const p = this.player;
+    const flags = (p.grounded ? FLAG_GROUNDED : 0) | (p.moving ? FLAG_MOVING : 0);
+    this.socket?.sendPos(p.x, p.y, p.z, p.yaw, flags);
+    this.socket?.sendPush(p.yaw);
+    this.myAvatar?.push();
+    SoundEffects.playPush();
   }
 
   private updateRemotes(dt: number): void {
@@ -509,6 +582,15 @@ export class Game {
         this.myAvatar.animate(dt, Math.hypot(p.vx, p.vz), p.grounded, p.vy);
         this.placeShadow(this.myAvatar, p.x, p.y, p.z);
       }
+      if (this.myMarker) {
+        const { ring, arrow } = this.myMarker;
+        const p = this.player;
+        ring.visible = visible && this.myAvatar.shadow.visible;
+        ring.position.set(p.x, 0.03, p.z);
+        arrow.visible = visible;
+        arrow.position.set(p.x, p.y + 2.75 + Math.sin(performance.now() / 180) * 0.12, p.z);
+        arrow.rotation.y += dt * 2.5;
+      }
     }
   }
 
@@ -523,22 +605,6 @@ export class Game {
     avatar.shadow.scale.setScalar(Math.max(0.45, 1 - y / 8));
   }
 
-  private updateCamera(dt: number): void {
-    const following = (this.state === "countdown" || this.state === "playing") && this.mySeat >= 0;
-    if (following) {
-      const p = this.player;
-      this.camY += (Math.max(p.y, -6) - this.camY) * (1 - Math.exp(-6 * dt));
-      const h = CAM_DISTANCE * Math.cos(CAM_PITCH);
-      const v = CAM_DISTANCE * Math.sin(CAM_PITCH);
-      this.camera.position.set(p.x, this.camY + 1.1 + v, p.z + h);
-      this.camera.lookAt(p.x, this.camY + 1.1, p.z);
-      return;
-    }
-    // Espectador: la pista entera desde el mismo lado, fija.
-    this.camera.position.set(0, SPECTATOR_HEIGHT, SPECTATOR_BACK);
-    this.camera.lookAt(0, -1, 0);
-  }
-
   private updateHud(now: number): void {
     const s = this.latest;
     if (!s) return;
@@ -551,6 +617,7 @@ export class Game {
       this.hud.setCall("idle", -1, 0);
     }
     this.hud.setJoystick(this.state === "playing" ? this.input.joystick : null);
+    this.hud.setPushCooldown(Math.max(0, (this.pushReadyAt - now) / PUSH_COOLDOWN_MS));
   }
 
   private rows(): PlayerRow[] {
@@ -570,7 +637,71 @@ export class Game {
     const h = window.innerHeight;
     this.renderer.setSize(w, h);
     this.camera.aspect = w / h;
-    this.camera.fov = w < h ? CAM_FOV + 16 : CAM_FOV;
-    this.camera.updateProjectionMatrix();
+    this.camera.fov = CAM_FOV;
+    this.fitCamera(w, h);
   };
+
+  /**
+   * Encuadra la pista ENTERA, fija (no sigue a nadie): busca la distancia minima a la
+   * que las esquinas de la pista (y la cabeza de un muñeco parado en las del fondo)
+   * entran en la franja libre entre el HUD de arriba y los botones de abajo, y
+   * despues corre el cuadro con `setViewOffset` para centrarla en esa franja.
+   */
+  private fitCamera(w: number, h: number): void {
+    const cam = this.camera;
+    const portrait = w < h;
+    const pitch = portrait ? CAM_PITCH_PORTRAIT : CAM_PITCH;
+    const top = Math.min(CAM_TOP_PX, h * 0.3);
+    const bottom = portrait ? CAM_BOTTOM_PX_PORTRAIT : CAM_BOTTOM_PX;
+    const bandH = 2 * Math.max(0.2, (h - top - bottom) / h);
+    const bandW = 2 - 2 * CAM_MARGIN;
+    const e = CENTER + 0.5;
+    const points = [
+      new THREE.Vector3(-e, -1, e),
+      new THREE.Vector3(e, -1, e),
+      new THREE.Vector3(-e, 2.4, -e),
+      new THREE.Vector3(e, 2.4, -e),
+      new THREE.Vector3(-e, 0, -e),
+      new THREE.Vector3(e, 0, -e),
+    ];
+    const v = new THREE.Vector3();
+    cam.clearViewOffset();
+    cam.updateProjectionMatrix();
+    const place = (d: number): { minX: number; maxX: number; minY: number; maxY: number } => {
+      cam.position.set(0, d * Math.sin(pitch), d * Math.cos(pitch));
+      cam.lookAt(0, 0, 0);
+      cam.updateMatrixWorld();
+      const box = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+      for (const p of points) {
+        v.copy(p).project(cam);
+        box.minX = Math.min(box.minX, v.x);
+        box.maxX = Math.max(box.maxX, v.x);
+        box.minY = Math.min(box.minY, v.y);
+        box.maxY = Math.max(box.maxY, v.y);
+      }
+      return box;
+    };
+    let lo = 8;
+    let hi = 200;
+    for (let i = 0; i < 40; i++) {
+      const mid = (lo + hi) / 2;
+      const b = place(mid);
+      if (b.maxX - b.minX <= bandW && b.maxY - b.minY <= bandH) hi = mid;
+      else lo = mid;
+    }
+    const box = place(hi);
+    // La bola va arriba del borde del fondo de la pista en el cuadro, nunca delante.
+    let ballY = BALL_Y;
+    for (; ballY < 90; ballY += 0.5) {
+      v.set(0, ballY - BALL_REACH, 0).project(cam);
+      if (v.y >= box.maxY + 0.02) break;
+    }
+    this.stage.setBallHeight(ballY);
+    // Centro de la pista en pixeles vs. centro de la franja libre.
+    const cx = ((box.minX + box.maxX) / 2 + 1) * 0.5 * w;
+    const cy = (1 - (box.minY + box.maxY) / 2) * 0.5 * h;
+    const bandCenter = top + (h - top - bottom) / 2;
+    cam.setViewOffset(w, h, cx - w / 2, cy - bandCenter, w, h);
+    cam.updateProjectionMatrix();
+  }
 }

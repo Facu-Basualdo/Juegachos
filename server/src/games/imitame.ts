@@ -75,7 +75,7 @@ const EFFECTS: Record<MtEffectId, { mult: number; kind: "bonus" | "sabotage" | "
 const EFFECT_IDS = Object.keys(EFFECTS) as MtEffectId[];
 
 /** Rondas (sonidos) por partido = una ronda de sala. */
-const ROUNDS_PER_MATCH = 4;
+const ROUNDS_PER_MATCH = 3;
 /** Espera desde el primer jugador para que se conecte el roster antes de arrancar. */
 const START_GRACE_MS = 8000;
 /*

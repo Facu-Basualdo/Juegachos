@@ -4,7 +4,7 @@ Clon simplificado de **Mimic Party** (Steam), **solo de sala** y con microfono. 
 sonido UNA vez (un gato, una sirena, un "ta-ta-ta-taaa"), todos lo imitan a la vez con la
 voz en una sola toma, cada navegador puntua su propia toma (melodia, ritmo, golpes; no el
 timbre), las tomas se reproducen una por una para toda la sala y una ruleta reparte bonus
-y sabotajes para la ronda siguiente. Un partido son `ROUNDS_PER_MATCH` (4) sonidos.
+y sabotajes para la ronda siguiente. Un partido son `ROUNDS_PER_MATCH` (3) sonidos (eran 4; se bajo a 3 porque el partido se hacia largo).
 
 Tiene **chat de voz embebido** (WebRTC, ver abajo) y una **biblioteca de audios de la
 comunidad** (Supabase, ver abajo) ademas de los sonidos sintetizados; una sola ruleta por

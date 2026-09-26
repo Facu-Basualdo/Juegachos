@@ -5,7 +5,16 @@ import { Avatar } from "./Avatar";
 import {
   CAM_BACK,
   CAM_BACK_PORTRAIT,
+  CAM_DIST,
+  CAM_DIST_PORTRAIT,
   CAM_FOV,
+  CAM_MIN_DIST,
+  CAM_PITCH,
+  CAM_PITCH_MAX,
+  CAM_PITCH_MIN,
+  CAM_TARGET_H,
+  CAM_YAW_SPEED,
+  WALL_Z,
   CONFIRM_MS,
   COUNTDOWN_LABELS,
   COUNTDOWN_STEP,
@@ -107,6 +116,9 @@ export class Game {
   private confirmTimer: number | null = null;
   private localScore = 0;
   private portrait = false;
+  /** Hacia donde mira la camara (rad). 0 = detras del muñeco mirando a la pared. */
+  private yaw = 0;
+  private pitch = CAM_PITCH;
 
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -223,6 +235,9 @@ export class Game {
       if (seat === this.mySeat) {
         if (!this.myAvatar) {
           this.myAvatar = new Avatar(seat, null);
+          // Con la camara detras, una plataforma puede quedar entre la camara y el
+          // muñeco: la silueta se ve solo en lo que queda tapado.
+          addXray(this.myAvatar.root, seatColor(seat));
           this.scene.add(this.myAvatar.root, this.myAvatar.shadow);
         }
         return;
@@ -327,6 +342,8 @@ export class Game {
   /** Resuelto: quemado o en la cima. */
   private resolve(result: "dead" | "top", score: number): void {
     if (this.state === "dead" || this.state === "top" || this.state === "over") return;
+    // Afuera ya no hay nada que mirar con el mouse: se suelta.
+    this.input.releaseMouse();
     this.state = result;
     this.localScore = score;
     this.hud.setSpectating(true);
@@ -347,6 +364,7 @@ export class Game {
 
   private finish(s: MlState): void {
     if (this.state === "over") return;
+    this.input.releaseMouse();
     this.state = "over";
     SoundEffects.stopRumble();
     if (this.mySeat >= 0) {
@@ -432,12 +450,20 @@ export class Game {
     const jump = this.input.consumeJump();
     let wx = 0;
     let wz = 0;
+    // Giro de camara: mouse / dedo acumulados + Q / E.
+    const look = this.input.consumeLook();
+    this.yaw += look.yaw - this.input.keyYaw * CAM_YAW_SPEED * dt;
+    this.pitch = Math.max(CAM_PITCH_MIN, Math.min(CAM_PITCH_MAX, this.pitch + look.pitch));
     if (playing) {
       if (jump) this.player.requestJump();
-      // Camara fija de frente a la pared: la pantalla y el mundo coinciden.
+      // Adelante es hacia donde mira la camara, proyectado al piso.
       const dir = this.input.direction;
-      wx = dir.x;
-      wz = dir.y;
+      const fx = -Math.sin(this.yaw);
+      const fz = -Math.cos(this.yaw);
+      const rx = Math.cos(this.yaw);
+      const rz = -Math.sin(this.yaw);
+      wx = rx * dir.x - fx * dir.y;
+      wz = rz * dir.x - fz * dir.y;
     }
     const events = this.player.update(dt, wx, wz, this.tower);
     if (playing) {
@@ -530,36 +556,100 @@ export class Game {
   }
 
   private updateCamera(dt: number, lava: number): void {
-    const back = this.portrait ? CAM_BACK_PORTRAIT : CAM_BACK;
     const following = (this.state === "countdown" || this.state === "playing") && this.mySeat >= 0;
-    let targetY: number;
-    let targetX: number;
     if (following) {
-      targetY = this.player.y;
-      targetX = this.player.x * 0.55;
-    } else {
-      // Resuelto: sigue al que va mas alto de los que siguen trepando (o a la lava).
-      let best = -Infinity;
-      let bx = 0;
-      for (const [seat, r] of this.remotes) {
-        if (!r.seen || this.latest?.status[seat] !== "run") continue;
-        if (r.y > best) {
-          best = r.y;
-          bx = r.x;
+      this.followCamera(dt);
+      return;
+    }
+    // Resuelto: de frente a la pared, siguiendo al que va mas alto de los que siguen
+    // trepando (o a la lava).
+    const back = this.portrait ? CAM_BACK_PORTRAIT : CAM_BACK;
+    let best = -Infinity;
+    let bx = 0;
+    for (const [seat, r] of this.remotes) {
+      if (!r.seen || this.latest?.status[seat] !== "run") continue;
+      if (r.y > best) {
+        best = r.y;
+        bx = r.x;
+      }
+    }
+    const targetY = best > -Infinity ? best : Math.max(lava + 4, this.camY);
+    this.camY += (targetY - this.camY) * (1 - Math.exp(-4 * dt));
+    const cx = this.camera.position.x + (bx * 0.4 - this.camera.position.x) * (1 - Math.exp(-4 * dt));
+    const lift = this.portrait ? 6.5 : 3.4;
+    const lookUp = this.portrait ? 6 : 2.6;
+    this.camera.position.set(cx, this.camY + lift, back);
+    this.stage.setFocus(cx, this.camY);
+    this.camera.lookAt(cx, this.camY + lookUp, -1);
+  }
+
+  /**
+   * Tercera persona: detras del muñeco segun el giro y la inclinacion que maneja el
+   * jugador. La altura se sigue con un poco de retraso (los saltos no sacuden la
+   * pantalla). Si una plataforma o la pared quedan entre el muñeco y la camara, la
+   * camara se acerca hasta ese punto en vez de quedar tapada.
+   */
+  private followCamera(dt: number): void {
+    const p = this.player;
+    this.camY += (p.y - this.camY) * (1 - Math.exp(-8 * dt));
+    const tx = p.x;
+    const ty = this.camY + CAM_TARGET_H;
+    const tz = p.z;
+    const dist = this.portrait ? CAM_DIST_PORTRAIT : CAM_DIST;
+    const ox = Math.sin(this.yaw) * Math.cos(this.pitch);
+    const oy = Math.sin(this.pitch);
+    const oz = Math.cos(this.yaw) * Math.cos(this.pitch);
+    const d = Math.max(CAM_MIN_DIST, this.clearDistance(tx, ty, tz, ox, oy, oz, dist));
+    this.camera.position.set(tx + ox * d, ty + oy * d, tz + oz * d);
+    this.camera.lookAt(tx, ty, tz);
+    this.stage.setFocus(p.x, p.y);
+  }
+
+  /**
+   * Hasta donde puede alejarse la camara desde (tx, ty, tz) en la direccion (ox, oy,
+   * oz) sin meterse en una plataforma ni atravesar la pared del fondo.
+   */
+  private clearDistance(tx: number, ty: number, tz: number, ox: number, oy: number, oz: number, max: number): number {
+    let best = max;
+    // La pared del fondo.
+    if (oz < 0) best = Math.min(best, (WALL_Z + 0.35 - tz) / oz);
+    if (!this.tower) return best;
+    const margin = 0.25;
+    for (const q of this.tower.near(ty - max - 1, ty + max + 1)) {
+      // Las de arriba del muñeco no acercan la camara: si la camara queda adentro de
+      // una, sus caras no se dibujan desde adentro (no tapa nada), y acercarse por
+      // ellas pegaba la camara a la espalda del muñeco, que tapaba toda la pantalla.
+      if (q.y - q.h > ty) continue;
+      // Choque rayo-caja (slabs) contra la plataforma agrandada un margen.
+      let tmin = 0;
+      let tmax = best;
+      const axes: [number, number, number, number][] = [
+        [tx, ox, q.x - q.w / 2 - margin, q.x + q.w / 2 + margin],
+        [ty, oy, q.y - q.h - margin, q.y + margin],
+        [tz, oz, q.z - q.d / 2 - margin, q.z + q.d / 2 + margin],
+      ];
+      let hit = true;
+      for (const [o, dir, lo, hi] of axes) {
+        if (Math.abs(dir) < 1e-6) {
+          if (o < lo || o > hi) {
+            hit = false;
+            break;
+          }
+          continue;
+        }
+        let t1 = (lo - o) / dir;
+        let t2 = (hi - o) / dir;
+        if (t1 > t2) [t1, t2] = [t2, t1];
+        tmin = Math.max(tmin, t1);
+        tmax = Math.min(tmax, t2);
+        if (tmin > tmax) {
+          hit = false;
+          break;
         }
       }
-      targetY = best > -Infinity ? best : Math.max(lava + 4, this.camY);
-      targetX = bx * 0.4;
+      if (hit && tmin > 0.05) best = Math.min(best, tmin - 0.1);
     }
-    this.camY += (targetY - this.camY) * (1 - Math.exp(-4 * dt));
-    const cx = this.camera.position.x + (targetX - this.camera.position.x) * (1 - Math.exp(-4 * dt));
-    // Un poco mas alta que el jugador y mirando apenas arriba: hay que ver el proximo
-    // salto. En vertical sube mas el encuadre: si no, media pantalla es lava.
-    const lift = this.portrait ? 6.5 : 3.4;
-    const look = this.portrait ? 6 : 2.6;
-    this.camera.position.set(cx, this.camY + lift, back);
-    this.stage.setFocus(following ? this.player.x : cx, this.camY);
-    this.camera.lookAt(cx, this.camY + look, -1);
+    return best;
   }
 
   private updateHud(lava: number): void {
@@ -604,4 +694,36 @@ export class Game {
     this.camera.fov = this.portrait ? CAM_FOV + 10 : CAM_FOV;
     this.camera.updateProjectionMatrix();
   };
+}
+
+/**
+ * Silueta "a traves de las paredes": un duplicado de cada malla del muñeco con un
+ * material plano que se dibuja SOLO donde algo esta adelante (`GreaterDepth`). Con el
+ * muñeco a la vista no se nota; tapado por una plataforma, se ve su forma en su color.
+ * Cada duplicado cuelga del mismo padre que su original, asi sigue la animacion.
+ *
+ * El orden importa: la silueta es opaca y se dibuja DESPUES de la torre y ANTES que el
+ * propio muñeco (renderOrder 20 y 21). Si fuera transparente, o se dibujara despues
+ * del muñeco, tambien aparecia donde el muñeco se tapa a si mismo (un brazo delante
+ * de la cara la teñia).
+ */
+function addXray(root: THREE.Object3D, color: string): void {
+  const mat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(color).multiplyScalar(0.75),
+    depthWrite: false,
+    depthFunc: THREE.GreaterDepth,
+  });
+  const meshes: THREE.Mesh[] = [];
+  root.traverse((o) => {
+    if (o instanceof THREE.Mesh) meshes.push(o);
+  });
+  for (const m of meshes) {
+    m.renderOrder = 21;
+    const ghost = new THREE.Mesh(m.geometry, mat);
+    ghost.position.copy(m.position);
+    ghost.rotation.copy(m.rotation);
+    ghost.scale.copy(m.scale);
+    ghost.renderOrder = 20;
+    m.parent?.add(ghost);
+  }
 }

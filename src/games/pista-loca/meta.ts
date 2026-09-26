@@ -5,10 +5,10 @@ export const meta: GameEntry = {
   id: "pista-loca",
   title: "Pista Loca",
   description:
-    "Una pista de baile de bloques de colores colgada en la nada. Mientras suena la música bailás; cuando se corta, se pide un color y tenés unos segundos para pararte encima antes de que se caiga todo lo demás. Cada ronda hay menos tiempo y el dibujo es más fino. Gana el último en pie. Solo se juega en salas.",
+    "Una pista de baile de bloques de colores colgada en la nada. Mientras suena la música bailás; cuando se corta, se pide un color y tenés unos segundos para pararte encima antes de que se caiga todo lo demás. Y ojo, que te pueden empujar. Cada ronda hay menos tiempo y el dibujo es más fino. Gana el último en pie. Solo se juega en salas.",
   path: "/games/pista-loca/",
   controls:
-    "Movete con WASD o las flechas y saltá con ESPACIO (en el celu: arrastrá el dedo y tocá SALTAR). Cuando se corta la música, corré al color que aparece arriba.",
+    "Movete con WASD o las flechas, saltá con ESPACIO y empujá con F o clic (en el celu: arrastrá el dedo y tocá SALTAR o EMPUJAR). Cuando se corta la música, corré al color que aparece arriba, y si podés, sacá a otro de su bloque.",
   accent: "#f27bb8",
   category: "Party",
   order: 1010,

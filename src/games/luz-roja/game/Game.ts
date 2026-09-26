@@ -29,7 +29,7 @@ import { devRoom, type RoomLink } from "./devRoom";
 import { Doll } from "./Doll";
 import { Hud, escapeHtml, type RunnerRow } from "./Hud";
 import { InputController } from "./InputController";
-import type { LrInit, LrSnap, LrState, LrStatus } from "./LuzRojaProtocol";
+import type { LrInit, LrSnap, LrSong, LrState, LrStatus } from "./LuzRojaProtocol";
 import { LuzRojaSocket } from "./LuzRojaSocket";
 import { CHANT, SoundEffects } from "./SoundEffects";
 import { Stage } from "./Stage";
@@ -107,6 +107,8 @@ export class Game {
   private light: "green" | "red" | null = null;
   private lightStart = 0;
   private lightDur = 0;
+  /** Ritmo de la cancion del verde actual (lo sortea el server). */
+  private song: LrSong = "steady";
   /** Momento local en que se prenden los ojos (desde ahi moverse elimina). */
   private eyesAt = 0;
   private eyesOn = false;
@@ -274,6 +276,7 @@ export class Game {
     this.lightSeq = s.lightSeq;
     this.light = s.light;
     this.lightDur = s.lightDur;
+    this.song = s.song ?? "steady";
     this.lightStart = now - Math.max(0, s.lightDur - s.lightLeft);
     this.eyesOn = false;
     this.doll.setEyes(false);
@@ -294,7 +297,19 @@ export class Game {
   private chantTimes(): number[] {
     const span = Math.max(0, this.lightDur - CHANT_TAIL_MS) / 1000;
     const n = CHANT.length;
-    return CHANT.map((_, i) => (span * i) / (n - 1));
+    return CHANT.map((_, i) => {
+      const x = i / (n - 1);
+      switch (this.song) {
+        // Acelerada: arranca lenta y las ultimas silabas se atropellan.
+        case "rush":
+          return span * Math.pow(x, 0.55);
+        // Cortada: canta las primeras seis parejo, se calla y remata el "1, 2, 3" de golpe.
+        case "stutter":
+          return i < 6 ? span * 0.5 * (i / 5) : span * (0.84 + ((i - 6) / 2) * 0.16);
+        default:
+          return span * x;
+      }
+    });
   }
 
   /** Avisos de quien cayo o paso, comparando contra el estado anterior. */
