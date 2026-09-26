@@ -1,6 +1,6 @@
 import type { Server } from "socket.io";
 import { GameRoom, registerGame, type RoomSim } from "../rooms.js";
-import type { LrLight, LrPhase, LrState, LrStatus } from "../protocol.js";
+import type { LrLight, LrPhase, LrSong, LrState, LrStatus } from "../protocol.js";
 
 /**
  * Luz Roja, Luz Verde en sala.
@@ -47,16 +47,32 @@ const STATE_SYNC_MS = 1000;
 
 /** Primer verde: largo y conocido, para que nadie quede eliminado en el primer segundo. */
 const FIRST_GREEN_MS = 3500;
-/** Perfiles de verde: rapido, medio y lento (ms), con su probabilidad. */
+/**
+ * Perfiles de verde (ms) con su probabilidad: relampago, rapido, medio y lento. El
+ * relampago (menos de un segundo) no deja ni arrancar: castiga al que sale corriendo
+ * apenas escucha la cancion.
+ */
 const GREEN_PROFILES: { min: number; max: number; weight: number }[] = [
-  { min: 1100, max: 1900, weight: 0.35 },
-  { min: 2200, max: 3300, weight: 0.4 },
-  { min: 3600, max: 5000, weight: 0.25 },
+  { min: 650, max: 1000, weight: 0.2 },
+  { min: 1100, max: 1900, weight: 0.3 },
+  { min: 2200, max: 3300, weight: 0.32 },
+  { min: 3600, max: 4800, weight: 0.18 },
 ];
-const RED_MIN_MS = 1600;
-const RED_MAX_MS = 3200;
-/** Probabilidad de que un verde (de 2 s o mas) traiga un amague de la muñeca. */
-const TEASE_CHANCE = 0.25;
+const RED_MIN_MS = 1500;
+const RED_MAX_MS = 3400;
+/** Probabilidad de que un verde (de 1.6 s o mas) traiga un amague de la muñeca. */
+const TEASE_CHANCE = 0.45;
+/**
+ * Como se reparte la cancion en el verde (el cliente arma las silabas con esto):
+ * pareja, acelerada (arranca lenta y termina de golpe) o cortada (canta, se calla y
+ * remata rapido). Con ritmos distintos contar las silabas ya no alcanza para saber
+ * cuando se da vuelta.
+ */
+const SONG_MODES: { mode: LrSong; weight: number }[] = [
+  { mode: "steady", weight: 0.4 },
+  { mode: "rush", weight: 0.35 },
+  { mode: "stutter", weight: 0.25 },
+];
 
 interface Pos {
   x: number;
@@ -87,6 +103,7 @@ export class LuzRojaSim implements RoomSim {
   private lightSeq = 0;
   private lightEndsAt = 0;
   private lightDur = 0;
+  private song: LrSong = "steady";
   private teaseAt = 0;
 
   private loop: ReturnType<typeof setInterval> | null = null;
@@ -257,7 +274,10 @@ export class LuzRojaSim implements RoomSim {
     this.lightDur = Math.round(dur);
     this.lightEndsAt = now + dur;
     this.teaseAt = 0;
-    if (light === "green" && this.lightSeq > 1 && dur >= 2000 && Math.random() < TEASE_CHANCE) {
+    // El primer verde canta parejo; despues, cualquier ritmo (los verdes relampago
+    // cantan parejo: no hay tiempo para una pausa en el medio).
+    this.song = light === "green" && this.lightSeq > 1 && dur >= 1600 ? pickSong() : "steady";
+    if (light === "green" && this.lightSeq > 1 && dur >= 1600 && Math.random() < TEASE_CHANCE) {
       this.teaseAt = now + dur * randRange(0.35, 0.65);
     }
     this.broadcastState();
@@ -322,6 +342,7 @@ export class LuzRojaSim implements RoomSim {
       light: this.light,
       lightSeq: this.lightSeq,
       lightDur: this.lightDur,
+      song: this.song,
       lightLeft: Math.max(0, Math.round(this.lightEndsAt - now)),
       status: this.seats.map((s) => s.status),
       prog: this.seats.map((s) => Math.round(s.prog * 10) / 10),
@@ -373,6 +394,15 @@ function pickGreen(): number {
   }
   const last = GREEN_PROFILES[GREEN_PROFILES.length - 1];
   return randRange(last.min, last.max);
+}
+
+function pickSong(): LrSong {
+  let roll = Math.random();
+  for (const s of SONG_MODES) {
+    if (roll < s.weight) return s.mode;
+    roll -= s.weight;
+  }
+  return "steady";
 }
 
 function randRange(min: number, max: number): number {

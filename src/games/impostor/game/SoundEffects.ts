@@ -42,6 +42,28 @@ function blip(
   osc.stop(now + dur);
 }
 
+/** Rafaga de ruido filtrado (sello, teclazos). */
+function thud(dur: number, vol: number, type: BiquadFilterType, freq: number, delay = 0): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") void ctx.resume();
+  const t = ctx.currentTime + delay;
+  const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 3);
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  const filter = ctx.createBiquadFilter();
+  filter.type = type;
+  filter.frequency.value = freq;
+  const gain = ctx.createGain();
+  gain.gain.value = vol;
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctx.destination);
+  src.start(t);
+}
+
 export class SoundEffects {
   /** Countdown tick (3 / 2 / 1 / YA) — mismo blip que el resto del repo. */
   static playCountdownTick(): void {
@@ -72,6 +94,18 @@ export class SoundEffects {
   }
 
   /** Fin del partido (ganaste). */
+  /** El sello golpea el expediente (el veredicto). */
+  static playStamp(): void {
+    thud(0.14, 0.5, "lowpass", 900);
+    blip("sine", 110, 0.2, 0.28, 45);
+  }
+
+  /** Maquina de escribir: una rafaga de teclazos cortos (una pista nueva). */
+  static playType(letters: number): void {
+    const n = Math.max(2, Math.min(12, letters));
+    for (let k = 0; k < n; k++) thud(0.025, 0.16, "bandpass", 2400 + Math.random() * 800, k * 0.055);
+  }
+
   static playWin(): void {
     blip("triangle", 392, 0.14, 0.11);
     blip("triangle", 523.25, 0.18, 0.1, undefined, 0.09);

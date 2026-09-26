@@ -1,3 +1,4 @@
+import { bookingNumber, mugshot } from "./avatar";
 import { MAX_WORD_LEN } from "./constants";
 import type { ImState, ImYou } from "./ImpostorTransport";
 
@@ -25,22 +26,38 @@ function phaseLabel(s: ImState): string {
 }
 
 const OUTCOME_TITLE: Record<string, string> = {
-  "impostor-survived": "El impostor zafo",
-  "impostor-guessed": "El impostor adivino",
+  "impostor-survived": "El impostor zaf&oacute;",
+  "impostor-guessed": "El impostor adivin&oacute;",
   "impostor-caught": "Impostor descubierto",
 };
 
+/** Numero de expediente de la ronda: el mismo para todos, cambia ronda a ronda. */
+function caseNumber(s: ImState): string {
+  return `${String(s.round).padStart(2, "0")}-${bookingNumber(`${s.category ?? ""}:${s.round}`)}`;
+}
+
+/** Ficha policial: retrato + regla de altura + pizarra de detenido. */
+function mugCard(name: string, extraClass = "", inner = ""): string {
+  return `
+    <div class="im-mug ${extraClass}">
+      <div class="im-mug__photo">${mugshot(name)}</div>
+      <div class="im-mug__plate"><span class="im-mug__no">N&ordm; ${bookingNumber(name)}</span><span class="im-mug__name">${esc(name)}</span></div>
+      ${inner}
+    </div>`;
+}
+
 /**
- * Hud de Impostor (estetica "sala de interrogatorio", ver DESIGN.md). Cinco vistas segun
- * la fase que manda el server:
- *  - reveal: la ficha de rol privada (tu palabra, o SOS EL IMPOSTOR + categoria).
- *  - clues: la categoria, las pistas dadas y, si es tu turno, el campo para tu pista.
- *  - voting: los sospechosos como fichas; tocas al que crees impostor.
- *  - guess: el acusado intenta adivinar la palabra (input propio si sos vos).
- *  - result: se revela el impostor, la palabra y los puntos de la ronda.
+ * Hud de Impostor (estetica "Expediente noir", ver DESIGN.md). La sala (lampara, polvo,
+ * viñeta, grano) es fija; cada fase del server arma una pieza del expediente:
+ *  - reveal: el sobre CONFIDENCIAL que se abre con tu palabra, o el sello de impostor.
+ *  - clues: la hoja de declaraciones a maquina; si es tu turno, el renglon para declarar.
+ *  - voting: la rueda de reconocimiento; tocas la ficha del que crees impostor.
+ *  - guess: ultima chance del acusado, con la luz en rojo.
+ *  - result: caso cerrado, con los sellos sobre las fichas y el registro de puntos.
  * Los estados de espera / resultados / tablero final los cubre el RoomOverlay por encima.
  */
 export class Hud {
+  private readonly root: HTMLElement;
   private readonly stage: HTMLElement;
   private readonly overlay: HTMLElement;
   private readonly countdownEl: HTMLElement;
@@ -58,6 +75,9 @@ export class Hud {
   private you: ImYou | null = null;
   private panelMode = "none";
   private cluesSig = "";
+  private revealSig = "";
+  private resultSig = "";
+  private rosterSig = "";
 
   private clockRaf = 0;
   private clockAnchor = 0;
@@ -69,6 +89,13 @@ export class Hud {
     const wrap = document.createElement("div");
     wrap.className = "im";
     wrap.innerHTML = `
+      <div class="im__room" aria-hidden="true">
+        <div class="im__cone"></div>
+        <div class="im__dust"></div>
+        <div class="im__lamp"><span class="im__lamp-cord"></span><span class="im__lamp-shade"></span><span class="im__lamp-bulb"></span></div>
+        <div class="im__vignette"></div>
+        <div class="im__grain"></div>
+      </div>
       <div class="im__stage" hidden>
         <div class="im__topbar">
           <div class="im__toprow">
@@ -87,6 +114,7 @@ export class Hud {
     `;
     root.appendChild(wrap);
 
+    this.root = wrap;
     this.stage = wrap.querySelector(".im__stage")!;
     this.overlay = wrap.querySelector(".im__overlay")!;
     this.countdownEl = wrap.querySelector(".im__countdown")!;
@@ -120,6 +148,7 @@ export class Hud {
     this.overlay.hidden = false;
     this.overlay.innerHTML = `
       <div class="im__card">
+        <div class="im__card-tab">EXPEDIENTE</div>
         <h1 class="im__card-title">${title}</h1>
         <div class="im__card-body">${bodyHtml}</div>
         ${action ? `<button class="im__card-btn" type="button">${action.label}</button>` : ""}
@@ -155,7 +184,8 @@ export class Hud {
     if (!input || !send) return;
     input.disabled = false;
     send.disabled = false;
-    input.focus();
+    // Sin scroll: el navegador desplazaria la sala para mostrar el campo.
+    input.focus({ preventScroll: true });
     input.select();
     if (note) {
       note.textContent = reason;
@@ -174,6 +204,8 @@ export class Hud {
     this.me = me;
     this.roundEl.textContent = `Ronda ${Math.min(s.round, s.totalRounds)}/${s.totalRounds}`;
     this.phaseEl.textContent = phaseLabel(s);
+    // La fase va en la sala: la adivinanza pone la lampara en rojo.
+    this.root.dataset.phase = s.phase;
     this.renderRoster(s);
     this.updateClock(s);
 
@@ -199,6 +231,11 @@ export class Hud {
   }
 
   private renderRoster(s: ImState): void {
+    const sig = s.players
+      .map((p) => `${p.nickname}:${p.connected}:${p.total}:${p.clued}:${p.voted}`)
+      .join("|") + `|${s.phase}|${s.turn}`;
+    if (sig === this.rosterSig) return;
+    this.rosterSig = sig;
     const chips = s.players
       .map((p) => {
         const cls = ["im__chip"];
@@ -206,54 +243,64 @@ export class Hud {
         if (p.nickname === this.me) cls.push("is-me");
         if (s.phase === "clues" && p.nickname === s.turn) cls.push("is-turn");
         let mark = "";
-        if (s.phase === "clues" && p.clued) mark = `<span class="im__chip-mark">&bull;</span>`;
-        else if (s.phase === "voting" && p.voted) mark = `<span class="im__chip-mark">&bull;</span>`;
+        if (s.phase === "clues" && p.clued) mark = `<span class="im__chip-mark" title="ya declar&oacute;"></span>`;
+        else if (s.phase === "voting" && p.voted) mark = `<span class="im__chip-mark" title="ya vot&oacute;"></span>`;
         else mark = `<span class="im__chip-prog">${p.total}</span>`;
-        return `<div class="${cls.join(" ")}"><span class="im__chip-name">${esc(p.nickname)}</span>${mark}</div>`;
+        return `<div class="${cls.join(" ")}"><span class="im__chip-face">${mugshot(p.nickname)}</span><span class="im__chip-name">${esc(p.nickname)}</span>${mark}</div>`;
       })
       .join("");
     this.rosterEl.innerHTML = chips;
   }
 
-  // ---------- Vista: reveal (rol privado) ----------
+  // ---------- Vista: reveal (el sobre confidencial) ----------
 
   private renderReveal(s: ImState): void {
-    this.panelMode = "reveal";
     // Esperamos el rol de ESTA ronda (im:you llega junto al reveal) para no mostrar la
     // ficha de la ronda anterior por un instante.
     if (!this.you || this.you.round !== s.round) {
-      this.panelEl.innerHTML = `<div class="im__role"><div class="im__role-tag">Repartiendo roles...</div></div>`;
+      this.panelMode = "reveal";
+      this.revealSig = "";
+      this.panelEl.innerHTML = `<div class="im__dealing">Repartiendo los sobres...</div>`;
       return;
     }
-    const category = esc(s.category ?? this.you?.category ?? "");
-    if (this.you?.impostor) {
-      const mates =
-        this.you.mates.length > 0
-          ? `<p class="im__role-note">Tu complice: ${this.you.mates.map(esc).join(", ")}</p>`
-          : "";
-      this.panelEl.innerHTML = `
-        <div class="im__role is-impostor">
-          <div class="im__role-tag">Tu rol</div>
-          <div class="im__role-word">SOS EL IMPOSTOR</div>
-          <p class="im__role-hint">No sabes la palabra. La categoria es <strong>${category}</strong>. Improvisa una pista que no te delate.</p>
-          ${mates}
-        </div>`;
-    } else {
-      this.panelEl.innerHTML = `
-        <div class="im__role is-crew">
-          <div class="im__role-tag">La palabra secreta (${category})</div>
-          <div class="im__role-word">${esc(this.you?.word ?? "")}</div>
-          <p class="im__role-hint">Da una pista que pruebe que la sabes, sin cantarla al impostor.</p>
-        </div>`;
-    }
+    const sig = `${s.round}|${this.you.impostor}|${this.you.word}`;
+    // No se rearma con cada broadcast: la animacion del sobre se veria una y otra vez.
+    if (this.panelMode === "reveal" && this.revealSig === sig) return;
+    this.panelMode = "reveal";
+    this.revealSig = sig;
+    const category = esc(s.category ?? this.you.category ?? "");
+    const kicker = `<div class="im__file-kicker">Expediente N&ordm; ${caseNumber(s)} &middot; Caso: ${category}</div>`;
+    const inner = this.you.impostor
+      ? `
+        ${kicker}
+        <div class="im__stamp im__stamp--role">Sos el impostor</div>
+        <p class="im__file-hint">No sab&eacute;s la palabra. La categor&iacute;a es <strong>${category}</strong>: improvis&aacute; una pista que no te delate.</p>
+        ${
+          this.you.mates.length > 0
+            ? `<p class="im__file-mates">Tu c&oacute;mplice: <strong>${this.you.mates.map(esc).join(", ")}</strong></p>`
+            : ""
+        }`
+      : `
+        ${kicker}
+        <div class="im__file-label">La palabra secreta</div>
+        <div class="im__secret">${esc(this.you.word ?? "")}</div>
+        <p class="im__file-hint">Da una pista que pruebe que la sab&eacute;s, sin cant&aacute;rsela al impostor.</p>`;
+    this.panelEl.innerHTML = `
+      <div class="im__envelope ${this.you.impostor ? "is-impostor" : "is-crew"}">
+        <div class="im__env-back"></div>
+        <div class="im__env-letter">${inner}</div>
+        <div class="im__env-front"><span class="im__env-seal">Confidencial</span></div>
+        <div class="im__env-flap"></div>
+      </div>`;
   }
 
-  // ---------- Vista: pistas ----------
+  // ---------- Vista: pistas (la hoja de declaraciones) ----------
 
   private renderClues(s: ImState): void {
     const myTurn = s.turn === this.me;
     const sig = `${s.turn}|${s.clues.length}|${myTurn}`;
     if (this.panelMode === "clues" && this.cluesSig === sig) return; // no romper el foco del input
+    const prevCount = this.panelMode === "clues" ? Number(this.cluesSig.split("|")[1]) : -1;
     this.panelMode = "clues";
     this.cluesSig = sig;
 
@@ -266,37 +313,43 @@ export class Hud {
           .map((c, i) => {
             const cls = ["im__clue"];
             if (c.player === this.me) cls.push("is-mine");
-            if (i === s.clues.length - 1) cls.push("is-new"); // la ultima entra iluminada
+            // Solo la que entro recien se tipea; las de antes ya estan escritas.
+            if (i === s.clues.length - 1 && i >= prevCount) cls.push("is-new");
+            const word = c.word.trim() ? esc(c.word) : "(no declar&oacute;)";
+            const len = c.word.trim() ? c.word.trim().length : 14;
             return `
             <li class="${cls.join(" ")}">
-              <span class="im__clue-who">${esc(c.player)}</span>
-              <span class="im__clue-word">${c.word.trim() ? esc(c.word) : "&mdash;"}</span>
+              <span class="im__clue-face">${mugshot(c.player)}</span>
+              <span class="im__clue-who">${esc(c.player)}:</span>
+              <span class="im__clue-word${c.word.trim() ? "" : " is-blank"}" style="--n:${len}">${word}</span>
             </li>`;
           })
           .join("")
-      : `<li class="im__clue is-empty">Todavia nadie dio una pista.</li>`;
+      : `<li class="im__clue is-empty">Todav&iacute;a nadie declar&oacute;.</li>`;
 
     // Sin turno = pausa de lectura del server (`CLUES_RECAP_MS`): estan todas las pistas
     // sobre la mesa y la votacion arranca en unos segundos.
     const inputHtml = myTurn
       ? `
         <form class="im__cluebar" novalidate>
+          <span class="im__cluebar-who">${esc(this.me)}:</span>
           <input class="im__clue-input" type="text" autocomplete="off" autocapitalize="none"
-                 spellcheck="false" maxlength="${MAX_WORD_LEN}" placeholder="Tu pista (una palabra)" />
-          <button class="im__send" type="submit">Enviar</button>
+                 spellcheck="false" maxlength="${MAX_WORD_LEN}" placeholder="tu pista" />
+          <button class="im__send" type="submit">Declarar</button>
         </form>
         <p class="im__cluenote">No vale repetir una pista ni cantar la palabra.</p>`
       : s.turn !== null
-        ? `<div class="im__turnwait">Turno de <strong>${esc(s.turn)}</strong>...</div>`
-        : `<div class="im__turnwait is-recap">Ya estan todas las pistas. Empieza la votaci&oacute;n...</div>`;
+        ? `<div class="im__turnwait"><span class="im__turnwait-face">${mugshot(s.turn)}</span><span>Declara <strong>${esc(s.turn)}</strong>...</span></div>`
+        : `<div class="im__turnwait is-recap">Ya est&aacute;n todas las declaraciones. Empieza la votaci&oacute;n...</div>`;
 
     this.panelEl.innerHTML = `
-      <div class="im__cluewrap">
-        <div class="im__cluehead">
-          <span class="im__cat">${esc(s.category ?? "")}</span>
+      <div class="im__sheet">
+        <div class="im__sheet-head">
+          <span class="im__cat">Caso: ${esc(s.category ?? "")}</span>
           ${roleChip}
         </div>
-        <ul class="im__clues">${cluesHtml}</ul>
+        <div class="im__sheet-title">Declaraciones</div>
+        <ol class="im__clues">${cluesHtml}</ol>
         ${inputHtml}
       </div>`;
 
@@ -311,11 +364,11 @@ export class Hud {
         form.querySelector<HTMLButtonElement>(".im__send")!.disabled = true;
         this.clueCb(word);
       });
-      input.focus();
+      input.focus({ preventScroll: true });
     }
   }
 
-  // ---------- Vista: votacion ----------
+  // ---------- Vista: votacion (rueda de reconocimiento) ----------
 
   private renderVoting(s: ImState): void {
     this.panelMode = "voting";
@@ -329,10 +382,16 @@ export class Hud {
         const cls = ["im__suspect"];
         if (mine) cls.push("is-mine");
         if (isMe) cls.push("is-self");
+        // Los votos son chinches rojas clavadas en la ficha.
+        const pins = Array.from({ length: count }, (_, i) => `<span class="im__pin" style="--i:${i}"></span>`).join("");
         return `
           <button class="${cls.join(" ")}" type="button" data-target="${esc(p.nickname)}" ${isMe ? "disabled" : ""}>
-            <span class="im__suspect-name">${esc(p.nickname)}${isMe ? " (vos)" : ""}</span>
-            <span class="im__suspect-clue">${clue.trim() ? esc(clue) : "&mdash;"}</span>
+            ${mugCard(
+              p.nickname,
+              "",
+              `<span class="im__circle"></span><span class="im__pins">${pins}</span>${isMe ? `<span class="im__self-tag">vos</span>` : ""}`,
+            )}
+            <span class="im__suspect-clue">dijo <strong>${clue.trim() ? esc(clue) : "nada"}</strong></span>
             ${count > 0 ? `<span class="im__suspect-votes">${count}</span>` : ""}
           </button>`;
       })
@@ -340,9 +399,9 @@ export class Hud {
 
     this.panelEl.innerHTML = `
       <div class="im__votewrap">
-        <div class="im__votehead">Quien es el impostor?</div>
-        <p class="im__votesub">Toca de nuevo para sacar tu voto. Si hay empate, el impostor zafa.</p>
-        <div class="im__suspects">${suspects}</div>
+        <div class="im__votehead">&iquest;Qui&eacute;n es el impostor?</div>
+        <p class="im__votesub">Toc&aacute; una ficha para acusar. Toc&aacute; de nuevo para sacar tu voto. Si hay empate, el impostor zafa.</p>
+        <div class="im__lineup">${suspects}</div>
       </div>`;
 
     for (const btn of this.panelEl.querySelectorAll<HTMLButtonElement>(".im__suspect")) {
@@ -351,22 +410,24 @@ export class Hud {
     }
   }
 
-  // ---------- Vista: adivinanza ----------
+  // ---------- Vista: adivinanza (ultima chance) ----------
 
   private renderGuess(s: ImState): void {
     if (this.panelMode === "guess") return; // input propio: no reconstruir
     this.panelMode = "guess";
-    const accused = esc(s.accused ?? "");
-    const amAccused = s.accused === this.me;
+    const accused = s.accused ?? "";
+    const amAccused = accused === this.me;
+    const mug = accused ? mugCard(accused, "im-mug--big", `<span class="im__stamp im__stamp--mug">Acusado</span>`) : "";
 
     if (amAccused) {
       this.panelEl.innerHTML = `
         <div class="im__guesswrap">
-          <div class="im__guesshead">Te descubrieron.</div>
-          <p class="im__guesssub">Adivina la palabra secreta (${esc(s.category ?? "")}) para robar la ronda.</p>
+          ${mug}
+          <div class="im__guesshead">Te descubrieron</div>
+          <p class="im__guesssub">&Uacute;ltima chance: adivin&aacute; la palabra secreta (${esc(s.category ?? "")}) y te rob&aacute;s la ronda.</p>
           <form class="im__cluebar" novalidate>
             <input class="im__clue-input" type="text" autocomplete="off" autocapitalize="none"
-                   spellcheck="false" maxlength="${MAX_WORD_LEN}" placeholder="La palabra secreta" />
+                   spellcheck="false" maxlength="${MAX_WORD_LEN}" placeholder="la palabra secreta" />
             <button class="im__send" type="submit">Adivinar</button>
           </form>
         </div>`;
@@ -380,28 +441,47 @@ export class Hud {
         form.querySelector<HTMLButtonElement>(".im__send")!.disabled = true;
         this.guessCb(word);
       });
-      input.focus();
+      input.focus({ preventScroll: true });
     } else {
       this.panelEl.innerHTML = `
         <div class="im__guesswrap">
-          <div class="im__guesshead"><strong>${accused}</strong> fue descubierto.</div>
-          <p class="im__guesssub">Esta intentando adivinar la palabra para robar la ronda...</p>
+          ${mug}
+          <div class="im__guesshead"><strong>${esc(accused)}</strong> fue descubierto</div>
+          <p class="im__guesssub">Tiene una &uacute;ltima chance: si adivina la palabra, se roba la ronda...</p>
         </div>`;
     }
   }
 
-  // ---------- Vista: resultado ----------
+  // ---------- Vista: resultado (caso cerrado) ----------
 
   private renderResult(s: ImState): void {
-    this.panelMode = "result";
     const outcome = s.outcome;
+    const sig = `${s.round}|${outcome?.kind}|${(s.impostors ?? []).join(",")}`;
+    // El estado se re-difunde cada tanto: los sellos no pueden volver a golpear.
+    if (this.panelMode === "result" && this.resultSig === sig) return;
+    this.panelMode = "result";
+    this.resultSig = sig;
     const impostors = s.impostors ?? [];
-    const title = outcome ? OUTCOME_TITLE[outcome.kind] ?? "Resultado" : "Resultado";
+    const title = outcome ? (OUTCOME_TITLE[outcome.kind] ?? "Resultado") : "Resultado";
     const winners = outcome?.winners === "impostores" ? "Ganan los impostores" : "Ganan los inocentes";
     const guessLine =
       outcome?.kind === "impostor-guessed" || outcome?.kind === "impostor-caught"
-        ? `<p class="im__result-guess">Adivino: <strong>${outcome.guess ? esc(outcome.guess) : "&mdash;"}</strong></p>`
+        ? `<p class="im__result-guess">El impostor dijo: <strong>${outcome.guess ? esc(outcome.guess) : "nada"}</strong></p>`
         : "";
+
+    // Las fichas del veredicto: los impostores (culpables o profugos) y, si la mesa acuso
+    // a un inocente, el inocente con su sello.
+    const caught = outcome?.kind === "impostor-caught";
+    const faces = impostors.map((name) =>
+      mugCard(
+        name,
+        "im-mug--verdict",
+        `<span class="im__stamp im__stamp--mug ${caught ? "is-guilty" : "is-escaped"}">${caught ? "Culpable" : "Pr&oacute;fugo"}</span>`,
+      ),
+    );
+    if (s.accused && !impostors.includes(s.accused)) {
+      faces.push(mugCard(s.accused, "im-mug--verdict", `<span class="im__stamp im__stamp--mug is-innocent">Inocente</span>`));
+    }
 
     const scores = outcome?.scores ?? [];
     const votes = s.votes ?? [];
@@ -428,12 +508,14 @@ export class Hud {
 
     this.panelEl.innerHTML = `
       <div class="im__result${outcome?.winners === "impostores" ? " is-impostor" : " is-crew"}">
+        <div class="im__file-kicker">Expediente N&ordm; ${caseNumber(s)} &middot; Caso: ${esc(s.category ?? "")}</div>
         <div class="im__result-title">${title}</div>
         <div class="im__result-word">La palabra era <strong>${esc(s.word ?? "")}</strong></div>
-        <div class="im__result-imp">${impostors.length > 1 ? "Impostores" : "Impostor"}: <strong>${impostors.map(esc).join(", ")}</strong></div>
+        <div class="im__verdict">${faces.join("")}</div>
         ${guessLine}
         <div class="im__result-winner">${winners}</div>
         <div class="im__scores">${scoreRows}</div>
+        <div class="im__stamp im__stamp--closed">Caso cerrado</div>
       </div>`;
   }
 

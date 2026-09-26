@@ -4,7 +4,10 @@ import { glintTexture } from "./textures";
 
 const NIGHT = new THREE.Color("#070a1f");
 const GLINTS = 26;
-const BALL_Y = 15;
+/** Altura de la bola por defecto; `setBallHeight` la sube si tapa la pista. */
+export const BALL_Y = 15;
+/** Radio de la bola mas un margen, para medir si su borde de abajo tapa la pista. */
+export const BALL_REACH = 1.8;
 const GLINT_COLORS = ["#ff5fa2", "#5fd7ff", "#fff27a", "#9a7bff", "#7dff9a"];
 
 /**
@@ -145,6 +148,17 @@ export class Stage {
     });
     this.beams.position.y = BALL_Y;
     scene.add(this.beams);
+  }
+
+  /**
+   * Cuelga la bola a otra altura (con la camara casi cenital del celu en vertical, a
+   * la altura normal queda delante del centro de la pista). Los haces se estiran para
+   * seguir llegando al piso.
+   */
+  setBallHeight(y: number): void {
+    this.ball.position.y = y;
+    this.beams.position.y = y;
+    this.beams.scale.y = y / BALL_Y;
   }
 
   setMode(mode: "party" | "plain"): void {

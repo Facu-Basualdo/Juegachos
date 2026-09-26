@@ -34,12 +34,37 @@ export const SERVER_GRACE_MS = 12_000;
 export const CONFIRM_MS = 3000;
 export const REMOTE_EASE = 14;
 
-// ---- Camara (fija, como en Derrumbe; sin pisos arriba puede ir mas alta) ----
-export const CAM_DISTANCE = 11.5;
+// ---- Empujon (el alcance y la fuerza los decide el server) ----
+/** Enfriamiento local del empujon; espejo del `PUSH_COOLDOWN_MS` del server. */
+export const PUSH_COOLDOWN_MS = 1200;
+/** Tras un empujon el empujado casi no controla su muñeco, asi el envion lo lleva. */
+export const SHOVE_STUN = 0.45;
+/** Aceleracion (en vez de GROUND/AIR_ACCEL) mientras dura el aturdimiento. */
+export const SHOVE_ACCEL = 1.5;
+
+// ---- Camara ----
+/**
+ * Camara fija que muestra la pista ENTERA (pedido del programador: hay que ver todo
+ * el espacio para elegir a que color correr y a quien empujar). No sigue al muñeco:
+ * `fitCamera` calcula la distancia minima que deja entrar las cuatro esquinas con
+ * este margen. Mira siempre hacia -Z, asi que la pantalla y el mundo coinciden.
+ */
+export const CAM_FOV = 55;
+/** Inclinacion en horizontal (rad, ~57 grados): se lee el dibujo y la altura del salto. */
 export const CAM_PITCH = 1.0;
-export const CAM_FOV = 60;
-export const SPECTATOR_BACK = 26;
-export const SPECTATOR_HEIGHT = 24;
+/** En vertical casi cenital: la pista cuadrada aprovecha mejor la pantalla angosta. */
+export const CAM_PITCH_PORTRAIT = 1.25;
+/** Borde libre a los costados de la pista, en coordenadas de pantalla (NDC). */
+export const CAM_MARGIN = 0.06;
+/**
+ * Franja de arriba reservada al HUD (ronda + cartel del color, en px): la pista se
+ * encuadra debajo, porque el cartel tapaba justo el fondo de la pista cuando hay que
+ * elegir a donde correr.
+ */
+export const CAM_TOP_PX = 200;
+/** Franja de abajo libre, en px (en el celu en vertical, los botones). */
+export const CAM_BOTTOM_PX = 24;
+export const CAM_BOTTOM_PX_PORTRAIT = 150;
 
 // ---- Countdown ----
 export const COUNTDOWN_LABELS = ["3", "2", "1", "YA"] as const;

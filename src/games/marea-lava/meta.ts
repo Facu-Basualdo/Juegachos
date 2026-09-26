@@ -8,7 +8,7 @@ export const meta: GameEntry = {
     "Una pared de roca llena de salientes y la lava subiendo desde abajo, cada vez más rápido. Trepá saltando de plataforma en plataforma antes de que te alcance: gana el que llega más alto, y si llegás a la cima, mejor todavía. Solo se juega en salas.",
   path: "/games/marea-lava/",
   controls:
-    "Movete con WASD o las flechas y saltá con ESPACIO (en el celu: arrastrá el dedo y tocá SALTAR). La sombra te marca dónde vas a caer.",
+    "Movete con WASD, mirá con el mouse (hacé clic para capturarlo, ESC lo suelta) y saltá con ESPACIO. En el celu: joystick a la izquierda, arrastrá a la derecha para mirar y tocá SALTAR. La sombra te marca dónde vas a caer.",
   accent: "#ff7a22",
   category: "Party",
   order: 1020,

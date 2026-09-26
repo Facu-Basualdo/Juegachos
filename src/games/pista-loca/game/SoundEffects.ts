@@ -174,6 +174,23 @@ export class SoundEffects {
     noise(0.08, 0.1, 500, 120, "lowpass");
   }
 
+  /** Empujaste: un golpe seco y corto. */
+  static playPush(): void {
+    noise(0.1, 0.22, 1400, 200, "lowpass");
+    tone("square", 180, 110, 0.08, 0.04);
+  }
+
+  /** Empujo otro (mas bajo: no es asunto tuyo). */
+  static playPushOther(): void {
+    noise(0.08, 0.1, 1200, 200, "lowpass");
+  }
+
+  /** Te empujaron: golpe y un silbido que sube. */
+  static playShoved(): void {
+    noise(0.14, 0.3, 900, 120, "lowpass");
+    tone("triangle", 330, 660, 0.22, 0.06);
+  }
+
   /** Te caiste al vacio. */
   static playFall(): void {
     tone("triangle", 600, 90, 0.9, 0.08);

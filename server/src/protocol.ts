@@ -1006,6 +1006,8 @@ export type LrPhase = "waiting" | "preroll" | "playing" | "over";
 export type LrLight = "green" | "red";
 /** Corriendo, eliminado o llego. */
 export type LrStatus = "run" | "out" | "fin";
+/** Ritmo de la cancion en el verde: pareja, acelerada o cortada (ver `games/luzroja.ts`). */
+export type LrSong = "steady" | "rush" | "stutter";
 
 export interface LrState {
   phase: LrPhase;
@@ -1018,6 +1020,8 @@ export interface LrState {
   lightSeq: number;
   /** Duracion total de la luz actual (el cliente reparte la cancion en ella). */
   lightDur: number;
+  /** Ritmo de la cancion del verde actual. */
+  song: LrSong;
   /** Ms que le quedan a la luz actual. */
   lightLeft: number;
   status: LrStatus[];
@@ -1105,6 +1109,8 @@ export interface PlClientToServer {
   "pl:pos": (msg: { x: number; y: number; z: number; r: number; f: number }) => void;
   /** Me cai al vacio. */
   "pl:dead": (msg: Record<string, never>) => void;
+  /** Empujo hacia donde miro (`r`, rad). El server decide a quien alcanza. */
+  "pl:push": (msg: { r: number }) => void;
 }
 
 /** Server -> Cliente. */
@@ -1113,6 +1119,10 @@ export interface PlServerToClient {
   "pl:state": (msg: PlState) => void;
   /** Posiciones a 20 Hz, aplanadas: [asiento, x, y, z, rotY, flags, ...]. */
   "pl:snap": (msg: { p: number[] }) => void;
+  /** Dirigido: te empujaron; aplica este impulso (m/s). `from` = asiento del que empujo. */
+  "pl:shove": (msg: { vx: number; vz: number; vy: number; from: number }) => void;
+  /** A todos: el asiento `i` empujo (para la animacion). */
+  "pl:pushfx": (msg: { i: number }) => void;
 }
 
 // ============================================================================

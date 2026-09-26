@@ -1,5 +1,5 @@
 import type { Socket } from "socket.io-client";
-import type { PlInit, PlSnap, PlState } from "./PistaLocaProtocol";
+import type { PlInit, PlShove, PlSnap, PlState } from "./PistaLocaProtocol";
 
 /**
  * Transporte socket.io contra el namespace `/pistaloca` del game server. La lib se
@@ -17,6 +17,8 @@ export class PistaLocaSocket {
   private initCb: (init: PlInit) => void = () => {};
   private stateCb: (state: PlState) => void = () => {};
   private snapCb: (snap: PlSnap) => void = () => {};
+  private shoveCb: (shove: PlShove) => void = () => {};
+  private pushFxCb: (seat: number) => void = () => {};
 
   private readonly serverUrl: string;
   private readonly code: string;
@@ -49,6 +51,8 @@ export class PistaLocaSocket {
     socket.on("pl:init", (init: PlInit) => this.initCb(init));
     socket.on("pl:state", (state: PlState) => this.stateCb(state));
     socket.on("pl:snap", (snap: PlSnap) => this.snapCb(snap));
+    socket.on("pl:shove", (shove: PlShove) => this.shoveCb(shove));
+    socket.on("pl:pushfx", (msg: { i: number }) => this.pushFxCb(msg.i));
   }
 
   onInit(cb: (init: PlInit) => void): void {
@@ -63,6 +67,16 @@ export class PistaLocaSocket {
     this.snapCb = cb;
   }
 
+  /** Te empujaron (dirigido). */
+  onShove(cb: (shove: PlShove) => void): void {
+    this.shoveCb = cb;
+  }
+
+  /** Alguien empujo (a todos, para la animacion). */
+  onPushFx(cb: (seat: number) => void): void {
+    this.pushFxCb = cb;
+  }
+
   get connected(): boolean {
     return this.socket?.connected ?? false;
   }
@@ -70,6 +84,12 @@ export class PistaLocaSocket {
   sendPos(x: number, y: number, z: number, r: number, f: number): void {
     if (!this.socket?.connected) return;
     this.socket.emit("pl:pos", { x: round2(x), y: round2(y), z: round2(z), r: round2(r), f });
+  }
+
+  /** Empujo hacia donde miro; el server decide a quien alcanza. */
+  sendPush(yaw: number): void {
+    if (!this.socket?.connected) return;
+    this.socket.emit("pl:push", { r: round2(yaw) });
   }
 
   sendDead(): void {

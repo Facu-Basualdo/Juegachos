@@ -1,6 +1,6 @@
 # Pista Loca (`pista-loca`)
 
-Block Party para salas, en 3D (Three.js, camara fija como en Derrumbe). Una pista
+Block Party para salas, en 3D (Three.js, camara fija que muestra la pista entera). Una pista
 de baile de 24x24 bloques de lana de colores colgada en la nada. Mientras suena la
 musica se baila; cuando se corta, se pide un color y hay unos segundos para
 pararse encima antes de que caiga todo lo demas. Cada ronda hay menos tiempo y el
@@ -17,7 +17,8 @@ Derrumbe, voxel estilo Minecraft con luces de boliche. Todo por codigo.
   `dance` (musica) -> `choose` (color pedido + su tiempo) -> `drop` (cae todo lo
   que no es de ese color) -> `reset` (se rearma con otro dibujo). El dibujo viaja en
   el estado como string de 576 digitos (un color por celda); el cliente no lo
-  genera. Lleva el orden de eliminacion y reenvia las posiciones a 20 Hz.
+  genera. Lleva el orden de eliminacion, reenvia las posiciones a 20 Hz y resuelve los
+  empujones (ver abajo).
 - **Cliente** (`game/Game.ts`): simula su muñeco (la fisica de Derrumbe, con un solo
   piso), **hace caer su propia pista** cuando le llega el `drop` y **declara su
   caida** al vacio (`pl:dead`).
@@ -51,6 +52,46 @@ todos o se llega a 20 rondas. Empatan los que caen en la misma ronda.
 sobre el color. `roomTimeLimitSec: 180` es la red por si el server se cae despues de
 largar.
 
+## Empujon (pedido del programador)
+
+F o clic en la compu, boton EMPUJAR en el celu. Empuja hacia donde mira el muñeco.
+
+- **Lo resuelve el server** (`push` en `pistaloca.ts`): alcanza a los vivos a menos de
+  `PUSH_RANGE` (1.9 m), a la misma altura (+-1.3 m) y adelante (dentro de `PUSH_ARC`, 1.2 rad,
+  de hacia donde mira). A cada uno le manda **dirigido** `pl:shove` con el impulso
+  (`PUSH_FORCE` 11 m/s, mas fuerte de cerca, y `PUSH_LIFT` 4.5 m/s para arriba) y a todos
+  `pl:pushfx` para la animacion de brazos.
+- **El vuelo lo simula el empujado** (`Player.shove`), igual que el resto de su movimiento:
+  reemplaza su velocidad horizontal y por `SHOVE_STUN` (0.45 s) casi no controla el muñeco
+  (`SHOVE_ACCEL`). Sin ese aturdimiento el joystick lo frenaba en el acto y el empujon no movia
+  a nadie. Medido: un empujon a 1 m desplaza ~3 m, o sea saca a cualquiera de su bloque.
+- **Enfriamiento de 1.2 s en los dos lados** (`PUSH_COOLDOWN_MS`, duplicado): el del server es
+  el que vale (no se pueden ametrallar empujones desde las devtools); el del cliente solo
+  pinta el boton, que se oscurece de arriba para abajo mientras recarga.
+- **Antes del empujon se manda la posicion** (`tryPush`): el server mide el alcance con la
+  ultima posicion declarada y a 20 Hz puede estar 50 ms atrasada.
+- El `pushPending` se consume en todos los estados, no solo jugando: si no, un clic durante el
+  countdown salia como empujon al largar.
+
+## Camara (pedido del programador: ver toda la pista)
+
+Fija y sin seguir a nadie (`fitCamera`, en `resize`): hace una busqueda binaria de la distancia
+minima a la que las cuatro esquinas de la pista (y la cabeza de un muñeco parado en las del
+fondo) entran en la franja libre entre el HUD de arriba (`CAM_TOP_PX`, 200 px: el cartel del
+color tapaba justo el fondo de la pista cuando habia que elegir a donde correr) y los botones
+de abajo, y la centra en esa franja con `setViewOffset`. En vertical va casi cenital
+(`CAM_PITCH_PORTRAIT`), que aprovecha mejor la pantalla angosta. Sigue mirando hacia -Z, asi
+que la pantalla y el mundo coinciden y el joystick no cambia.
+
+- Con la pista entera en pantalla el muñeco propio es chico: lleva un **aro** en el piso y una
+  **flecha** que gira arriba de la cabeza, en el color del asiento. Los carteles de nombre de
+  los demas son mas grandes (0.62) por lo mismo.
+- **La bola de espejos se sube si tapa la pista** (`Stage.setBallHeight`): con la camara casi
+  cenital del celu, a su altura normal quedaba justo delante del centro. `fitCamera` la sube
+  hasta que su borde de abajo queda arriba del fondo de la pista en el cuadro, y los haces se
+  estiran para seguir llegando al piso.
+- El espectador ve la misma toma (antes tenia una aparte).
+
 ## Gotchas
 
 - **El dibujo se arma una sola vez por ronda**, en el paso `reset` (el de la ronda 1
@@ -81,5 +122,5 @@ va a la consola y a `window.__pistaLocaScore`. En el build queda eliminado.
 ## Movil
 
 `mobile: true`, verificado **en emulacion** (Playwright, iPhone 13, touch), no en un
-telefono real: joystick flotante en cualquier lado y boton SALTAR (solo con
-`pointer: coarse`). En vertical el FOV se abre 16 grados.
+telefono real: joystick flotante en cualquier lado y botones EMPUJAR y SALTAR (solo con
+`pointer: coarse`). En vertical la camara va casi cenital (ver "Camara").

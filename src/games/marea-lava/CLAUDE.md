@@ -1,6 +1,6 @@
 # Marea de Lava (`marea-lava`)
 
-Trepada para salas, en 3D (Three.js, camara fija de frente a la pared). Una pared
+Trepada para salas, en 3D (Three.js, camara en tercera persona detras del muñeco, como Minecraft). Una pared
 de basalto llena de salientes y la lava subiendo desde abajo, cada vez mas rapido.
 Se trepa saltando de plataforma en plataforma; gana el que llega mas alto, y
 llegar a la cima es lo mejor. **Solo se juega en salas** y **necesita el game
@@ -74,9 +74,22 @@ verificacion** (el criterio de `valid()` asume ese salto).
 - **Luz:** la lava lleva una luz naranja pegada a su superficie (sube con ella) y el
   jugador un "farol" frio (`Stage.setFocus`). Sin el farol, a media altura todo
   quedaba casi negro y no se distinguian las plataformas.
-- **Camara:** fija de frente a la pared, sigue la altura con retraso. En vertical se
-  aleja (`CAM_BACK_PORTRAIT`) y sube el encuadre: si no, media pantalla es lava.
-  Resuelto, sigue al que va mas alto de los que siguen trepando.
+- **Camara en tercera persona** (pedido del programador: con la camara fija de frente
+  no se podia medir la profundidad de los saltos). Va detras del muñeco segun `yaw` /
+  `pitch`, que maneja el jugador: en la compu un clic **captura el mouse** (pointer lock,
+  ESC lo suelta; sin captura se mira arrastrando, y con Q / E); en el celu el dedo de la
+  mitad izquierda es el joystick y el de la derecha mira. WASD es relativo a donde mira.
+  - **Choque de camara** (`clearDistance`): si una plataforma o la pared del fondo quedan
+    entre el muñeco y la camara, la camara se acerca (nunca a menos de `CAM_MIN_DIST`).
+    Las plataformas que estan **por encima** del muñeco no cuentan: acercarse por ellas
+    pegaba la camara a la espalda y el muñeco tapaba toda la pantalla, y si la camara queda
+    adentro de una, sus caras no se dibujan desde adentro.
+  - **Silueta** (`addXray`): lo que igual tapa al muñeco (una plataforma a su altura) deja
+    ver su forma en su color: un duplicado opaco con `depthFunc: GreaterDepth`, dibujado
+    despues de la torre y **antes** que el propio muñeco (renderOrder 20 / 21). Transparente
+    o despues del muñeco, tambien aparecia donde el muñeco se tapa a si mismo.
+  - Al quedar afuera (quemado o en la cima) se suelta el mouse y la camara pasa a la vista de
+    frente a la pared, siguiendo al que va mas alto (`CAM_BACK`, mas lejos en vertical).
 - **La posicion de cada asiento se siembra con la largada**, como en Derrumbe.
 - **Puntaje (`higher`):** la mejor altura en metros; el que llega a la cima suma
   `100 + segundos que le sobraron`, asi cualquiera que llego le gana a cualquiera
@@ -94,4 +107,4 @@ a la consola y a `window.__mareaLavaScore`. En el build queda eliminado.
 ## Movil
 
 `mobile: true`, verificado **en emulacion** (Playwright, iPhone 13, touch), no en un
-telefono real: joystick flotante en cualquier lado y boton SALTAR.
+telefono real: joystick flotante en la mitad izquierda, la derecha mira, y boton SALTAR.

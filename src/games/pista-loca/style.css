@@ -229,10 +229,15 @@ body {
   pointer-events: auto;
 }
 
-/* El boton solo existe en pantallas tactiles; en la compu se salta con ESPACIO. */
+.pl--playing:not(.pl--spectating) .pl-controls {
+  gap: 12px;
+  align-items: flex-end;
+}
+
+/* Los botones solo existen en pantallas tactiles; en la compu se salta con ESPACIO y se empuja con F o clic. */
 @media (pointer: coarse) {
   .pl--playing:not(.pl--spectating) .pl-controls {
-    display: block;
+    display: flex;
   }
 }
 
@@ -250,6 +255,41 @@ body {
 }
 
 .pl-controls__jump:active {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Empujar: mas chico y a la izquierda de SALTAR. El relleno de abajo es el enfriamiento. */
+.pl-controls__push {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-shadow: 2px 2px 0 var(--shadow);
+  touch-action: none;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.pl-controls__push::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(0, 0, 0, 0.55);
+  transform-origin: top;
+  transform: scaleY(var(--cd, 0));
+}
+
+.pl-controls__push.is-cooling {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.pl-controls__push:active {
   background: rgba(255, 255, 255, 0.3);
 }
 

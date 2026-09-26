@@ -7,6 +7,7 @@
 export type LrPhase = "waiting" | "preroll" | "playing" | "over";
 export type LrLight = "green" | "red";
 export type LrStatus = "run" | "out" | "fin";
+export type LrSong = "steady" | "rush" | "stutter";
 
 export interface LrState {
   phase: LrPhase;
@@ -15,6 +16,7 @@ export interface LrState {
   light: LrLight;
   lightSeq: number;
   lightDur: number;
+  song: LrSong;
   lightLeft: number;
   status: LrStatus[];
   prog: number[];
