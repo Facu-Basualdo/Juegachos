@@ -6,6 +6,12 @@ export const meta: GameEntry = {
   description: "Se encienden unas celdas de la grilla un instante: memorizá el patrón y volvé a marcarlas. Cada nivel suma celdas.",
   path: "/games/visual-memory/",
   controls: "Mirá qué celdas se encienden y, cuando se apaguen, tocá esas mismas. Tenés 3 vidas.",
+  howTo: {
+    intro: "Se encienden unas celdas un instante: memorizalas y volvé a marcarlas. Tenés tres vidas.",
+    actions: [
+      { title: "Marcar", icons: ["click", "tap"] },
+    ],
+  },
   accent: "#5fe1ff",
   category: "Puzzle",
   order: 47,

@@ -9,6 +9,14 @@ export const meta: GameEntry = {
   path: "/games/dalgona/",
   controls:
     "Durante el 3, 2, 1 elegí una lata (clic, toque o 1-4). Después seguí el contorno arrastrando la aguja con el mouse o el dedo, despacio y sobre la línea. Mantené L o el botón LAMER para ablandar la galleta.",
+  howTo: {
+    intro: "Elegí una lata a ciegas y sacá la figura del caramelo con la aguja, sin que se parta.",
+    actions: [
+      { title: "Elegir lata", icons: ["keys:1 2 3 4", "click", "tap"], note: "durante el 3, 2, 1" },
+      { title: "Tallar", icons: ["drag", "swipe"], note: "despacio y sobre la línea" },
+      { title: "Lamer", icons: ["key:L", "btn:LAMER"], note: "mantené para ablandarla" },
+    ],
+  },
   accent: "#d98c34",
   category: "Precisión",
   order: 1030,

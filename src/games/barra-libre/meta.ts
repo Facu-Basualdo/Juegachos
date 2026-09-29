@@ -6,6 +6,12 @@ export const meta: GameEntry = {
   description: "Atiende las cuatro barras del bar: llena jarras, sírvelas deslizando y ataja los vasos vacíos antes de que un cliente llegue a la canilla.",
   path: "/games/barra-libre/",
   controls: "Tocá o hacé clic en cada barra para llenar las jarras, servirlas y atajar los vasos vacíos.",
+  howTo: {
+    intro: "Llená jarras, servilas a los clientes y atajá los vasos vacíos antes de que caigan.",
+    actions: [
+      { title: "Atender", icons: ["click", "tap"], note: "tocá cada barra" },
+    ],
+  },
   accent: "#ffb454",
   category: "Arcade",
   order: 190,

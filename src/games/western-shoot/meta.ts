@@ -6,6 +6,13 @@ export const meta: GameEntry = {
   description: "Apunta y dispara a las dianas del viejo oeste. Cuidado con los civiles y derriba a los vaqueros antes de que te disparen.",
   path: "/games/western-shoot/",
   controls: "Apuntá con el mouse y hacé clic o toque para disparar.",
+  howTo: {
+    intro: "Dispará a los vaqueros antes de que te disparen, y cuidado con los civiles.",
+    actions: [
+      { title: "Apuntar", icons: ["mouse"] },
+      { title: "Disparar", icons: ["click", "tap"] },
+    ],
+  },
   accent: "#c9883e",
   category: "Precisión",
   order: 3,

@@ -9,6 +9,13 @@ export const meta: GameEntry = {
   path: "/games/templo-rodante/",
   controls:
     "Flecha arriba / W (o la mitad de arriba de la pantalla) para saltar la viga rasante; flecha abajo / S (o la mitad de abajo) para agacharte ante la viga alta.",
+  howTo: {
+    intro: "Vienen vigas con púas rodando: saltá las rasantes y agachate ante las altas.",
+    actions: [
+      { title: "Saltar", icons: ["arrow-up", "key:W", "tap"], note: "mitad de arriba" },
+      { title: "Agacharse", icons: ["arrow-down", "key:S", "tap"], note: "mitad de abajo" },
+    ],
+  },
   accent: "#ff7a18",
   category: "Reflejos",
   order: 970,

@@ -10,6 +10,13 @@ export const meta: GameEntry = {
     "Adiviná la palabra de 5 letras en 6 intentos. Cada intento te dice qué letras acertaste y cuáles están en otro lugar.",
   path: "/games/wordle/",
   controls: "Escribí una palabra de 5 letras y confirmá con Enter.",
+  howTo: {
+    intro: "Adiviná la palabra de 5 letras en 6 intentos. Los colores te dicen qué letras acertaste.",
+    actions: [
+      { title: "Escribir", icons: ["keyboard", "tap"], note: "o el teclado en pantalla" },
+      { title: "Probar", icons: ["enter"] },
+    ],
+  },
   accent: "#2f7d4f",
   category: "Puzzle",
   order: 410,

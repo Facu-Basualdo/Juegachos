@@ -6,6 +6,12 @@ export const meta: GameEntry = {
   description: "Estira, apunta y encesta la pelota en el aro siguiente encadenando canastas perfectas.",
   path: "/games/dunk-shot/",
   controls: "Arrastrá para estirar, apuntá y soltá para encestar.",
+  howTo: {
+    intro: "Estirá, apuntá y encestá en el aro siguiente. Encadená canastas perfectas.",
+    actions: [
+      { title: "Tirar", icons: ["drag", "swipe"], note: "estirá y soltá" },
+    ],
+  },
   accent: "#ff7a45",
   category: "Precisión",
   order: 130,

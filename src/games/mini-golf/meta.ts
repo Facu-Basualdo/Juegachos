@@ -9,6 +9,13 @@ export const meta: GameEntry = {
   path: "/games/mini-golf/",
   controls:
     "Arrastrá desde la pelota para apuntar y dosificar la fuerza y soltá para pegar. Arrastrá fuera de la pelota para girar la cámara y usá la rueda para el zoom.",
+  howTo: {
+    intro: "Tres hoyos de minigolf con molinetes y atajos: embocá en la menor cantidad de golpes.",
+    actions: [
+      { title: "Pegar", icons: ["drag", "swipe"], note: "desde la pelota, y soltá" },
+      { title: "Cámara", icons: ["drag", "wheel"], note: "arrastrá afuera de la pelota" },
+    ],
+  },
   accent: "#5fc248",
   category: "Precisión",
   order: 350,

@@ -9,6 +9,9 @@
  * permanente con codigo / ronda / tiempo mientras se juega.
  */
 
+import type { HowTo } from "../howto";
+import { HOWTO_CSS, renderHowTo } from "./howtoView";
+
 const STYLE_ID = "mg-room-styles";
 
 /*
@@ -126,7 +129,7 @@ function ensureStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement("style");
   style.id = STYLE_ID;
-  style.textContent = CSS;
+  style.textContent = CSS + HOWTO_CSS;
   document.head.append(style);
 }
 
@@ -289,6 +292,7 @@ export class RoomOverlay {
   private show(): void {
     this.root.style.display = "";
     this.boxEl.innerHTML = "";
+    this.boxEl.className = "mg-room__box";
     this.timeEl = null;
     this.resetVoteState();
   }
@@ -477,6 +481,8 @@ export class RoomOverlay {
     gameTitle: string;
     description: string;
     controls: string;
+    /** Como se juega en iconos; si viene, reemplaza a `description` + `controls`. */
+    howTo?: HowTo;
     /** Tope de tiempo de la ronda ya formateado, o "" si el juego no tiene. */
     timeLimit: string;
     readyCount: number;
@@ -496,9 +502,13 @@ export class RoomOverlay {
     this.briefSig = sig;
     this.addKicker(`Ronda ${opts.roundNo}/${opts.totalRounds} - proximo juego`);
     this.addTitle(opts.gameTitle);
-    if (opts.description) this.addSubtitle(opts.description);
+    if (opts.howTo) {
+      // Intro de dos renglones y una tarjeta por accion con sus iconos: se entiende sin leer.
+      this.boxEl.classList.add("mg-room__box--wide");
+      this.boxEl.append(renderHowTo(opts.howTo));
+    } else if (opts.description) this.addSubtitle(opts.description);
 
-    if (opts.controls) {
+    if (!opts.howTo && opts.controls) {
       const box = document.createElement("div");
       box.className = "mg-room__controls";
       const label = document.createElement("div");

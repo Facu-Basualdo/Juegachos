@@ -8,6 +8,13 @@ export const meta: GameEntry = {
   path: "/games/pizza-express/",
   controls:
     "Flechas o A/D (o arrastrá el dedo) para esquivar. Espacio o tocá para lanzar una pizza al buzón que pide. Un choque y se acaba.",
+  howTo: {
+    intro: "Repartí pizzas en scooter: esquivá autos y pozos y tirale la pizza al buzón que la pide.",
+    actions: [
+      { title: "Esquivar", icons: ["ad", "arrows-lr", "swipe"] },
+      { title: "Tirar pizza", icons: ["space", "tap"] },
+    ],
+  },
   accent: "#d83a2b",
   category: "Arcade",
   order: 370,

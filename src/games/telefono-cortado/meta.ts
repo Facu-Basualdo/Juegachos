@@ -13,6 +13,13 @@ export const meta: GameEntry = {
 
   order: 950,
   controls: "Mouse o dedo para dibujar (con deshacer), teclado para escribir y adivinar.",
+  howTo: {
+    intro: "Escribí una frase, dibujá la de otro y adiviná lo que quiso decir un tercero.",
+    actions: [
+      { title: "Dibujar", icons: ["drag", "swipe"] },
+      { title: "Escribir", icons: ["keyboard"] },
+    ],
+  },
 };
 
 //
