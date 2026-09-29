@@ -1,4 +1,5 @@
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 
 /** DOM overlay: live score, timer bar plus start/game-over screens. */
 export class Hud {
@@ -51,6 +52,8 @@ export class Hud {
 
     this.overlayEl.append(this.titleEl, this.subtitleEl, this.scoreLineEl, this.hintEl);
     this.leaderboard.mount(this.overlayEl);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("timberman").follow(this.leaderboard).hides(".overlay__hint");
     this.leaderboard.clear();
 
     this.countdownEl = document.createElement("div");

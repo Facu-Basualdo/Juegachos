@@ -1,5 +1,6 @@
 import { BEST_KEY_PREFIX, ERROR_FLASH_MS, GRID_SIZES } from "./constants";
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 import { formatClock } from "../../../shared/scoring";
 
 export class Hud {
@@ -100,6 +101,8 @@ export class Hud {
       this.hintEl
     );
     this.leaderboard.mount(this.overlayEl);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("click-the-number").follow(this.leaderboard);
     this.leaderboard.clear();
 
     // 4. Countdown Screen

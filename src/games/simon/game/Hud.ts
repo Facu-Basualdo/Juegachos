@@ -1,4 +1,5 @@
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 import { PAD_COUNT } from "./constants";
 
 export class Hud {
@@ -75,6 +76,8 @@ export class Hud {
 
     this.overlayEl.append(this.titleEl, this.subtitleEl, this.scoreLineEl, this.hintEl);
     this.leaderboard.mount(this.overlayEl);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("simon").follow(this.leaderboard);
     this.leaderboard.clear();
 
     // Countdown

@@ -1,4 +1,5 @@
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 
 /** Overlay DOM: score en vivo + pantallas de inicio / fin + countdown. */
 export class Hud {
@@ -43,6 +44,8 @@ export class Hud {
 
     this.overlayEl.append(this.titleEl, this.subtitleEl, this.scoreLineEl, this.hintEl);
     this.leaderboard.mount(this.overlayEl);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("color-switch").follow(this.leaderboard);
     this.leaderboard.clear();
 
     this.countdownEl = document.createElement("div");

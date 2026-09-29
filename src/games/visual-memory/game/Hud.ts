@@ -1,4 +1,5 @@
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 import { LIVES } from "./constants";
 
 export interface Handlers {
@@ -52,6 +53,8 @@ export class Hud {
     this.hintEl = el("div", "overlay__hint");
     this.overlayEl.append(this.titleEl, this.subtitleEl, this.scoreEl, this.hintEl);
     this.leaderboard.mount(this.overlayEl);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("visual-memory").follow(this.leaderboard);
     this.leaderboard.clear();
 
     container.append(this.hudBar, this.board, this.countdownEl, this.overlayEl);

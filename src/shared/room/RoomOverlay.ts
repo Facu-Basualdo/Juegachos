@@ -10,7 +10,7 @@
  */
 
 import type { HowTo } from "../howto";
-import { HOWTO_CSS, renderHowTo } from "./howtoView";
+import { renderHowTo } from "../howtoView";
 
 const STYLE_ID = "mg-room-styles";
 
@@ -116,6 +116,23 @@ const CSS = `
 }
 .mg-room__controls-label { font-size: 10px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #0091a6; margin-bottom: 5px; }
 .mg-room__controls-text { font-size: 14px; font-weight: 600; line-height: 1.4; }
+/* Briefing con iconos (renderHowTo): en la sala va con la paleta del overlay,
+   tarjetas blancas y botones negros. En el celu la caja se compacta para que entren
+   hasta cuatro acciones sin scroll y la intro quede en dos renglones. */
+.mg-room__box--wide { max-width: 620px; }
+.mg-room .mg-ht { --ht-accent: #00c2d6; margin: 0 0 16px; }
+.mg-room .mg-ht__intro { color: #3d3b31; opacity: 1; }
+.mg-room .mg-ht__card { background: #ffffff; border-color: rgba(17, 17, 17, 0.14); }
+.mg-room .mg-kc { background: #ffffff; }
+.mg-room .mg-ht .ht-f { fill: #ffffff; }
+.mg-room .mg-hb { background: #111; color: #efeee6; border-color: #111; }
+@media (max-width: 480px) {
+  .mg-room__box--wide { padding: 20px 14px; }
+  .mg-room .mg-ht__intro { font-size: 14px; margin-bottom: 12px; }
+  .mg-room .mg-ht__grid { gap: 8px; }
+  .mg-room .mg-ht__card { padding: 9px 8px 10px; gap: 7px; }
+  .mg-room .mg-ht__title { font-size: 18px; }
+}
 .mg-room__ready-count { font-size: 12px; font-weight: 700; color: #6f6d5e; margin-top: 12px; font-variant-numeric: tabular-nums; }
 .mg-room__btn:disabled { cursor: default; background: #0a9d54; color: #efeee6; border-color: #0a9d54; opacity: 1; }
 .mg-room__btn:disabled:hover { background: #0a9d54; color: #efeee6; }
@@ -129,7 +146,7 @@ function ensureStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement("style");
   style.id = STYLE_ID;
-  style.textContent = CSS + HOWTO_CSS;
+  style.textContent = CSS;
   document.head.append(style);
 }
 

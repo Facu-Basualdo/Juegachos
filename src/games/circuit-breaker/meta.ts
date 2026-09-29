@@ -12,7 +12,7 @@ export const meta: GameEntry = {
   howTo: {
     intro: "Llevá la señal por el circuito hasta el conector sin tocar las paredes. Avanza sola: vos girás.",
     actions: [
-      { title: "Girar", icons: ["arrows", "wasd", "swipe"] },
+      { title: "Girar", icons: ["arrows", "wasd", "swipe"], note: "la señal avanza sola" },
     ],
   },
   accent: "#33e39a",
