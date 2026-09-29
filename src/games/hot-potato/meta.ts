@@ -9,6 +9,13 @@ export const meta: GameEntry = {
   path: "/games/hot-potato/",
   controls:
     "Cuando tengas la papa, marca las 4 flechas en orden (flechas o WASD, o los botones) para pasarla. Toca a un jugador (o Q / E) para elegir a quien. La aguja muestra cuanto lleva la papa: los primeros 9 segundos nunca explota; de ahi a los 20 puede explotar en cualquier momento, y cuanto mas pasa, mas probable.",
+  howTo: {
+    intro: "La papa explota cuando nadie sabe: marcá las flechas y pasásela a otro antes de que te toque.",
+    actions: [
+      { title: "Marcar flechas", icons: ["arrows", "wasd", "tap"], note: "las 4, en orden" },
+      { title: "Elegir a quién", icons: ["keys:Q E", "tap"], note: "no se la podés devolver" },
+    ],
+  },
   accent: "#d9442b",
   category: "Party",
   order: 285,

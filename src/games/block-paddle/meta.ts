@@ -6,6 +6,12 @@ export const meta: GameEntry = {
   description: "Movi la barra de izquierda a derecha para evitar que la pelota caiga. Cada rebote suma puntos y acelera la pelota.",
   path: "/games/block-paddle/",
   controls: "Flechas o mové el mouse para desplazar la barra de lado a lado.",
+  howTo: {
+    intro: "Mové la barra para que la pelota no se caiga. Cada rebote suma y la pelota acelera.",
+    actions: [
+      { title: "Movimiento", icons: ["arrows-lr", "mouse", "swipe"] },
+    ],
+  },
   accent: "#64c8ff",
   category: "Arcade",
   order: 230,

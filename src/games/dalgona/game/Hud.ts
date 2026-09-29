@@ -1,4 +1,5 @@
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 
 /**
  * HUD de Dalgona (DESIGN.md: la voz del galpon). Arriba, el reloj digital rojo, la
@@ -97,6 +98,8 @@ export class Hud {
     this.hintEl.className = "overlay__hint";
     this.overlayEl.append(this.titleEl, this.subtitleEl, this.scoreEl, this.hintEl);
     this.leaderboard.mount(this.overlayEl);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("dalgona").follow(this.leaderboard);
     this.leaderboard.clear();
 
     container.append(this.root, this.countdownEl, this.overlayEl);

@@ -1,4 +1,5 @@
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 import { HOLES_PER_ROUND } from "./constants";
 
 export interface HoleResult {
@@ -54,6 +55,8 @@ export class Hud {
       "Arrastrá desde la pelota para apuntar y soltá para pegar. Arrastrá fuera de la pelota para girar la cámara, rueda para el zoom.";
     this.overlayEl.append(this.titleEl, this.subtitleEl, this.scoreLineEl, this.cardEl, this.hintEl);
     this.leaderboard.mount(this.overlayEl);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("mini-golf").follow(this.leaderboard).hides(".overlay__hint");
     this.leaderboard.clear();
 
     this.countdownEl = document.createElement("div");

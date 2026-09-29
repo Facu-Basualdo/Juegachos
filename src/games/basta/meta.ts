@@ -9,6 +9,14 @@ export const meta: GameEntry = {
   path: "/games/basta/",
   controls:
     "Llena las 7 categorias con palabras que empiecen con la letra. Toca BASTA cuando completes todas. Al final, tacha las respuestas que no valgan.",
+  howTo: {
+    intro: "Sale una letra: llená las 7 categorías con palabras que empiecen con ella y gritá BASTA.",
+    actions: [
+      { title: "Escribir", icons: ["keyboard"] },
+      { title: "Cortar", icons: ["btn:BASTA"], note: "cuando completes todas" },
+      { title: "Votar", icons: ["click", "tap"], note: "tachá las que no valen" },
+    ],
+  },
   accent: "#2f5bd8",
   category: "Party",
   order: 380,

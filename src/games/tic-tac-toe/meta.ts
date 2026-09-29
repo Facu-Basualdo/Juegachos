@@ -8,6 +8,12 @@ export const meta: GameEntry = {
     "Ta-Te-Ti sin empates: al colocar tu cuarta ficha desaparece la primera. Solo es contra una IA dificil (racha de victorias); en sala es PvP.",
   path: "/games/tic-tac-toe/",
   controls: "Clic o toque en una celda para colocar tu ficha.",
+  howTo: {
+    intro: "Ta-Te-Ti sin empates: al poner tu cuarta ficha, desaparece la primera.",
+    actions: [
+      { title: "Poner ficha", icons: ["click", "tap"] },
+    ],
+  },
   accent: "#22d3ee",
   category: "Puzzle",
   order: 260,

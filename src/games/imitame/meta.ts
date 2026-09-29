@@ -9,6 +9,13 @@ export const meta: GameEntry = {
   path: "/games/imitame/",
   controls:
     "Escucha el sonido (suena una vez). Cuando diga YA, imitalo con la voz: tenes una sola toma. Usa auriculares si podes.",
+  howTo: {
+    intro: "Suena un sonido una sola vez: cuando diga YA, imitalo con la voz. Tenés una sola toma.",
+    actions: [
+      { title: "Imitar", icons: ["mic"] },
+      { title: "Mejor con", icons: ["headphones"] },
+    ],
+  },
   accent: "#ff4f9a",
   category: "Party",
   order: 395,

@@ -9,6 +9,15 @@ export const meta: GameEntry = {
   path: "/games/la-cuerda/",
   controls:
     "Movete con WASD, mirá con el mouse (hacé clic para capturarlo, ESC lo suelta), saltá con ESPACIO y empujá con F. En el celu: joystick a la izquierda, arrastrá a la derecha para mirar y tocá SALTAR o EMPUJAR. El golpe de cada cuerda contra el puente te marca el ritmo.",
+  howTo: {
+    intro: "Cruzá el puente saltando las dos cuerdas gigantes, sin caerte y cuidándote de los empujones.",
+    actions: [
+      { title: "Movimiento", icons: ["wasd", "joystick"] },
+      { title: "Mirar", icons: ["mouse", "swipe"], note: "clic para capturar el mouse" },
+      { title: "Saltar", icons: ["space", "btn:SALTAR"] },
+      { title: "Empujar", icons: ["key:F", "btn:EMPUJAR"] },
+    ],
+  },
   accent: "#f4a6bf",
   category: "Party",
   order: 1030,

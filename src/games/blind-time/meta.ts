@@ -7,6 +7,12 @@ export const meta: GameEntry = {
   description: "Detén el cronómetro a ciegas lo más cerca posible del tiempo objetivo asignado.",
   path: "/games/blind-time/",
   controls: "ENTER o clic para arrancar, y de nuevo para frenar el cronómetro a ciegas.",
+  howTo: {
+    intro: "Frená el cronómetro a ciegas lo más cerca posible del tiempo que te piden.",
+    actions: [
+      { title: "Arrancar y frenar", icons: ["enter", "click", "tap"] },
+    ],
+  },
   accent: "#ffdd53",
   category: "Precisión",
   order: 200,

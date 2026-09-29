@@ -1,4 +1,5 @@
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 
 // A pizza slice token (warm) and a shield token (cool, deliberately distinct so
 // the one-time presentation shield reads apart from the miss pizzas).
@@ -88,6 +89,8 @@ export class Hud {
 
     this.overlayEl.append(this.titleEl, this.subtitleEl, this.scoreLineEl, this.hintEl);
     this.leaderboard.mount(this.overlayEl);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("pizza-express").follow(this.leaderboard).hides(".overlay__hint");
     this.leaderboard.clear();
 
     this.countdownEl = document.createElement("div");

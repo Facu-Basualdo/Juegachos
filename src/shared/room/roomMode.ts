@@ -919,6 +919,7 @@ class RoomModeController implements RoomMode {
       gameTitle: this.gameTitle(this.gameId),
       description: game?.description ?? "",
       controls: game?.controls ?? "",
+      howTo: game?.howTo,
       // Solo los juegos con tope declarado avisan el reloj; el resto no lo tiene.
       timeLimit: limit === NO_TIME_LIMIT ? "" : formatRoundTimeLimit(limit),
       readyCount,

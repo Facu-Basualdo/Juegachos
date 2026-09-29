@@ -9,6 +9,12 @@ export const meta: GameEntry = {
   path: "/games/luz-roja/",
   controls:
     "Corré con WASD o las flechas (en el celu: arrastrá el dedo) y soltá antes de que la muñeca se dé vuelta.",
+  howTo: {
+    intro: "Corré hacia la línea roja mientras la muñeca canta. Cuando se da vuelta, quedate quieto.",
+    actions: [
+      { title: "Correr", icons: ["wasd", "arrows", "swipe"], note: "soltá todo cuando se da vuelta" },
+    ],
+  },
   accent: "#d0232b",
   category: "Party",
   order: 1000,

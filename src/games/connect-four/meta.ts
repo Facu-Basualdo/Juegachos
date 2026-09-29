@@ -8,6 +8,12 @@ export const meta: GameEntry = {
     "Solta fichas y alinea 4 en fila, columna o diagonal. Solo es contra una IA dificil (racha de victorias); en sala es PvP por turnos.",
   path: "/games/connect-four/",
   controls: "Clic o toque en una columna para soltar tu ficha.",
+  howTo: {
+    intro: "Soltá fichas y alineá cuatro en fila, columna o diagonal antes que tu rival.",
+    actions: [
+      { title: "Soltar ficha", icons: ["click", "tap"], note: "en la columna" },
+    ],
+  },
   accent: "#facc15",
   category: "Puzzle",
   order: 270,

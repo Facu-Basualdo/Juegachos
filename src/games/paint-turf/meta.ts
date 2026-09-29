@@ -8,6 +8,13 @@ export const meta: GameEntry = {
     "Captura la zona a los brochazos: sos un pincel suelto sobre una hoja y pintas cada celda por la que pasas, robandole las que ya eran de otro. Tenes un salpicon con enfriamiento que pinta un circulo grande y deja aturdido al que agarre adentro. A los 45 segundos gana el que se quedo con mas tablero. Solo se juega en salas.",
   path: "/games/paint-turf/",
   controls: "Movete con WASD o las flechas (en el celu arrastra el dedo) y salpica con ESPACIO.",
+  howTo: {
+    intro: "Pintá el tablero pasando por cada celda y robale las suyas a los demás. Gana el que más pinta.",
+    actions: [
+      { title: "Movimiento", icons: ["wasd", "arrows", "swipe"] },
+      { title: "Salpicar", icons: ["space", "key:SHIFT", "btn:SALPICAR"] },
+    ],
+  },
   accent: "#e0523f",
   category: "Party",
   order: 970,

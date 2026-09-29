@@ -7,6 +7,12 @@ export const meta: GameEntry = {
   description: "Los numeros del 1 al 25 desordenados en una grilla: tocalos en orden lo mas rapido posible.",
   path: "/games/click-the-number/",
   controls: "Clic o toque en cada numero, del mas chico al mas grande, contrarreloj.",
+  howTo: {
+    intro: "Los números del 1 al 25 están desordenados: tocalos en orden, lo más rápido que puedas.",
+    actions: [
+      { title: "Tocar", icons: ["click", "tap"], note: "del más chico al más grande" },
+    ],
+  },
   accent: "#22d3ee",
   category: "Reflejos",
   order: 400,

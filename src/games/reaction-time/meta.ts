@@ -7,6 +7,12 @@ export const meta: GameEntry = {
   description: "Pon a prueba tus reflejos en este juego de 5 rondas. El puntaje final es tu tiempo de reacción promedio.",
   path: "/games/reaction-time/",
   controls: "Clic o ENTER apenas cambie el color, lo más rápido que puedas.",
+  howTo: {
+    intro: "Esperá a que cambie el color y reaccioná lo más rápido que puedas. Son cinco rondas.",
+    actions: [
+      { title: "Reaccionar", icons: ["click", "enter", "tap"] },
+    ],
+  },
   accent: "#39ff14",
   category: "Reflejos",
   order: 60,

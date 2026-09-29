@@ -1,4 +1,5 @@
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 import type { CarInput } from "./Car";
 
 /** HUD DOM del juego: vueltas, cronometro, posicion, overlays y tactil. */
@@ -22,6 +23,7 @@ export class Hud {
   private mapChips: HTMLElement[] = [];
   private voteCountEls: HTMLElement[] = [];
   private readonly leaderboard = new LeaderboardPanel();
+  private readonly howTo = new HowToPanel("car-race");
 
   constructor(container: HTMLElement, onAction: () => void) {
     const hud = document.createElement("div");
@@ -88,6 +90,10 @@ export class Hud {
     this.mapsEl = this.overlayEl.querySelector("#overlay-maps")!;
 
     this.leaderboard.mount(this.overlayEl.querySelector(".overlay__card")!);
+
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+
+    this.howTo.mount(this.leaderboard.root.parentElement!, this.leaderboard.root).hides(".overlay__instructions");
     this.leaderboard.clear();
 
     this.createTouchControls(container);
@@ -255,6 +261,7 @@ export class Hud {
     this.statsEl.classList.remove("hidden");
     this.mapsEl.classList.remove("hidden");
     this.leaderboard.clear();
+    this.howTo.show(true);
     this.overlayEl.classList.remove("hidden");
   }
 
@@ -271,6 +278,7 @@ export class Hud {
       : "Carrera completada.";
     this.overlayStat1El.textContent = timeText;
     this.overlayStat2El.textContent = bestText;
+    this.howTo.show(false);
     this.overlayButtonEl.textContent = "OTRA CARRERA";
     this.overlayButtonEl.style.display = allowRetry ? "" : "none";
     this.statsEl.classList.remove("hidden");

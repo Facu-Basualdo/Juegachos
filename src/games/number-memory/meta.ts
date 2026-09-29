@@ -7,6 +7,13 @@ export const meta: GameEntry = {
   description: "Memorizá el número que aparece un instante y escribilo cuando se esfuma. Cada acierto suma un dígito.",
   path: "/games/number-memory/",
   controls: "Elegí modo, mirá el número, y cuando desaparezca tipealo (teclado o teclas en pantalla) y confirmá con OK/Enter.",
+  howTo: {
+    intro: "Memorizá el número que aparece un instante y escribilo. Cada acierto suma un dígito.",
+    actions: [
+      { title: "Escribir", icons: ["keys:1 2 3", "tap"] },
+      { title: "Confirmar", icons: ["enter", "btn:OK"] },
+    ],
+  },
   accent: "#ffca57",
   category: "Puzzle",
   order: 45,

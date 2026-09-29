@@ -1,6 +1,7 @@
 import { CHAMBERS } from "./constants";
 import type { RunResult } from "./Game";
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 
 /** Un jugador en el panel de "como le va al resto de la sala". */
 export interface LivePlayer {
@@ -97,6 +98,8 @@ export class Hud {
       this.hintEl,
     );
     this.leaderboard.mount(this.overlayEl);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("typing-race").follow(this.leaderboard);
     this.leaderboard.clear();
 
     // --- Countdown / efectos ---

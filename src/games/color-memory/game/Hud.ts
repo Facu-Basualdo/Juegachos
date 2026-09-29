@@ -1,5 +1,6 @@
 import { TOTAL_ROUNDS } from "./constants";
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 import { type HSV, hsvCss, textToneFor } from "./color";
 
 export interface HudHandlers {
@@ -146,6 +147,9 @@ export class Hud {
     this.startHint = el("div", "cm-hint");
     this.startHint.textContent = "presioná ENTER o tocá Comenzar";
     this.startEl.append(startKicker, startTitle, startSub, this.startBest, this.startBtn, this.startHint);
+    // Como se juega con iconos (el howTo del meta.ts). Va en la caja de inicio y no
+    // siguiendo al ranking: aca el ranking vive en la caja del game over.
+    new HowToPanel("color-memory").mount(this.startEl, this.startBtn);
 
     // Game over content
     this.overEl = el("div", "cm-gameover");

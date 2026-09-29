@@ -1,4 +1,5 @@
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 import { formatClock } from "../../../shared/scoring-core";
 
 export class Hud {
@@ -69,6 +70,8 @@ export class Hud {
     this.overlayEl.append(this.titleEl, this.subtitleEl, this.scoreLineEl, this.bestLineEl, this.hintEl);
     this.overlayEl.append(this.rankTabsEl);
     this.leaderboard.mount(this.overlayEl);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("circuit-breaker").follow(this.leaderboard);
     this.leaderboard.clear();
 
     this.countdownEl = document.createElement("div");
@@ -145,7 +148,7 @@ export class Hud {
     this.scoreLineEl.style.display = best ? "block" : "none";
     this.bestLineEl.textContent = "";
     this.bestLineEl.style.display = "none";
-    this.hintEl.textContent = "ENTER o toca para empezar - avanza sola, gira con flechas / WASD";
+    this.hintEl.textContent = "ENTER o toca para empezar";
     this.rankTabsEl.style.display = "none";
     this.leaderboard.clear();
     this.overlayEl.classList.remove("hidden");

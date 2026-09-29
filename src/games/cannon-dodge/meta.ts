@@ -8,6 +8,12 @@ export const meta: GameEntry = {
     "Sobreviví en una isla pirata esquivando las balas de cañón que la cruzan. Cuanto más aguantás, más difícil se pone.",
   path: "/games/cannon-dodge/",
   controls: "WASD o flechas para moverte por la isla y esquivar las balas. Aguantá lo máximo posible.",
+  howTo: {
+    intro: "Esquivá las balas de cañón que cruzan la isla. Cuanto más aguantás, más difícil se pone.",
+    actions: [
+      { title: "Movimiento", icons: ["wasd", "arrows", "joystick"] },
+    ],
+  },
   accent: "#f2b134",
   category: "Reflejos",
   order: 360,

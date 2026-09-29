@@ -6,6 +6,12 @@ export const meta: GameEntry = {
   description: "Pilotea un caza por el espacio y esquiva meteoritos, hielo y chatarra mientras vas cada vez más rápido.",
   path: "/games/vector-rush/",
   controls: "Flechas o WASD, o arrastrá el dedo, para esquivar.",
+  howTo: {
+    intro: "Piloteá un caza por el espacio y esquivá meteoritos, cada vez más rápido.",
+    actions: [
+      { title: "Esquivar", icons: ["arrows", "wasd", "swipe"] },
+    ],
+  },
   accent: "#00fff2",
   category: "Arcade",
   order: 1,
