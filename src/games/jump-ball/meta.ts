@@ -6,6 +6,12 @@ export const meta: GameEntry = {
   description: "Corre hacia el horizonte saltando solo entre plataformas y cambia de carril a tiempo para no caer al vacío.",
   path: "/games/jump-ball/",
   controls: "Flechas o A/D, o tocá izquierda y derecha, para cambiar de carril.",
+  howTo: {
+    intro: "Saltá entre plataformas hacia el horizonte y cambiá de carril para no caer al vacío.",
+    actions: [
+      { title: "Cambiar de carril", icons: ["ad", "arrows-lr", "tap-sides"] },
+    ],
+  },
   accent: "#ff8a3d",
   category: "Arcade",
   order: 50,

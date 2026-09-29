@@ -7,6 +7,12 @@ export const meta: GameEntry = {
   description: "Apaga todas las luces: cada toque invierte una celda y sus vecinas.",
   path: "/games/lights-out/",
   controls: "Clic o toque en una celda para invertirla junto a sus vecinas.",
+  howTo: {
+    intro: "Apagá todas las luces: cada toque invierte la celda y sus vecinas.",
+    actions: [
+      { title: "Invertir", icons: ["click", "tap"] },
+    ],
+  },
   accent: "#ffd23f",
   category: "Puzzle",
   order: 290,

@@ -1,4 +1,5 @@
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 
 export class Hud {
   private readonly scoreEl: HTMLDivElement;
@@ -56,6 +57,8 @@ export class Hud {
 
     this.overlayEl.append(this.titleEl, this.subtitleEl, this.scoreLineEl, this.btnEl, this.hintEl);
     this.leaderboard.mount(this.overlayEl);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("asteroids").follow(this.leaderboard).hides(".overlay__hint");
     this.leaderboard.clear();
 
     // Countdown element

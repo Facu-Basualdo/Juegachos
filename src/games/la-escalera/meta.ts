@@ -8,6 +8,12 @@ export const meta: GameEntry = {
   path: "/games/la-escalera/",
   controls:
     "Flechas (o WASD, o la cruceta en pantalla) para copiar la flecha del cartel. Acertás y subís, errás y resbalás.",
+  howTo: {
+    intro: "Seguí las flechas del cartel para subir la escalera mecánica. Cada error te acerca a las púas.",
+    actions: [
+      { title: "Copiar la flecha", icons: ["arrows", "wasd", "tap"], note: "o la cruceta en pantalla" },
+    ],
+  },
   accent: "#ff7a2a",
   category: "Reflejos",
   order: 420,

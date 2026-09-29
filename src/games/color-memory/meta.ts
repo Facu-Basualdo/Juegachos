@@ -6,6 +6,12 @@ export const meta: GameEntry = {
   title: "Memoria de Color",
   description:
     "Un color aparece unos segundos y desaparece. Recreálo de memoria con matiz, saturación y brillo. Tres rondas, un promedio de aciertos.",
+  howTo: {
+    intro: "Un color aparece unos segundos y desaparece: recrealo de memoria con los tres controles.",
+    actions: [
+      { title: "Ajustar", icons: ["drag", "swipe"], note: "matiz, saturación y brillo" },
+    ],
+  },
   path: "/games/color-memory/",
   accent: "#a855f7",
   category: "Precisión",

@@ -9,6 +9,14 @@ export const meta: GameEntry = {
   path: "/games/marea-lava/",
   controls:
     "Movete con WASD, mirá con el mouse (hacé clic para capturarlo, ESC lo suelta) y saltá con ESPACIO. En el celu: joystick a la izquierda, arrastrá a la derecha para mirar y tocá SALTAR. La sombra te marca dónde vas a caer.",
+  howTo: {
+    intro: "La lava sube cada vez más rápido: trepá saltando de saliente en saliente hasta la cima.",
+    actions: [
+      { title: "Movimiento", icons: ["wasd", "joystick"] },
+      { title: "Mirar", icons: ["mouse", "swipe"], note: "clic para capturar el mouse" },
+      { title: "Saltar", icons: ["space", "btn:SALTAR"] },
+    ],
+  },
   accent: "#ff7a22",
   category: "Party",
   order: 1020,

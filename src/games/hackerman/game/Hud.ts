@@ -1,5 +1,6 @@
 import { BEST_KEY } from "./constants";
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 import { formatClock } from "../../../shared/scoring-core";
 
 export class Hud {
@@ -70,6 +71,8 @@ export class Hud {
     this.hintEl.className = "overlay__hint";
     this.overlayEl.append(this.titleEl, this.subtitleEl, this.scoreEl, this.bestEl, this.hintEl);
     this.leaderboard.mount(this.overlayEl);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("hackerman").follow(this.leaderboard);
     this.leaderboard.clear();
 
     this.countdownEl = document.createElement("div");

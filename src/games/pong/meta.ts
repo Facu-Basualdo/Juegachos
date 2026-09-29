@@ -7,6 +7,12 @@ export const meta: GameEntry = {
   description: "Pong clasico: en la landing, un jugador contra la IA; en sala, duelos 1v1 arbitrados por el game server (el impar juega vs IA).",
   path: "/games/pong/",
   controls: "Mouse, flechas o W/S para mover tu paleta. En sala, primero a 3 goles.",
+  howTo: {
+    intro: "Pong de siempre: devolvé la pelota con tu paleta. En sala, gana el primero a 3 goles.",
+    actions: [
+      { title: "Movimiento", icons: ["mouse", "arrows-ud", "ws", "swipe"] },
+    ],
+  },
   accent: "#ffffff",
   category: "Arcade",
   order: 220,

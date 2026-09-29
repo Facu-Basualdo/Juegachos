@@ -8,6 +8,13 @@ export const meta: GameEntry = {
     "Tres intrusiones seguidas al estilo de los hackeos de GTA Online: cloná la huella, descifrá la secuencia y forzá la clave. Gana el que las resuelve más rápido.",
   path: "/games/hackerman/",
   controls: "Flechas para navegar, Enter para confirmar. Resolvé las 3 fases lo más rápido posible.",
+  howTo: {
+    intro: "Tres hackeos seguidos: cloná la huella, descifrá la secuencia y forzá la clave. Gana el más rápido.",
+    actions: [
+      { title: "Movimiento", icons: ["arrows"] },
+      { title: "Confirmar", icons: ["enter"] },
+    ],
+  },
   accent: "#33ff88",
   category: "Puzzle",
   order: 390,

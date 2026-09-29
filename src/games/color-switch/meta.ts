@@ -6,6 +6,12 @@ export const meta: GameEntry = {
   description: "Tu bola cambia de color: cruzá cada anillo giratorio solo por el arco de tu mismo color. Un roce del color equivocado y perdés.",
   path: "/games/color-switch/",
   controls: "Espacio, clic o toque para impulsar la bola hacia arriba y cronometrar el cruce.",
+  howTo: {
+    intro: "Cruzá cada anillo solo por el arco de tu color. Un roce del color equivocado y perdés.",
+    actions: [
+      { title: "Impulsar", icons: ["space", "click", "tap"] },
+    ],
+  },
   accent: "#ff3d81",
   category: "Arcade",
   order: 49,

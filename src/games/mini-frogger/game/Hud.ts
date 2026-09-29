@@ -1,5 +1,6 @@
 import { LIVES_START } from "./constants";
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 
 export class Hud {
   private scoreEl!: HTMLElement;
@@ -87,6 +88,10 @@ export class Hud {
     this.overlayButtonEl = this.overlayEl.querySelector("#overlay-button")!;
 
     this.leaderboard.mount(this.overlayEl.querySelector(".overlay__card")!);
+
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+
+    new HowToPanel("mini-frogger").follow(this.leaderboard).hides(".overlay__instructions");
     this.leaderboard.clear();
 
     // 3. Mobile virtual D-Pad buttons

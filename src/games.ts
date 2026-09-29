@@ -1,3 +1,5 @@
+import type { HowTo } from "./shared/howto";
+
 export interface GameEntry {
   id: string;
   title: string;
@@ -5,9 +7,13 @@ export interface GameEntry {
   path: string;
   /** Accent color used to theme the game's card on the landing page. */
   accent?: string;
-  /** Como se juega: una linea breve con los controles, mostrada en el briefing
-   * previo a cada ronda en modo sala. Sin valor, el briefing omite los controles. */
+  /** Como se juega: una linea breve con los controles. Es el RESPALDO del briefing
+   * de sala para los juegos que no declaran `howTo`; sin ninguno de los dos, el
+   * briefing omite los controles. */
   controls?: string;
+  /** Como se juega en iconos (intro de dos renglones + una tarjeta por accion): lo que
+   * muestra el briefing previo a cada ronda en modo sala. Ver `src/shared/howto.ts`. */
+  howTo?: HowTo;
   /** Categoria para los filtros de la landing. */
   category: string;
   /** Orden en la landing (menor primero). Sin valor va al final, alfabetico por titulo. */

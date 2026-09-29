@@ -6,6 +6,12 @@ export const meta: GameEntry = {
   description: "Encuentra la ficha con el tono distinto antes de que se acabe el tiempo: la grilla crece y la diferencia se achica.",
   path: "/games/odd-one-out/",
   controls: "Clic o toque en la ficha del tono distinto.",
+  howTo: {
+    intro: "Encontrá la ficha del tono distinto: la grilla crece y la diferencia se achica.",
+    actions: [
+      { title: "Elegir", icons: ["click", "tap"] },
+    ],
+  },
   accent: "#c084fc",
   category: "Reflejos",
   order: 120,

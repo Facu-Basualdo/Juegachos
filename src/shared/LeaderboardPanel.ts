@@ -154,6 +154,17 @@ export class LeaderboardPanel {
     container.append(this.root);
   }
 
+  private readonly showCbs: ((showing: boolean) => void)[] = [];
+
+  /**
+   * Avisa cuando el panel pasa a mostrar un ranking (`true`, el game over) o se
+   * vacia (`false`, la pantalla de inicio). Lo usa `HowToPanel` para aparecer solo en
+   * la pantalla de inicio.
+   */
+  onShowChange(cb: (showing: boolean) => void): void {
+    this.showCbs.push(cb);
+  }
+
   unmount(): void {
     this.root.remove();
   }
@@ -167,6 +178,7 @@ export class LeaderboardPanel {
     this.listEl.innerHTML = "";
     this.statusEl.textContent = "";
     this.root.style.display = "none";
+    for (const cb of this.showCbs) cb(false);
   }
 
   /**
@@ -177,6 +189,7 @@ export class LeaderboardPanel {
    */
   async render(gameId: string, opts: RenderOpts = {}): Promise<void> {
     this.root.style.display = "";
+    for (const cb of this.showCbs) cb(true);
     this.pending = null;
     this.formEl.style.display = "none";
     this.board = { gameId, variant: opts.variant };

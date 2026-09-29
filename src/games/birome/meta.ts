@@ -9,6 +9,12 @@ export const meta: GameEntry = {
   path: "/games/birome/",
   controls:
     "Mantené ESPACIO / flecha arriba / click (o el dedo en la pantalla) para subir en diagonal; soltá para bajar. No toques los tachones, los manchones ni los márgenes rojos.",
+  howTo: {
+    intro: "Sos la punta de una birome: subí y bajá en diagonal entre los tachones sin tocar los márgenes.",
+    actions: [
+      { title: "Subir", icons: ["space", "arrow-up", "click", "hold"], note: "soltá para bajar" },
+    ],
+  },
   accent: "#2f5bd8",
   category: "Arcade",
   order: 980,

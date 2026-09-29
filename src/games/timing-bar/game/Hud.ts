@@ -1,5 +1,6 @@
 import { TOTAL_ROUNDS } from "./constants";
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 
 export class Hud {
   private readonly canvas: HTMLCanvasElement;
@@ -92,6 +93,8 @@ export class Hud {
       this.hintEl,
     );
     this.leaderboard.mount(this.overlayEl);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("timing-bar").follow(this.leaderboard);
     this.leaderboard.clear();
 
     // Countdown

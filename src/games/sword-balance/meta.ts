@@ -8,6 +8,12 @@ export const meta: GameEntry = {
     "Mantené la espada en equilibrio sobre la mano el mayor tiempo posible antes de que se caiga.",
   path: "/games/sword-balance/",
   controls: "Mantené ← → (o A/D), o tocá y sostené cada lado de la pantalla, para equilibrar la espada.",
+  howTo: {
+    intro: "Mantené la espada en equilibrio sobre la mano el mayor tiempo posible.",
+    actions: [
+      { title: "Equilibrar", icons: ["ad", "arrows-lr", "tap-sides"], note: "mantené apretado" },
+    ],
+  },
   accent: "#7fb0ff",
   category: "Precisión",
   order: 350,

@@ -1,5 +1,6 @@
 import { BEST_KEY_PREFIX, DISC_OPTIONS, optimalMoves } from "./constants";
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 
 export interface DiscVoteView {
   /** Opciones de discos a votar. */
@@ -123,6 +124,8 @@ export class Hud {
       this.hintEl,
     );
     this.leaderboard.mount(this.overlayEl);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("tower-of-hanoi").follow(this.leaderboard);
     this.leaderboard.clear();
 
     this.countdownEl = document.createElement("div");

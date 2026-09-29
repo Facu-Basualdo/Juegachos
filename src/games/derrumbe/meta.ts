@@ -9,6 +9,13 @@ export const meta: GameEntry = {
   path: "/games/derrumbe/",
   controls:
     "Corré con WASD o las flechas y saltá con ESPACIO (en el celu: arrastrá el dedo en cualquier lado y tocá SALTAR).",
+  howTo: {
+    intro: "Cada bloque que pisás se cae medio segundo después. Corré, saltá y sé el último en pie.",
+    actions: [
+      { title: "Movimiento", icons: ["wasd", "arrows", "swipe"] },
+      { title: "Saltar", icons: ["space", "btn:SALTAR"] },
+    ],
+  },
   accent: "#d8463b",
   category: "Party",
   order: 990,

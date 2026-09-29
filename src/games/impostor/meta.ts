@@ -9,6 +9,13 @@ export const meta: GameEntry = {
   path: "/games/impostor/",
   controls:
     "En tu turno escribi UNA palabra-pista relacionada a la secreta (el impostor improvisa). Despues vota al que creas impostor. Si sos el impostor descubierto, adivina la palabra.",
+  howTo: {
+    intro: "Todos tienen la palabra secreta menos el impostor. Dá una pista sin cantarla y votá al sospechoso.",
+    actions: [
+      { title: "Pista", icons: ["keyboard"], note: "una sola palabra" },
+      { title: "Votar", icons: ["click", "tap"] },
+    ],
+  },
   accent: "#c9313b",
   category: "Party",
   order: 390,

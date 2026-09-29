@@ -7,6 +7,12 @@ export const meta: GameEntry = {
   description: "Encuentra los pares dando vuelta las cartas: contrarreloj en solitario, y por turnos sobre un tablero compartido en las salas.",
   path: "/games/memory-match/",
   controls: "Clic o toque para dar vuelta las cartas y encontrar los pares.",
+  howTo: {
+    intro: "Dá vuelta las cartas de a dos y encontrá todos los pares.",
+    actions: [
+      { title: "Dar vuelta", icons: ["click", "tap"] },
+    ],
+  },
   accent: "#ffd24a",
   category: "Puzzle",
   order: 140,

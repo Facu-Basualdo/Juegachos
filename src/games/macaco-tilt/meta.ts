@@ -8,6 +8,12 @@ export const meta: GameEntry = {
     "Mantené al mono en equilibrio sobre el tablón de bambú mientras se le rompen los extremos y el viento lo empuja.",
   path: "/games/macaco-tilt/",
   controls: "Caminá con ← → (o A/D), o tocá cada lado de la pantalla, para reacomodar el peso.",
+  howTo: {
+    intro: "Mantené al mono en equilibrio sobre el bambú mientras se rompen las puntas y sopla el viento.",
+    actions: [
+      { title: "Caminar", icons: ["ad", "arrows-lr", "tap-sides"] },
+    ],
+  },
   accent: "#f4d03f",
   category: "Precisión",
   order: 960,

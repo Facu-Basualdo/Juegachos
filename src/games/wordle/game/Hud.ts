@@ -9,6 +9,7 @@ import {
   type LetterState,
 } from "./constants";
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 import { formatClock } from "../../../shared/scoring";
 
 /** Tecla especial del teclado en pantalla (el resto son letras sueltas). */
@@ -111,6 +112,8 @@ export class Hud {
       this.hintEl,
     );
     this.leaderboard.mount(this.overlayEl);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("wordle").follow(this.leaderboard);
     this.leaderboard.clear();
 
     // 5. Countdown

@@ -1,4 +1,5 @@
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { HowToPanel } from "../../../shared/HowToPanel";
 
 /** Capa DOM: puntaje en cm, pantallas de inicio / fin, countdown y banda de espectador. */
 export class Hud {
@@ -48,6 +49,8 @@ export class Hud {
 
     card.append(this.titleEl, this.subtitleEl, this.scoreLineEl, this.hintEl);
     this.leaderboard.mount(card);
+    // Como se juega con iconos (el howTo del meta.ts): solo en la pantalla de inicio.
+    new HowToPanel("birome").follow(this.leaderboard).hides(".overlay__hint");
     this.leaderboard.clear();
     this.overlayEl.append(card);
 

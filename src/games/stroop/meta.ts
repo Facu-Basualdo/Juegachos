@@ -6,6 +6,12 @@ export const meta: GameEntry = {
   description: "Aparece el nombre de un color pintado con OTRA tinta: tocá el color de la tinta, no lo que dice la palabra. Contra el reloj.",
   path: "/games/stroop/",
   controls: "Tocá (o teclas 1-6) el color de la TINTA con que está pintada la palabra, ignorando lo que dice.",
+  howTo: {
+    intro: "Tocá el color de la TINTA con la que está pintada la palabra, no lo que dice.",
+    actions: [
+      { title: "Elegir color", icons: ["click", "tap", "keys:1 2 3 4 5 6"] },
+    ],
+  },
   accent: "#ff3b4e",
   category: "Reflejos",
   order: 51,

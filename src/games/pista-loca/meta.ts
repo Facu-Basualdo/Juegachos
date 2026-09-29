@@ -9,6 +9,14 @@ export const meta: GameEntry = {
   path: "/games/pista-loca/",
   controls:
     "Movete con WASD o las flechas, saltá con ESPACIO y empujá con F o clic (en el celu: arrastrá el dedo y tocá SALTAR o EMPUJAR). Cuando se corta la música, corré al color que aparece arriba, y si podés, sacá a otro de su bloque.",
+  howTo: {
+    intro: "Cuando se corta la música, corré al color pedido antes de que se caiga todo lo demás.",
+    actions: [
+      { title: "Movimiento", icons: ["wasd", "arrows", "swipe"] },
+      { title: "Saltar", icons: ["space", "btn:SALTAR"] },
+      { title: "Empujar", icons: ["key:F", "click", "btn:EMPUJAR"] },
+    ],
+  },
   accent: "#f27bb8",
   category: "Party",
   order: 1010,

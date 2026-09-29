@@ -6,6 +6,12 @@ export const meta: GameEntry = {
   description: "Rota la torre para hacer descender la bola a través de los huecos, esquivando los obstáculos de color.",
   path: "/games/helix-jump/",
   controls: "Flechas o A/D, o arrastrá, para rotar la torre.",
+  howTo: {
+    intro: "Girá la torre para que la bola baje por los huecos sin tocar los colores peligrosos.",
+    actions: [
+      { title: "Girar", icons: ["ad", "arrows-lr", "swipe"] },
+    ],
+  },
   accent: "#00ffcc",
   category: "Arcade",
   order: 55,

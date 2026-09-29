@@ -7,6 +7,12 @@ export const meta: GameEntry = {
   description: "Sigue con la mirada el vaso que oculta la moneda. !Cada nivel mezcla mas rapido, hace mas pases y agrega mas vasos!",
   path: "/games/shell-game/",
   controls: "Clic o toque en el vaso que oculta la moneda.",
+  howTo: {
+    intro: "Seguí con la vista el vaso que tiene la moneda. Cada nivel mezcla más rápido y con más vasos.",
+    actions: [
+      { title: "Elegir vaso", icons: ["click", "tap"] },
+    ],
+  },
   accent: "#ffdd53",
   category: "Reflejos",
   order: 210,

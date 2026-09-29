@@ -7,6 +7,12 @@ export const meta: GameEntry = {
   description: "Carrera 2D de drift: 6 circuitos (Mónaco, Shanghái, Silverstone y más) con boosts, conos y barreras, ranking por pista y salas online.",
   path: "/games/car-race/",
   controls: "Flechas o WASD para acelerar y girar; derrapá en las curvas.",
+  howTo: {
+    intro: "Carrera de drift en circuitos de neón: acelerá, doblá y derrapá en las curvas para bajar el tiempo.",
+    actions: [
+      { title: "Manejar", icons: ["arrows", "wasd", "tap"], note: "en el celu, con los botones" },
+    ],
+  },
   accent: "#00f0ff",
   category: "Carreras",
   order: 110,
