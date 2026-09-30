@@ -31,6 +31,7 @@ import {
   signTexture,
   woodTexture,
 } from "./textures";
+import { RecordBoard } from "./RecordBoard";
 import { Tower } from "./Tower";
 
 /** Candidato encendido en la votacion. */
@@ -110,6 +111,8 @@ export class World {
   readonly group = new THREE.Group();
   readonly world = new CollisionWorld();
   readonly tower: Tower;
+  /** Cartel del Top 10 global de la torre, al pie de la torre. */
+  readonly recordBoard: RecordBoard;
   readonly readyBox: Box;
   private readonly portals: Portal[] = [];
   private readonly pickables: THREE.Object3D[] = [];
@@ -204,6 +207,8 @@ export class World {
 
     this.tower = new Tower(this.world);
     this.group.add(this.tower.group);
+    this.recordBoard = new RecordBoard(this.world);
+    this.group.add(this.recordBoard.group);
   }
 
   private buildFence(rand: () => number, rust: THREE.Material): void {
@@ -650,5 +655,6 @@ export class World {
       l.intensity = base * (0.88 + Math.random() * 0.14);
     }
     this.tower.update(dt, t);
+    this.recordBoard.update(this.time, this.dread);
   }
 }

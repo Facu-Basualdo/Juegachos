@@ -455,6 +455,161 @@ export function bubbleTexture(text: string): LabelTexture {
   return labelCanvas(text, 52, ACCENT, "rgba(232, 228, 216, 0.92)", "#0b0b0d");
 }
 
+/** Una fila del cartel de records de la torre. */
+export interface RecordRow {
+  name: string;
+  time: string;
+  /** Es del jugador de esta pantalla: va en rojo. */
+  mine: boolean;
+}
+
+/** Proporcion del cartel de records (ancho / alto). */
+export const RECORD_BOARD_ASPECT = 0.8;
+
+/**
+ * Cartel de records de La Torre: el tablero de puntajes de una feria de pueblo que
+ * alguien volvio a pintar (DESIGN.md "Cinta Gastada"). Madera podrida de grano gordo,
+ * el titulo a pincel en rojo con chorreadas, las diez filas en pintura hueso, el
+ * primero dorado con su corona y los tiempos propios en rojo. Encima, rayones y mugre
+ * que nunca tapan una letra: se tiene que leer de lejos. Nitido y con mipmaps, como
+ * los afiches.
+ */
+export function recordBoardTexture(rows: RecordRow[], state: "ok" | "loading" | "offline"): THREE.CanvasTexture {
+  const K = 8;
+  const w = 640;
+  const h = Math.round(w / RECORD_BOARD_ASPECT);
+  const [c, ctx] = canvas(w, h);
+  const rand = rng(7331);
+  // Tablas horizontales de madera, cada una con su tono.
+  const plank = h / 10;
+  for (let p = 0; p < 10; p++) {
+    const tone = shade("#3b2d20", 0.85 + rand() * 0.3);
+    for (let y = Math.round(p * plank); y < Math.round((p + 1) * plank); y += K) {
+      for (let x = 0; x < w; x += K) {
+        ctx.fillStyle = shade(tone, 1 + (rand() - 0.5) * 0.28);
+        ctx.fillRect(x, y, K, K);
+      }
+    }
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.fillRect(0, Math.round((p + 1) * plank) - 3, w, 3);
+  }
+  // Marco pintado de rojo gastado y clavos en las esquinas.
+  ctx.strokeStyle = "#7a1f18";
+  ctx.lineWidth = 14;
+  ctx.strokeRect(14, 14, w - 28, h - 28);
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(24, 24, w - 48, h - 48);
+  for (const [x, y] of [[30, 30], [w - 30, 30], [30, h - 30], [w - 30, h - 30]]) {
+    ctx.fillStyle = "#8a8e90";
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "center";
+  // Titulo a pincel, con sombra dura y chorreadas de pintura debajo.
+  ctx.font = `92px ${FONT}`;
+  ctx.fillStyle = "#1a0605";
+  ctx.fillText("RECORDS", w / 2 + 4, 92 + 4);
+  ctx.fillStyle = "#c0392b";
+  ctx.fillText("RECORDS", w / 2, 92);
+  for (let i = 0; i < 9; i++) {
+    const x = w / 2 - 170 + rand() * 340;
+    const len = 12 + rand() * 34;
+    ctx.fillStyle = "#b3322a";
+    ctx.fillRect(x, 118, 4, len);
+    ctx.beginPath();
+    ctx.arc(x + 2, 118 + len, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.font = `54px ${FONT}`;
+  ctx.fillStyle = "#ece3cc";
+  ctx.fillText("DE LA TORRE", w / 2, 172);
+  ctx.font = `34px ${FONT}`;
+  ctx.fillStyle = "rgba(236, 227, 204, 0.8)";
+  ctx.fillText("TODAS LAS SALAS", w / 2, 212);
+  ctx.fillStyle = "rgba(224, 214, 191, 0.35)";
+  ctx.fillRect(70, 232, w - 140, 2);
+
+  const top = 262;
+  const rowH = (h - top - 48) / 10;
+  if (state !== "ok" || rows.length === 0) {
+    ctx.font = `40px ${FONT}`;
+    ctx.fillStyle = "rgba(224, 214, 191, 0.75)";
+    const msg =
+      state === "offline" ? ["SIN CONEXION", "CON EL RANKING"] : state === "loading" ? ["CARGANDO..."] : ["NADIE LLEGO", "A LA CIMA TODAVIA"];
+    msg.forEach((line, i) => ctx.fillText(line, w / 2, top + rowH * 4 + i * 48));
+  } else {
+    rows.slice(0, 10).forEach((row, i) => {
+      const y = top + rowH * (i + 0.5);
+      const first = i === 0;
+      // Claros y gordos: el filtro PS1 dibuja la escena a 400 lineas y se come lo fino.
+      const color = row.mine ? "#ff4a3d" : first ? "#ffd65c" : i < 3 ? "#f2ead6" : "#ddd3bb";
+      ctx.textAlign = "left";
+      ctx.font = `${first ? 52 : 46}px ${FONT}`;
+      // Numero de puesto en una chapita.
+      ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+      ctx.fillRect(58, y - rowH * 0.36, 52, rowH * 0.72);
+      ctx.fillStyle = color;
+      ctx.textAlign = "center";
+      ctx.fillText(String(i + 1), 84, y + 2);
+      ctx.textAlign = "left";
+      let nameX = 126;
+      if (first) {
+        drawCrownGlyph(ctx, 126, y, 22);
+        nameX = 166;
+      }
+      const name = row.name.toUpperCase();
+      ctx.fillText(name, nameX, y + 2);
+      ctx.textAlign = "right";
+      ctx.fillText(row.time, w - 60, y + 2);
+      // Puntos guia entre el nombre y el tiempo.
+      const from = nameX + ctx.measureText(name).width + 14;
+      const to = w - 60 - ctx.measureText(row.time).width - 14;
+      ctx.fillStyle = "rgba(224, 214, 191, 0.25)";
+      for (let x = from; x < to; x += 14) ctx.fillRect(x, y + 6, 4, 4);
+    });
+  }
+
+  // Mugre y rayones encima de todo, suaves: nunca tapan una letra.
+  for (let i = 0; i < 90; i++) {
+    ctx.strokeStyle = `rgba(0, 0, 0, ${0.05 + rand() * 0.08})`;
+    ctx.lineWidth = 1 + rand() * 2;
+    const x = rand() * w;
+    const y = rand() * h;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (rand() - 0.5) * 60, y + (rand() - 0.5) * 18);
+    ctx.stroke();
+  }
+  for (let i = 0; i < 26; i++) {
+    ctx.fillStyle = `rgba(20, 12, 6, ${0.06 + rand() * 0.1})`;
+    ctx.beginPath();
+    ctx.arc(rand() * w, rand() * h, 6 + rand() * 26, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return crispTexture(c);
+}
+
+/** Corona dorada chiquita (la del primero del cartel). */
+function drawCrownGlyph(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
+  ctx.fillStyle = "#ffcf4a";
+  ctx.beginPath();
+  ctx.moveTo(x, y + s * 0.55);
+  ctx.lineTo(x, y - s * 0.35);
+  ctx.lineTo(x + s * 0.4, y + s * 0.05);
+  ctx.lineTo(x + s * 0.8, y - s * 0.6);
+  ctx.lineTo(x + s * 1.2, y + s * 0.05);
+  ctx.lineTo(x + s * 1.6, y - s * 0.35);
+  ctx.lineTo(x + s * 1.6, y + s * 0.55);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#c0392b";
+  ctx.fillRect(x + s * 0.7, y + s * 0.15, s * 0.2, s * 0.2);
+}
+
 /** Placa de texto (contador de votos, marcador, record de la torre). */
 export function plaqueTexture(text: string, opts: { bg?: string; fg?: string; size?: number } = {}): LabelTexture {
   return labelCanvas(text, opts.size ?? 40, null, opts.bg ?? PANEL, opts.fg ?? TEXT);
