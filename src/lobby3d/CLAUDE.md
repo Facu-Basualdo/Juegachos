@@ -81,6 +81,44 @@ Ademas:
   `Map` **afuera del sim**: entre ronda y ronda todos se van a la pagina del juego,
   el GameRoom se vacia y se descarta, y la corona no se puede morir con el. Dura 6 h.
 
+**Ranking global de la torre (pedido del programador).** Ademas de la corona de la
+sala, cada carrera **validada por el server** (el `lb:summit` propio, o sea que paso
+`MIN_CLIMB_MS` y `TOP_MIN_Y`) se guarda para siempre en la tabla `scores` de Supabase
+con `game_id = TOWER_BOARD` (`"lobby3d-torre"`) y el nickname de la sala
+(`Hub.saveTowerTime`, `source: "room"`). El server **no** escribe (regla del repo: no
+toca la DB); lo hace el cliente dueño de la carrera, con el mismo nivel de confianza
+que el resto de los rankings. Sin server no hay validacion, asi que esa carrera no
+entra.
+
+- **Lectura:** `fetchTop(TOWER_BOARD, { direction: "lower", period: "all" })`. La
+  feria no tiene `meta.ts` (apareceria en el roster), asi que el orden va a mano con
+  el `direction` de `FetchOpts`. Ningun otro lugar lista ese `game_id`: la landing, el
+  Salon de la fama y los rankings recorren solo el roster. Sin migracion.
+- **Se relee** al cargar la feria, cada `TOWER_TOP_REFRESH_MS` (60 s) y 2.5 s despues
+  de que alguien de la sala llega a la cima (su pantalla es la que guarda).
+- **Avisos del HUD:** "RECORD DE LA FERIA" si el tiempo propio queda primero,
+  "Entraste al top de la feria: puesto N" si entra al Top 10, y a todos "X marco el
+  record de la feria" cuando cambia el primero.
+- **El cartel (`RecordBoard.ts`)**: el tablero de puntajes de una feria de pueblo, al
+  **sureste** de la plaza en (12.5, 12.5), del otro lado de la torre y de cara al
+  centro. La primera version iba al norte del mastil y **tapaba el afiche de la punta
+  oeste** de las carteleras: tiene que quedar afuera del arco de los afiches (que llega
+  hasta z ~ 4.5 en las dos puntas), lejos del spawn, del escenario y de los trastos. Madera de tablas
+  con marco rojo, "RECORDS / DE LA TORRE / TODAS LAS SALAS" a pincel con chorreadas, el
+  Top 10 en pintura hueso con el primero dorado y su corona y los tiempos propios en
+  rojo (`recordBoardTexture` en `textures.ts`). Una lampara de obra lo ilumina (lo que
+  se lee tiene su propia luz) y una guirnalda alrededor titila y se quema con la noche
+  como el resto; en la final va roja. Choca como un bloque entero. **La letra es
+  gorda y clara a proposito**: el filtro PS1 dibuja la escena a 400 lineas y con
+  letra fina las filas de abajo no se leian.
+- Estados del cartel: "CARGANDO...", "NADIE LLEGO A LA CIMA TODAVIA" y, sin
+  credenciales, "SIN CONEXION CON EL RANKING".
+- **Probarlo sin ensuciar el ranking real:** interceptar en Playwright
+  `/rest/v1/rpc/leaderboard_best` (devolver filas inventadas) y el `POST
+  /rest/v1/scores` (capturar la fila y contestar 201), y llamar
+  `window.__isla.saveTowerTime(ms)`. Asi se verifico: lee con `p_ascending: true` e
+  inserta `{game_id: "lobby3d-torre", player, score, source: "room"}`.
+
 Por que el server y no el canal de Supabase: 8 x 15/s = 120 msg/s, arriba del tope
 de ~100 por canal (ver "Canales efimeros" en el CLAUDE.md raiz). **Sin server** la
 feria funciona igual como sala (votos, listos, resultados son de Supabase); solo no

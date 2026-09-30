@@ -42,6 +42,17 @@ export const TOWER_Z = 13.5;
 export const TOWER_R = 4.5;
 /** Una carrera mas corta que esto es imposible: el server la descarta. */
 export const MIN_CLIMB_MS = 15_000;
+/**
+ * Tablero del ranking GLOBAL de la torre en la tabla `scores` de Supabase (todas las
+ * salas, para siempre). No es un juego ni tiene `meta.ts`: el orden (menos es mejor)
+ * se pasa a mano en `fetchTop` y ningun otro lugar lo lista (landing, Salon de la
+ * fama y rankings recorren solo el roster).
+ */
+export const TOWER_BOARD = "lobby3d-torre";
+/** Cuantos entran en el cartel de records. */
+export const TOWER_TOP = 10;
+/** Cada cuanto se relee el ranking global (ademas de al marcar un tiempo). */
+export const TOWER_TOP_REFRESH_MS = 60_000;
 
 // ---------- Muñeco ----------
 export const SPEED = 6.2;
