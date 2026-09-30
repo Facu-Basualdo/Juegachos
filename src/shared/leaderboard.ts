@@ -1,5 +1,5 @@
 import { getSupabase } from "./supabase";
-import { getDirection, getRankingMetric } from "./scoring";
+import { getDirection, getRankingMetric, type Direction } from "./scoring";
 import { getNickname } from "./nickname";
 
 /**
@@ -35,6 +35,11 @@ interface FetchOpts {
   variant?: string;
   limit?: number;
   period?: RankPeriod;
+  /**
+   * Orden del tablero, para los que no son un juego y no tienen `meta.ts` de donde
+   * sacarlo (p.ej. el record de La Torre de la sala 3D, `lobby3d-torre`: menos es mejor).
+   */
+  direction?: Direction;
 }
 
 // ---------- Mes en curso ----------
@@ -220,7 +225,7 @@ export async function fetchTop(gameId: string, opts: FetchOpts = {}): Promise<Sc
 
 async function fetchBest(gameId: string, opts: FetchOpts): Promise<ScoreRow[]> {
   const supabase = getSupabase()!;
-  const ascending = getDirection(gameId, opts.variant) === "lower";
+  const ascending = (opts.direction ?? getDirection(gameId, opts.variant)) === "lower";
   const limit = opts.limit ?? 10;
   const since = sinceFor(opts.period);
 

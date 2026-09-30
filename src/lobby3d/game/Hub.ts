@@ -16,7 +16,9 @@ import type {
   VotingView,
   WaitingEntry,
 } from "../../shared/room/RoomOverlay";
+import { fetchTop, submitScore, type ScoreRow } from "../../shared/leaderboard";
 import { isGameServerConfigured, resolveGameServerUrl } from "../../shared/server-status";
+import { isLeaderboardEnabled } from "../../shared/supabase";
 import {
   AIM_RANGE,
   CAM_FOV,
@@ -41,6 +43,9 @@ import {
   REMOTE_SNAP_DIST,
   SPAWN_Z,
   START_PITCH,
+  TOWER_BOARD,
+  TOWER_TOP,
+  TOWER_TOP_REFRESH_MS,
   seatColor,
 } from "./constants";
 import { Avatar } from "./Avatar";
@@ -161,6 +166,8 @@ export class Hub implements HubPresenter {
   private run: Run = "idle";
   private runStart = 0;
   private crown: LbCrown | null = null;
+  /** Top 10 global de la torre (todas las salas), tal como esta pintado en el cartel. */
+  private towerTop: ScoreRow[] = [];
 
   private phase: Phase = "none";
   private voting: VotingView | null = null;
@@ -196,6 +203,7 @@ export class Hub implements HubPresenter {
     this.world.world.circles.push(...this.scoreboard.colliders);
     this.scene.add(this.fireworks.group);
     this.world.tower.setRecord("Sin record", false);
+    this.startTowerRanking();
 
     this.hud = new Hud(container);
     this.input = new InputController(container);
@@ -290,7 +298,14 @@ export class Hub implements HubPresenter {
       socket.onEmote((p, e) => this.remoteEmote(p, e));
       socket.onPong((c, t) => this.onPong(c, t));
       socket.onSummit((s) => {
-        if (s.p !== this.me) this.hud.announce(`${s.p} llego a la cima: ${formatClimb(s.ms)}`);
+        if (s.p === this.me) {
+          // El server valido la carrera propia: recien ahi entra al ranking global.
+          void this.saveTowerTime(s.ms);
+          return;
+        }
+        this.hud.announce(`${s.p} llego a la cima: ${formatClimb(s.ms)}`);
+        // Su pantalla lo guarda; se relee un toque despues para verlo en el cartel.
+        window.setTimeout(() => void this.loadTowerTop(true), 2500);
       });
       socket.onCrown((c) => this.setCrown(c, true));
       void socket.connect();
@@ -499,6 +514,54 @@ export class Hub implements HubPresenter {
     } else if (!this.crown || ms < this.crown.ms) {
       // Sin server (dev sin red): la corona es local.
       this.setCrown({ p: this.me, ms }, true);
+    }
+  }
+
+  // ---------- Ranking global de la torre ----------
+
+  /**
+   * Arranca el cartel de records: lee el Top 10 ahora y cada `TOWER_TOP_REFRESH_MS`.
+   * Sin Supabase el cartel dice "sin conexion" y la corona de la sala sigue igual.
+   */
+  private startTowerRanking(): void {
+    if (!isLeaderboardEnabled()) {
+      this.world.recordBoard.setRows([], "offline");
+      return;
+    }
+    void this.loadTowerTop(false);
+    window.setInterval(() => void this.loadTowerTop(true), TOWER_TOP_REFRESH_MS);
+  }
+
+  /**
+   * Relee el Top 10 y repinta el cartel. Con `announce`, si el primero cambio y no fue
+   * uno mismo (eso lo avisa `saveTowerTime`), lo cuenta en el HUD.
+   */
+  private async loadTowerTop(announce: boolean): Promise<void> {
+    const prev = this.towerTop[0];
+    const rows = await fetchTop(TOWER_BOARD, { limit: TOWER_TOP, direction: "lower", period: "all" });
+    this.towerTop = rows;
+    this.world.recordBoard.setRows(
+      rows.map((r) => ({ name: r.player, time: formatClimb(r.score), mine: r.player === this.me })),
+      "ok",
+    );
+    const lead = rows[0];
+    if (announce && lead && prev && lead.player !== this.me && (lead.player !== prev.player || lead.score !== prev.score)) {
+      this.hud.announce(`${lead.player} marco el record de la feria: ${formatClimb(lead.score)}`);
+    }
+  }
+
+  /** Guarda una carrera propia validada por el server y cuenta en que puesto quedo. */
+  private async saveTowerTime(ms: number): Promise<void> {
+    if (!isLeaderboardEnabled()) return;
+    const ok = await submitScore(TOWER_BOARD, Math.round(ms), { player: this.me, source: "room" });
+    if (!ok) return;
+    const before = this.towerTop[0];
+    await this.loadTowerTop(false);
+    const rank = this.towerTop.findIndex((r) => r.player === this.me && r.score === Math.round(ms));
+    if (rank === 0 && (!before || before.player !== this.me || before.score !== Math.round(ms))) {
+      this.hud.announce("RECORD DE LA FERIA: sos el mas rapido de todas las salas");
+    } else if (rank > 0) {
+      this.hud.announce(`Entraste al top de la feria: puesto ${rank + 1}`);
     }
   }
 
