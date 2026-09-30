@@ -1139,6 +1139,12 @@ class RoomModeController implements RoomMode, RoomHub {
     const counts: Record<string, number> = {};
     for (const v of votes) counts[v.game_id] = (counts[v.game_id] ?? 0) + 1;
     const myVote = votes.find((v) => v.player === this.me)?.game_id ?? null;
+    // Quien voto que, en el orden de la sala (el mismo en todas las pantallas).
+    const voters: Record<string, string[]> = {};
+    for (const player of state.players) {
+      const v = votes.find((x) => x.player === player);
+      if (v) (voters[v.game_id] ??= []).push(player);
+    }
 
     this.overlay.showVoting({
       round: voteRound,
@@ -1149,6 +1155,7 @@ class RoomModeController implements RoomMode, RoomHub {
         return { id, title: game?.title ?? id, accent: game?.accent, cover: coverUrl(id) };
       }),
       counts,
+      voters,
       myVote,
       onVote: (id) => {
         void castVote(this.code, voteRound, this.me, id).then((ok) => {
@@ -1462,8 +1469,11 @@ export const VOTE_OPTION_COUNT = 5;
  * si son distintos entre si.
  */
 export function pickVoteOptions(settings?: RoomSettings | null): string[] {
-  // En una sala 3D solo se vota entre los juegos de la isla (ver hub.ts).
   const pool = votePool(settings).map((g) => g.id);
+  // Sala 3D: se vota entre TODOS los juegos de la feria, no entre 5 sorteados (pedido
+  // del programador: "que cada uno vote el juego que quiera"). Son pocos (los
+  // rooms-only) y todos tienen su afiche en las carteleras.
+  if (isLobby3d(settings)) return pool;
 
   const picked: string[] = [];
   while (picked.length < VOTE_OPTION_COUNT && pool.length > 0) {

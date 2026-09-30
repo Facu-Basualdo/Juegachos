@@ -19,3 +19,9 @@ export interface LbPos {
 export interface LbPlayer extends LbPos {
   look: number;
 }
+
+/** Record de la torre de la sala: quien tiene la corona y en cuanto subio. */
+export interface LbCrown {
+  p: string;
+  ms: number;
+}

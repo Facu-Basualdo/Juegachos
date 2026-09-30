@@ -1,7 +1,7 @@
 import { coverUrl } from "../../games";
 import { lobbyGames } from "../../shared/room/hub";
 import type { Hub } from "./Hub";
-import type { Weather } from "./Sky";
+import type { Weather } from "./Night";
 
 /**
  * Isla sin Supabase, solo en dev: `/rooms/lobby/?dev=Ana&roster=Ana,Beto&code=TEST`.
@@ -9,8 +9,8 @@ import type { Weather } from "./Sky";
  * tocar la base real: una pestaña por nickname, mismo `code` y `roster`.
  *
  * `&phase=lobby|voting|briefing|results|final` muestra una fase con datos de
- * mentira (para ver los portales, la plataforma y los paneles), `&t=0..1` fija la
- * hora del dia y `&weather=clear|cloudy|rain` el clima. En el build
+ * mentira (para ver los afiches, el escenario y los paneles), `&dread=0..1` fija
+ * cuanto empeoro la noche (1 = la final) y `&weather=clear|fog|rain` el clima. En el build
  * `import.meta.env.DEV` es false y todo esto queda afuera.
  */
 export function startDevHub(hub: Hub): boolean {
@@ -20,14 +20,20 @@ export function startDevHub(hub: Hub): boolean {
   if (!me) return false;
   const code = (params.get("code") ?? "TEST").toUpperCase();
   const roster = (params.get("roster") ?? me).split(",").filter(Boolean);
-  const t = params.get("t");
+  const dread = params.get("dread");
   const weather = params.get("weather") as Weather | null;
-  hub.startDev({ me, code, roster, day: t !== null ? Number(t) : undefined, weather: weather ?? undefined });
+  // Para las pruebas con Playwright (el bot de la torre, ver CLAUDE.md).
+  (window as unknown as { __isla: Hub }).__isla = hub;
+  hub.startDev({ me, code, roster, dread: dread !== null ? Number(dread) : undefined, weather: weather ?? undefined });
+
+  if (params.has("dolls")) hub.devDolls();
 
   const log = (what: string) => (...args: unknown[]) => console.log(`[isla dev] ${what}`, ...args);
   const totals = roster.map((player, i) => ({ rank: i + 1, player, points: (roster.length - i) * 3 }));
-  const counts: Record<string, number> = {};
-  const options = lobbyGames.slice(0, 5).map((g) => ({ id: g.id, title: g.title, accent: g.accent, cover: coverUrl(g.id) }));
+  // Como en una sala 3D real: se votan todos los juegos. Algunos votos de mentira para ver los focos.
+  const options = lobbyGames.map((g) => ({ id: g.id, title: g.title, accent: g.accent, cover: coverUrl(g.id) }));
+  const counts: Record<string, number> = { [options[3].id]: 2, [options[8].id]: 1 };
+  const voters: Record<string, string[]> = { [options[3].id]: ["Caro", "Dani"], [options[8].id]: ["Eze"] };
   let myVote: string | null = null;
   let ready = false;
 
@@ -39,11 +45,16 @@ export function startDevHub(hub: Hub): boolean {
           round: 2,
           options,
           counts,
+          voters,
           myVote,
           onVote: (id) => {
-            if (myVote) counts[myVote]--;
+            if (myVote) {
+              counts[myVote]--;
+              voters[myVote] = (voters[myVote] ?? []).filter((p) => p !== me);
+            }
             myVote = id;
             counts[id] = (counts[id] ?? 0) + 1;
+            (voters[id] ??= []).push(me);
             log("vote")(id);
             render();
           },

@@ -1,5 +1,5 @@
 import type { Socket } from "socket.io-client";
-import type { LbPlayer, LbPos } from "./LobbyProtocol";
+import type { LbCrown, LbPlayer, LbPos } from "./LobbyProtocol";
 
 /**
  * Transporte contra el namespace `/lobby` del game server (un relay puro, ver
@@ -9,7 +9,10 @@ import type { LbPlayer, LbPos } from "./LobbyProtocol";
  */
 export class LobbySocket {
   private socket: Socket | null = null;
-  private initCb: (players: LbPlayer[]) => void = () => {};
+  private initCb: (players: LbPlayer[], crown: LbCrown | null) => void = () => {};
+  private pongCb: (c: number, t: number) => void = () => {};
+  private summitCb: (c: LbCrown) => void = () => {};
+  private crownCb: (c: LbCrown) => void = () => {};
   private hiCb: (p: string, look: number) => void = () => {};
   private byeCb: (p: string) => void = () => {};
   private posCb: (pos: LbPos) => void = () => {};
@@ -43,15 +46,43 @@ export class LobbySocket {
         look: this.look,
       });
     });
-    socket.on("lb:init", (msg: { players: LbPlayer[] }) => this.initCb(msg.players ?? []));
+    socket.on("lb:init", (msg: { players: LbPlayer[]; crown?: LbCrown | null }) =>
+      this.initCb(msg.players ?? [], msg.crown ?? null),
+    );
+    socket.on("lb:pong", (msg: { c: number; t: number }) => this.pongCb(msg.c, msg.t));
+    socket.on("lb:summit", (msg: LbCrown) => this.summitCb(msg));
+    socket.on("lb:crown", (msg: LbCrown) => this.crownCb(msg));
     socket.on("lb:hi", (msg: { p: string; look: number }) => this.hiCb(msg.p, msg.look));
     socket.on("lb:bye", (msg: { p: string }) => this.byeCb(msg.p));
     socket.on("lb:pos", (msg: LbPos) => this.posCb(msg));
     socket.on("lb:emote", (msg: { p: string; e: number }) => this.emoteCb(msg.p, msg.e));
   }
 
-  onInit(cb: (players: LbPlayer[]) => void): void {
+  onInit(cb: (players: LbPlayer[], crown: LbCrown | null) => void): void {
     this.initCb = cb;
+  }
+
+  /** Respuesta al ping: `c` es la hora local del envio, `t` la del server. */
+  onPong(cb: (c: number, t: number) => void): void {
+    this.pongCb = cb;
+  }
+
+  onSummit(cb: (c: LbCrown) => void): void {
+    this.summitCb = cb;
+  }
+
+  onCrown(cb: (c: LbCrown) => void): void {
+    this.crownCb = cb;
+  }
+
+  ping(): void {
+    if (!this.socket?.connected) return;
+    this.socket.emit("lb:ping", { c: Date.now() });
+  }
+
+  sendTop(ms: number): void {
+    if (!this.socket?.connected) return;
+    this.socket.emit("lb:top", { ms });
   }
 
   onHi(cb: (p: string, look: number) => void): void {

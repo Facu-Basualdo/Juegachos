@@ -1,17 +1,38 @@
+import type { HowToAction } from "../../shared/howto";
 import { renderHowTo } from "../../shared/howtoView";
 import type { BriefingView, FinalView, ResultsView, TotalEntry, VotingView } from "../../shared/room/RoomOverlay";
 import type { HubLobbyView } from "../../shared/room/roomMode";
 import { TOTAL_ROUNDS_OPTIONS } from "../../shared/room/types";
 import { EMOTES } from "./constants";
+import { drawEmoteFace } from "./textures";
+
+/** Carita de una reaccion en un canvas (botones del HUD y el cartel propio). */
+function faceCanvas(id: string, size: number): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = c.height = size * 2;
+  c.style.width = c.style.height = `${size}px`;
+  drawEmoteFace(c.getContext("2d")!, id, size * 2);
+  return c;
+}
 import type { JoystickView } from "./InputController";
 
 type Action = { label: string; onClick: () => void; primary?: boolean; disabled?: boolean };
 
+/** Controles de la feria en la compu (la tira de abajo). */
+const CONTROLS: HowToAction[] = [
+  { title: "Caminar", icons: ["wasd"] },
+  { title: "Mirar", icons: ["mouse"] },
+  { title: "Saltar", icons: ["space"] },
+  { title: "Reacciones", icons: ["keys:1 2 3 4 5"] },
+  { title: "Soltar mouse", icons: ["esc"] },
+];
+
 /**
- * HUD de la Isla: papel crema con borde de tinta, como el resto de las salas
- * (DESIGN.md). Una barra arriba (sala, fase, reloj), un panel con la fase de la
- * sala (lobby, votacion, briefing, resultados, final) que nunca tapa el medio de
- * la pantalla, y en el celu los botones SALTAR y de reacciones.
+ * HUD de La Feria: la pantalla de una videocasetera (DESIGN.md, "Cinta Gastada"):
+ * letra de monitor, texto claro sobre negro translucido y un REC rojo. Una barra
+ * arriba (REC + sala, fase, reloj, corona de la torre), un panel con la fase de la
+ * sala (lobby, votacion, briefing, resultados, final) que nunca tapa el medio de la
+ * pantalla, el cronometro de la torre, anuncios, y en el celu SALTAR y reacciones.
  *
  * Cada vista se reconstruye solo si cambio lo que muestra (se la llama en cada
  * sync de la sala): la clave es el JSON de sus datos.
@@ -21,6 +42,10 @@ export class Hud {
   private readonly topCode: HTMLSpanElement;
   private readonly topPhase: HTMLSpanElement;
   private readonly topClock: HTMLSpanElement;
+  private readonly topCrown: HTMLSpanElement;
+  private readonly runEl: HTMLDivElement;
+  private readonly announceEl: HTMLDivElement;
+  private announceTimer = 0;
   private readonly panel: HTMLDivElement;
   private readonly panelBody: HTMLDivElement;
   private readonly panelHead: HTMLButtonElement;
@@ -44,17 +69,28 @@ export class Hud {
 
     const top = document.createElement("div");
     top.className = "isl-top";
+    const rec = document.createElement("span");
+    rec.className = "isl-top__rec";
+    rec.textContent = "REC";
     this.topCode = document.createElement("span");
     this.topCode.className = "isl-top__code";
     this.topPhase = document.createElement("span");
     this.topPhase.className = "isl-top__phase";
     this.topClock = document.createElement("span");
     this.topClock.className = "isl-top__clock";
+    this.topCrown = document.createElement("span");
+    this.topCrown.className = "isl-top__crown";
     const home = document.createElement("a");
     home.className = "isl-top__home";
     home.href = "/";
     home.textContent = "Menu";
-    top.append(this.topCode, this.topPhase, this.topClock, home);
+    top.append(rec, this.topCode, this.topPhase, this.topCrown, this.topClock, home);
+
+    this.runEl = document.createElement("div");
+    this.runEl.className = "isl-run";
+    this.runEl.style.display = "none";
+    this.announceEl = document.createElement("div");
+    this.announceEl.className = "isl-announce";
 
     this.panel = document.createElement("div");
     this.panel.className = "isl-panel";
@@ -92,18 +128,24 @@ export class Hud {
 
     this.emotes = document.createElement("div");
     this.emotes.className = "isl-emotes";
-    EMOTES.forEach((text, i) => {
+    EMOTES.forEach((emote, i) => {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "isl-emote";
-      b.innerHTML = `<kbd>${i + 1}</kbd>${text}`;
+      b.title = `${emote.label} (${i + 1})`;
+      b.append(faceCanvas(emote.id, 40));
+      const k = document.createElement("kbd");
+      k.textContent = String(i + 1);
+      b.append(k);
       b.addEventListener("click", () => this.emoteCb(i));
       this.emotes.append(b);
     });
 
+    // Controles con los mismos iconos del briefing de las salas (src/shared/howto.ts),
+    // en una tira abajo. Solo en la compu: en el celu estan los botones en pantalla.
     const hint = document.createElement("div");
     hint.className = "isl-hint";
-    hint.textContent = "WASD camina - mouse mira - ESPACIO salta - 1 a 4 reacciones - ESC suelta el mouse";
+    hint.append(renderHowTo({ intro: "", actions: CONTROLS }, { intro: false, compact: true }));
 
     // Mira del centro: se agranda cuando apunta a algo que se puede tocar.
     this.crosshair = document.createElement("div");
@@ -111,13 +153,26 @@ export class Hud {
 
     this.lockHint = document.createElement("div");
     this.lockHint.className = "isl-lockhint";
-    this.lockHint.textContent = "Hace clic en la isla para mirar con el mouse";
+    this.lockHint.textContent = "Hace clic en la feria para mirar con el mouse";
 
     // Tus reacciones: en primera persona no ves tu propio globo.
     this.flashEl = document.createElement("div");
     this.flashEl.className = "isl-flash";
 
-    this.root.append(top, this.panel, this.notice, this.stick, controls, this.emotes, hint, this.crosshair, this.lockHint, this.flashEl);
+    this.root.append(
+      top,
+      this.panel,
+      this.notice,
+      this.stick,
+      controls,
+      this.emotes,
+      hint,
+      this.crosshair,
+      this.lockHint,
+      this.flashEl,
+      this.runEl,
+      this.announceEl,
+    );
     container.append(this.root);
   }
 
@@ -129,8 +184,28 @@ export class Hud {
     this.emoteCb = cb;
   }
 
+  /** Cronometro de la torre (null lo oculta). */
+  setRun(text: string | null): void {
+    this.runEl.style.display = text ? "" : "none";
+    this.runEl.textContent = text ?? "";
+  }
+
+  /** Record de la torre en la barra: quien tiene la corona (resaltado si sos vos). */
+  setRecord(text: string | null, mine: boolean): void {
+    this.topCrown.textContent = text ? `Corona: ${text}` : "";
+    this.topCrown.classList.toggle("is-mine", mine);
+  }
+
+  /** Anuncio arriba al medio (llegadas a la cima, cambios de corona). */
+  announce(text: string): void {
+    this.announceEl.textContent = text;
+    this.announceEl.classList.add("is-on");
+    window.clearTimeout(this.announceTimer);
+    this.announceTimer = window.setTimeout(() => this.announceEl.classList.remove("is-on"), 3500);
+  }
+
   setTop(code: string, phase: string): void {
-    this.topCode.textContent = code ? `SALA ${code}` : "LA ISLA";
+    this.topCode.textContent = code ? `SALA ${code}` : "LA FERIA";
     this.topPhase.textContent = phase;
   }
 
@@ -163,6 +238,12 @@ export class Hud {
     this.crosshair.classList.toggle("is-locked", locked);
     this.crosshair.classList.toggle("is-target", target);
     this.lockHint.classList.toggle("is-hidden", locked);
+  }
+
+  /** Reaccion propia: la carita y su nombre en pantalla (en primera persona no te ves). */
+  flashEmote(id: string, label: string): void {
+    this.flash(label);
+    this.flashEl.prepend(faceCanvas(id, 34));
   }
 
   flash(text: string): void {
@@ -270,7 +351,7 @@ export class Hud {
       look.name,
     ]);
     if (!this.begin(key)) return;
-    this.heading("La Isla", "Sala " + view.code);
+    this.heading("La Feria", "Sala " + view.code);
 
     const copy = this.el("button", "isl-btn isl-btn--small", "Copiar link");
     copy.type = "button";
@@ -309,6 +390,10 @@ export class Hud {
       ul.append(li);
     }
     this.panelBody.append(ul);
+    this.text(
+      "Mientras esperan: La Torre, la de la luz roja. El que la sube mas rapido lleva la corona de la sala.",
+      "isl-hint-text",
+    );
 
     if (view.onStart && view.onSetRounds) {
       this.panelBody.append(this.el("div", "isl-sub", "Juegos de la partida"));
@@ -334,10 +419,11 @@ export class Hud {
 
   showVoting(view: VotingView, mine: string | null): void {
     const counts = view.options.map((o) => view.counts[o.id] ?? 0);
-    const key = JSON.stringify(["vote", view.round, view.options.map((o) => o.id), counts, mine, view.title]);
+    const names = view.options.map((o) => view.voters?.[o.id] ?? []);
+    const key = JSON.stringify(["vote", view.round, view.options.map((o) => o.id), counts, names, mine, view.title]);
     if (!this.begin(key)) return;
     this.heading(view.kicker ?? "Votacion", view.title ?? "Elegi el proximo juego");
-    this.text("Pisa un portal encendido, o apuntale y hace clic (tambien podes tocar el juego aca).", "isl-hint-text");
+    this.text("Pisa la chapa encendida de un afiche, o apuntale y hace clic (tambien podes tocar el juego aca).", "isl-hint-text");
     const ul = this.el("ul", "isl-list");
     for (const o of view.options) {
       const n = view.counts[o.id] ?? 0;
@@ -350,7 +436,11 @@ export class Hud {
         img.alt = "";
         li.append(img);
       }
-      li.append(this.el("span", "isl-row__name", o.title), this.el("span", "isl-row__value", n === 1 ? "1 voto" : `${n} votos`));
+      // Titulo y, debajo, quienes lo votaron.
+      const who = view.voters?.[o.id] ?? [];
+      const nameCol = this.el("span", "isl-row__name", o.title);
+      if (who.length > 0) nameCol.append(this.el("small", "isl-row__voters", who.join(", ")));
+      li.append(nameCol, this.el("span", "isl-row__value", n === 1 ? "1 voto" : `${n} votos`));
       li.addEventListener("click", () => view.onVote(o.id));
       ul.append(li);
     }
@@ -378,7 +468,7 @@ export class Hud {
     }
     if (view.timeLimit) this.text(`Tiempo de la ronda: ${view.timeLimit}`, "isl-hint-text");
     this.text(
-      iAmReady ? "Listo. Esperando a los demas..." : "Subite a la plataforma LISTO (entre la entrada y la plaza) cuando hayas leido.",
+      iAmReady ? "Listo. Esperando a los demas..." : "Subite al escenario LISTO (entre la entrada y el televisor) cuando hayas leido.",
       "isl-hint-text",
     );
     const list: Action[] = [];
