@@ -2,7 +2,9 @@
 
 Samples de las cinco reacciones de **Bomba Palabra** y **Cadena de Palabras** (los dos
 juegos comparten el set de emotes y cada uno tiene su copia de `EmoteAudio.ts`, por la
-regla de decoupling del repo).
+regla de decoupling del repo). **La Feria** (la sala 3D, `src/lobby3d/`) usa los mismos
+cinco para sus reacciones, desde su propio `Sounds.ts`: si se cambia o se renombra un
+archivo, afecta a los tres.
 
 Es una de las dos **excepciones** del repo a la regla de sintetizar todo con Web Audio
 (ver el `CLAUDE.md` de sliding-puzzle): una risa humana no la hace un oscilador. La otra

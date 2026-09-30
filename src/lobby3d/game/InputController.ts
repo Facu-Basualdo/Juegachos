@@ -129,7 +129,7 @@ export class InputController {
     if (this.isTyping(e)) return;
     if (e.code === "Space" || e.code.startsWith("Arrow")) e.preventDefault();
     if (e.code === "Space" && !this.keys.has("Space")) this.jumpPending = true;
-    const digit = /^Digit([1-4])$/.exec(e.code);
+    const digit = /^Digit([1-5])$/.exec(e.code);
     if (digit && !e.repeat) this.emoteCb(Number(digit[1]) - 1);
     this.keys.add(e.code);
   };

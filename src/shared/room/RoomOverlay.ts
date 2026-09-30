@@ -606,6 +606,11 @@ export class RoomOverlay {
     options: VoteOption[];
     /** Cantidad de votos por opcion. */
     counts: Record<string, number>;
+    /**
+     * Quien voto cada opcion (en orden de llegada a la sala). El overlay no lo usa; la
+     * sala 3D lo muestra arriba de cada afiche y en su panel.
+     */
+    voters?: Record<string, string[]>;
     myVote: string | null;
     onVote: (optionId: string) => void;
     /** Ronda que se vota (parte de la firma: una votacion nueva se reconstruye). */

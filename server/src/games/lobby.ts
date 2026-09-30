@@ -1,6 +1,6 @@
 import type { Server } from "socket.io";
 import { GameRoom, registerGame, type RoomSim } from "../rooms.js";
-import type { LbPlayer, LbPos } from "../protocol.js";
+import type { LbCrown, LbPlayer, LbPos } from "../protocol.js";
 
 /**
  * La Isla (sala 3D) en el server: un RELAY puro, como Neon Drift. Cada cliente
@@ -13,9 +13,15 @@ import type { LbPlayer, LbPos } from "../protocol.js";
  * 120 mensajes/s, arriba del tope de ~100 por canal de Realtime (ver "Canales
  * efimeros" en el CLAUDE.md raiz).
  *
- * Lo unico que recuerda es la ultima posicion y el accesorio de cada uno, para que
- * el que llega (o vuelve de jugar una ronda) vea a todos al instante y no recien
- * cuando cada uno se mueva.
+ * Recuerda la ultima posicion y el accesorio de cada uno, para que el que llega (o
+ * vuelve de jugar una ronda) vea a todos al instante y no recien cuando cada uno se
+ * mueva. Y el **record de la torre** (el parkour del lobby): el que lo tiene lleva la
+ * corona. El record vive en `records`, afuera del sim, porque entre ronda y ronda
+ * todos se van a la pagina del juego, el GameRoom se vacia y se descarta, y la corona
+ * no puede morirse con el.
+ *
+ * Ademas contesta `lb:ping` con su hora: las plataformas, barredores y ganchos de la
+ * torre son funcion de ese reloj, asi todos los ven en el mismo lugar.
  */
 
 /** Tope de envios reenviados por jugador (el cliente manda ~15/s; esto frena abusos). */
@@ -26,10 +32,40 @@ const MAX_EMOTE = 7;
 const MAX_LOOK = 15;
 /** La isla mide ~40 m: cualquier cosa mas lejos es basura (o alguien cayendose). */
 const MAX_COORD = 250;
+/**
+ * La cima de la torre esta a ~23.6 m (`src/lobby3d/game/Tower.ts`); para que valga una
+ * llegada, la ultima posicion declarada tiene que estar arriba de esto. Duplicado del
+ * cliente: si se cambia la torre, revisarlo.
+ */
+const TOP_MIN_Y = 20;
+/** Una subida mas rapida que esto es imposible (`MIN_CLIMB_MS` del cliente). */
+const MIN_CLIMB_MS = 15_000;
+const MAX_CLIMB_MS = 60 * 60_000;
+/** Cuanto sobrevive el record de una sala sin que nadie lo mire. */
+const RECORD_TTL_MS = 6 * 60 * 60_000;
+
+/** Record de la torre por codigo de sala (sobrevive a que el GameRoom se vacie). */
+const records = new Map<string, LbCrown & { at: number }>();
+
+function readRecord(code: string): LbCrown | null {
+  const r = records.get(code);
+  if (!r) return null;
+  if (Date.now() - r.at > RECORD_TTL_MS) {
+    records.delete(code);
+    return null;
+  }
+  r.at = Date.now();
+  return { p: r.p, ms: r.ms };
+}
+
+function purgeRecords(): void {
+  const now = Date.now();
+  for (const [code, r] of records) if (now - r.at > RECORD_TTL_MS) records.delete(code);
+}
 
 export class LobbySim implements RoomSim {
   private readonly room: GameRoom;
-  private readonly players = new Map<string, LbPlayer & { at: number; emoteAt: number }>();
+  private readonly players = new Map<string, LbPlayer & { at: number; emoteAt: number; topAt: number }>();
 
   constructor(room: GameRoom) {
     this.room = room;
@@ -54,8 +90,9 @@ export class LobbySim implements RoomSim {
       f: prev?.f ?? 0,
       at: 0,
       emoteAt: 0,
+      topAt: 0,
     });
-    this.room.emitTo(nickname, "lb:init", { players: others });
+    this.room.emitTo(nickname, "lb:init", { players: others, crown: readRecord(this.room.code) });
     this.room.broadcast("lb:hi", { p: nickname, look });
   }
 
@@ -83,6 +120,29 @@ export class LobbySim implements RoomSim {
         if (e === null || e < 0 || e > MAX_EMOTE || now - st.emoteAt < EMOTE_COOLDOWN_MS) return;
         st.emoteAt = now;
         this.room.broadcast("lb:emote", { p: nickname, e: Math.trunc(e) });
+        return;
+      }
+      case "lb:ping": {
+        const c = readNum(payload, "c");
+        if (c === null) return;
+        this.room.emitTo(nickname, "lb:pong", { c, t: Date.now() });
+        return;
+      }
+      case "lb:top": {
+        const ms = readNum(payload, "ms");
+        // Mismo nivel de confianza que el resto (spoofeable); se descarta lo imposible.
+        if (ms === null || ms < MIN_CLIMB_MS || ms > MAX_CLIMB_MS || st.y < TOP_MIN_Y) return;
+        // Una llegada por subida: no se puede spamear el anuncio.
+        if (now - st.topAt < MIN_CLIMB_MS) return;
+        st.topAt = now;
+        const time = Math.round(ms);
+        this.room.broadcast("lb:summit", { p: nickname, ms: time });
+        const rec = readRecord(this.room.code);
+        if (!rec || time < rec.ms) {
+          purgeRecords();
+          records.set(this.room.code, { p: nickname, ms: time, at: Date.now() });
+          this.room.broadcast("lb:crown", { p: nickname, ms: time });
+        }
         return;
       }
     }

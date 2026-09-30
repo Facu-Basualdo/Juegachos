@@ -2,11 +2,11 @@ import { roomGames, type GameEntry } from "../../games";
 import type { RoomSettings } from "./types";
 
 /**
- * La Isla: la sala 3D (`/rooms/lobby/`, codigo en `src/lobby3d/`). En una sala con
- * `settings.lobby3d` los jugadores pasan entre ronda y ronda por una isla
- * compartida en vez de ver el overlay de la sala: ahi votan el proximo juego
- * parandose en un portal, marcan "listo" subiendose a una plataforma y ven los
- * resultados. Las paginas de los juegos solo muestran la partida (`playing`);
+ * La Feria: la sala 3D (`/rooms/lobby/`, codigo en `src/lobby3d/`; en el codigo le
+ * decimos "hub" o "isla", su primer nombre). En una sala con `settings.lobby3d` los
+ * jugadores pasan entre ronda y ronda por una feria compartida en vez de ver el
+ * overlay de la sala: ahi votan el proximo juego parandose frente a su afiche,
+ * marcan "listo" subiendose a un escenario y ven los resultados. Las paginas de los juegos solo muestran la partida (`playing`);
  * cualquier otra fase las devuelve a la isla (ver `roomMode.ts`).
  */
 

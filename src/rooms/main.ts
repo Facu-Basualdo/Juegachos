@@ -244,18 +244,18 @@ function renderHome(joinProblem?: string): void {
   });
   createPanel.append(visLabel, visChoices, visHint, createBtn);
 
-  // Sala 3D (la Isla): mismas reglas, pero entre ronda y ronda todos caminan por
-  // una isla compartida y votan parandose en un portal. Los otros jugadores se ven
+  // Sala 3D (La Feria): mismas reglas, pero entre ronda y ronda todos caminan por
+  // una feria abandonada compartida y votan parandose frente al afiche de un juego. Los otros jugadores se ven
   // por el game server, asi que sin server configurado no se ofrece.
   if (isGameServerConfigured()) {
     const create3dBtn = document.createElement("button");
     create3dBtn.className = "btn btn--island";
     create3dBtn.type = "button";
-    create3dBtn.textContent = "Crear sala 3D (la Isla)";
+    create3dBtn.textContent = "Crear sala 3D (La Feria)";
     const hint3d = document.createElement("p");
     hint3d.className = "hint";
     hint3d.textContent =
-      "Entre juego y juego caminan todos por una isla flotante y votan el próximo parándose en su portal. Solo juegos de sala.";
+      "Entre juego y juego recorren juntos una feria abandonada, votan el próximo parándose frente a su afiche y se pelean el récord de La Torre. Solo juegos de sala.";
     create3dBtn.addEventListener("click", () => {
       void (async () => {
         createError.textContent = "";
@@ -660,7 +660,7 @@ async function joinFlow(
   }
   if (result === "error") return "No se pudo entrar. Proba de nuevo.";
 
-  // Sala 3D: todo pasa en la isla (ella misma manda al juego si hay ronda en curso).
+  // Sala 3D: todo pasa en La Feria (ella misma manda al juego si hay ronda en curso).
   if (isLobby3d(state.room.settings)) {
     location.href = roomHubUrl(code);
     return null;
@@ -1045,7 +1045,7 @@ function renderLobby(code: string, player: string): void {
       return;
     }
     state = fresh;
-    // Sala 3D (p.ej. un link viejo al lobby comun): su lobby es la isla.
+    // Sala 3D (p.ej. un link viejo al lobby comun): su lobby es La Feria.
     if (isLobby3d(fresh.room.settings)) {
       teardown();
       location.href = roomHubUrl(code);
