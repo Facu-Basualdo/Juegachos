@@ -1,13 +1,18 @@
 import * as THREE from "three";
-import { TOWER_X, TOWER_Z } from "./constants";
 import { makeBox, type CollisionWorld } from "./Physics";
 import { decal, psxBasic, psxLambert } from "./retro";
 import { RECORD_BOARD_ASPECT, recordBoardTexture, woodTexture, type RecordRow } from "./textures";
 
-/** Donde va: 7.8 m al norte del mastil de la torre (a 1.8 m del espiral), de cara al claro. */
-const BOARD_X = TOWER_X;
-const BOARD_Z = TOWER_Z - 7.8;
-const FACE_TARGET = { x: 0, z: 7.5 };
+/**
+ * Donde va: al sureste, del otro lado de la torre y de cara al centro. La primera
+ * version estaba al norte del mastil y tapaba el afiche de la punta oeste del
+ * semicirculo (Bomba Palabra): tiene que quedar AFUERA del arco de las carteleras
+ * (que va de oeste a este por el norte hasta z ~ 4.5), lejos del spawn, del escenario
+ * y de los trastos (el cajon mas cercano, en (9.8, 9.5), queda a ~4 m).
+ */
+const BOARD_X = 12.5;
+const BOARD_Z = 12.5;
+const FACE_TARGET = { x: 0, z: 8 };
 /** Alto del tablero pintado, y a que altura empieza (se lee parado, sin mirar al piso). */
 const FACE_H = 3.75;
 const FACE_W = FACE_H * RECORD_BOARD_ASPECT;
@@ -26,7 +31,7 @@ interface Bulb {
 
 /**
  * El cartel de records de La Torre: el Top 10 GLOBAL (todas las salas, ver
- * `TOWER_BOARD`) pintado en un tablero de feria al pie de la torre. Madera podrida
+ * `TOWER_BOARD`) pintado en un tablero de feria, al sureste de la plaza. Madera podrida
  * sobre dos postes con un techito, una lampara de obra colgando que lo ilumina (lo que
  * se tiene que leer tiene su propia luz, DESIGN.md) y una guirnalda de lamparitas
  * alrededor que titila y se quema con la noche, como las del resto de la feria.

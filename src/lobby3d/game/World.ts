@@ -111,7 +111,7 @@ export class World {
   readonly group = new THREE.Group();
   readonly world = new CollisionWorld();
   readonly tower: Tower;
-  /** Cartel del Top 10 global de la torre, al pie de la torre. */
+  /** Cartel del Top 10 global de la torre, al sureste de la plaza. */
   readonly recordBoard: RecordBoard;
   readonly readyBox: Box;
   private readonly portals: Portal[] = [];

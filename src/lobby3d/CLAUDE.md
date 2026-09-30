@@ -99,8 +99,11 @@ entra.
 - **Avisos del HUD:** "RECORD DE LA FERIA" si el tiempo propio queda primero,
   "Entraste al top de la feria: puesto N" si entra al Top 10, y a todos "X marco el
   record de la feria" cuando cambia el primero.
-- **El cartel (`RecordBoard.ts`)**: el tablero de puntajes de una feria de pueblo, a
-  7.8 m al norte del mastil (a 1.8 m del espiral), de cara al claro. Madera de tablas
+- **El cartel (`RecordBoard.ts`)**: el tablero de puntajes de una feria de pueblo, al
+  **sureste** de la plaza en (12.5, 12.5), del otro lado de la torre y de cara al
+  centro. La primera version iba al norte del mastil y **tapaba el afiche de la punta
+  oeste** de las carteleras: tiene que quedar afuera del arco de los afiches (que llega
+  hasta z ~ 4.5 en las dos puntas), lejos del spawn, del escenario y de los trastos. Madera de tablas
   con marco rojo, "RECORDS / DE LA TORRE / TODAS LAS SALAS" a pincel con chorreadas, el
   Top 10 en pintura hueso con el primero dorado y su corona y los tiempos propios en
   rojo (`recordBoardTexture` en `textures.ts`). Una lampara de obra lo ilumina (lo que
