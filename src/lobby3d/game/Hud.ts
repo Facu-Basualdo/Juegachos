@@ -8,10 +8,11 @@ import type { JoystickView } from "./InputController";
 type Action = { label: string; onClick: () => void; primary?: boolean; disabled?: boolean };
 
 /**
- * HUD de la Isla: papel crema con borde de tinta, como el resto de las salas
- * (DESIGN.md). Una barra arriba (sala, fase, reloj), un panel con la fase de la
- * sala (lobby, votacion, briefing, resultados, final) que nunca tapa el medio de
- * la pantalla, y en el celu los botones SALTAR y de reacciones.
+ * HUD de La Feria: la pantalla de una videocasetera (DESIGN.md, "Cinta Gastada"):
+ * letra de monitor, texto claro sobre negro translucido y un REC rojo. Una barra
+ * arriba (REC + sala, fase, reloj, corona de la torre), un panel con la fase de la
+ * sala (lobby, votacion, briefing, resultados, final) que nunca tapa el medio de la
+ * pantalla, el cronometro de la torre, anuncios, y en el celu SALTAR y reacciones.
  *
  * Cada vista se reconstruye solo si cambio lo que muestra (se la llama en cada
  * sync de la sala): la clave es el JSON de sus datos.
@@ -21,6 +22,10 @@ export class Hud {
   private readonly topCode: HTMLSpanElement;
   private readonly topPhase: HTMLSpanElement;
   private readonly topClock: HTMLSpanElement;
+  private readonly topCrown: HTMLSpanElement;
+  private readonly runEl: HTMLDivElement;
+  private readonly announceEl: HTMLDivElement;
+  private announceTimer = 0;
   private readonly panel: HTMLDivElement;
   private readonly panelBody: HTMLDivElement;
   private readonly panelHead: HTMLButtonElement;
@@ -44,17 +49,28 @@ export class Hud {
 
     const top = document.createElement("div");
     top.className = "isl-top";
+    const rec = document.createElement("span");
+    rec.className = "isl-top__rec";
+    rec.textContent = "REC";
     this.topCode = document.createElement("span");
     this.topCode.className = "isl-top__code";
     this.topPhase = document.createElement("span");
     this.topPhase.className = "isl-top__phase";
     this.topClock = document.createElement("span");
     this.topClock.className = "isl-top__clock";
+    this.topCrown = document.createElement("span");
+    this.topCrown.className = "isl-top__crown";
     const home = document.createElement("a");
     home.className = "isl-top__home";
     home.href = "/";
     home.textContent = "Menu";
-    top.append(this.topCode, this.topPhase, this.topClock, home);
+    top.append(rec, this.topCode, this.topPhase, this.topCrown, this.topClock, home);
+
+    this.runEl = document.createElement("div");
+    this.runEl.className = "isl-run";
+    this.runEl.style.display = "none";
+    this.announceEl = document.createElement("div");
+    this.announceEl.className = "isl-announce";
 
     this.panel = document.createElement("div");
     this.panel.className = "isl-panel";
@@ -111,13 +127,26 @@ export class Hud {
 
     this.lockHint = document.createElement("div");
     this.lockHint.className = "isl-lockhint";
-    this.lockHint.textContent = "Hace clic en la isla para mirar con el mouse";
+    this.lockHint.textContent = "Hace clic en la feria para mirar con el mouse";
 
     // Tus reacciones: en primera persona no ves tu propio globo.
     this.flashEl = document.createElement("div");
     this.flashEl.className = "isl-flash";
 
-    this.root.append(top, this.panel, this.notice, this.stick, controls, this.emotes, hint, this.crosshair, this.lockHint, this.flashEl);
+    this.root.append(
+      top,
+      this.panel,
+      this.notice,
+      this.stick,
+      controls,
+      this.emotes,
+      hint,
+      this.crosshair,
+      this.lockHint,
+      this.flashEl,
+      this.runEl,
+      this.announceEl,
+    );
     container.append(this.root);
   }
 
@@ -129,8 +158,28 @@ export class Hud {
     this.emoteCb = cb;
   }
 
+  /** Cronometro de la torre (null lo oculta). */
+  setRun(text: string | null): void {
+    this.runEl.style.display = text ? "" : "none";
+    this.runEl.textContent = text ?? "";
+  }
+
+  /** Record de la torre en la barra: quien tiene la corona (resaltado si sos vos). */
+  setRecord(text: string | null, mine: boolean): void {
+    this.topCrown.textContent = text ? `Corona: ${text}` : "";
+    this.topCrown.classList.toggle("is-mine", mine);
+  }
+
+  /** Anuncio arriba al medio (llegadas a la cima, cambios de corona). */
+  announce(text: string): void {
+    this.announceEl.textContent = text;
+    this.announceEl.classList.add("is-on");
+    window.clearTimeout(this.announceTimer);
+    this.announceTimer = window.setTimeout(() => this.announceEl.classList.remove("is-on"), 3500);
+  }
+
   setTop(code: string, phase: string): void {
-    this.topCode.textContent = code ? `SALA ${code}` : "LA ISLA";
+    this.topCode.textContent = code ? `SALA ${code}` : "LA FERIA";
     this.topPhase.textContent = phase;
   }
 
@@ -270,7 +319,7 @@ export class Hud {
       look.name,
     ]);
     if (!this.begin(key)) return;
-    this.heading("La Isla", "Sala " + view.code);
+    this.heading("La Feria", "Sala " + view.code);
 
     const copy = this.el("button", "isl-btn isl-btn--small", "Copiar link");
     copy.type = "button";
@@ -309,6 +358,10 @@ export class Hud {
       ul.append(li);
     }
     this.panelBody.append(ul);
+    this.text(
+      "Mientras esperan: La Torre, la de la luz roja. El que la sube mas rapido lleva la corona de la sala.",
+      "isl-hint-text",
+    );
 
     if (view.onStart && view.onSetRounds) {
       this.panelBody.append(this.el("div", "isl-sub", "Juegos de la partida"));
@@ -334,10 +387,11 @@ export class Hud {
 
   showVoting(view: VotingView, mine: string | null): void {
     const counts = view.options.map((o) => view.counts[o.id] ?? 0);
-    const key = JSON.stringify(["vote", view.round, view.options.map((o) => o.id), counts, mine, view.title]);
+    const names = view.options.map((o) => view.voters?.[o.id] ?? []);
+    const key = JSON.stringify(["vote", view.round, view.options.map((o) => o.id), counts, names, mine, view.title]);
     if (!this.begin(key)) return;
     this.heading(view.kicker ?? "Votacion", view.title ?? "Elegi el proximo juego");
-    this.text("Pisa un portal encendido, o apuntale y hace clic (tambien podes tocar el juego aca).", "isl-hint-text");
+    this.text("Pisa la chapa encendida de un afiche, o apuntale y hace clic (tambien podes tocar el juego aca).", "isl-hint-text");
     const ul = this.el("ul", "isl-list");
     for (const o of view.options) {
       const n = view.counts[o.id] ?? 0;
@@ -350,7 +404,11 @@ export class Hud {
         img.alt = "";
         li.append(img);
       }
-      li.append(this.el("span", "isl-row__name", o.title), this.el("span", "isl-row__value", n === 1 ? "1 voto" : `${n} votos`));
+      // Titulo y, debajo, quienes lo votaron.
+      const who = view.voters?.[o.id] ?? [];
+      const nameCol = this.el("span", "isl-row__name", o.title);
+      if (who.length > 0) nameCol.append(this.el("small", "isl-row__voters", who.join(", ")));
+      li.append(nameCol, this.el("span", "isl-row__value", n === 1 ? "1 voto" : `${n} votos`));
       li.addEventListener("click", () => view.onVote(o.id));
       ul.append(li);
     }
@@ -378,7 +436,7 @@ export class Hud {
     }
     if (view.timeLimit) this.text(`Tiempo de la ronda: ${view.timeLimit}`, "isl-hint-text");
     this.text(
-      iAmReady ? "Listo. Esperando a los demas..." : "Subite a la plataforma LISTO (entre la entrada y la plaza) cuando hayas leido.",
+      iAmReady ? "Listo. Esperando a los demas..." : "Subite al escenario LISTO (entre la entrada y el televisor) cuando hayas leido.",
       "isl-hint-text",
     );
     const list: Action[] = [];

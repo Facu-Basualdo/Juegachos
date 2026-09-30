@@ -1271,16 +1271,32 @@ export interface LbClientToServer {
   "lb:pos": (msg: Omit<LbPos, "p">) => void;
   /** Reaccion (indice del set del cliente). */
   "lb:emote": (msg: { e: number }) => void;
+  /** Medir el reloj del server (lo que se mueve en la torre depende de el). */
+  "lb:ping": (msg: { c: number }) => void;
+  /** Llegue a la cima de la torre en `ms` (desde la largada). */
+  "lb:top": (msg: { ms: number }) => void;
+}
+
+/** Record de la torre de una sala: quien tiene la corona. */
+export interface LbCrown {
+  p: string;
+  ms: number;
 }
 
 /** Server -> Cliente. */
 export interface LbServerToClient {
-  /** Al unirse: los que ya estan, con su ultima posicion. */
-  "lb:init": (msg: { players: LbPlayer[] }) => void;
+  /** Al unirse: los que ya estan, con su ultima posicion, y el record de la torre. */
+  "lb:init": (msg: { players: LbPlayer[]; crown: LbCrown | null }) => void;
   /** Alguien entro (todavia sin posicion). */
   "lb:hi": (msg: { p: string; look: number }) => void;
   /** Alguien se fue (todos sus sockets). */
   "lb:bye": (msg: { p: string }) => void;
   "lb:pos": (msg: LbPos) => void;
   "lb:emote": (msg: { p: string; e: number }) => void;
+  /** Respuesta al ping: `t` es Date.now() del server. */
+  "lb:pong": (msg: { c: number; t: number }) => void;
+  /** Alguien llego a la cima (a todos, sea o no record). */
+  "lb:summit": (msg: LbCrown) => void;
+  /** Nuevo record de la sala: la corona cambia de dueño. */
+  "lb:crown": (msg: LbCrown) => void;
 }

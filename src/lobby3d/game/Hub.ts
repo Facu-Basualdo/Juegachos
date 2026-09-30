@@ -21,9 +21,10 @@ import {
   AIM_RANGE,
   CAM_FOV,
   CAM_FOV_PORTRAIT,
-  DAY_FINAL,
-  DAY_LAST_ROUND,
-  DAY_LOBBY,
+  CLOCK_PING_MS,
+  DREAD_FINAL,
+  DREAD_LAST_ROUND,
+  DREAD_LOBBY,
   EMOTES,
   EYE_HEIGHT,
   FLAG_GROUNDED,
@@ -31,6 +32,7 @@ import {
   HEAD_BOB,
   LOOKS,
   MAX_DT,
+  MIN_CLIMB_MS,
   PITCH_LIMIT,
   POS_IDLE_MS,
   POS_SEND_MS,
@@ -41,13 +43,16 @@ import {
   seatColor,
 } from "./constants";
 import { Avatar } from "./Avatar";
+import { Fireworks } from "./Fireworks";
 import { Hud } from "./Hud";
 import { InputController } from "./InputController";
-import { Island } from "./Island";
 import { LobbySocket } from "./LobbySocket";
-import type { LbPlayer, LbPos } from "./LobbyProtocol";
+import type { LbCrown, LbPlayer, LbPos } from "./LobbyProtocol";
+import { Night, type Weather } from "./Night";
 import { Player } from "./Player";
-import { Sky, type Weather } from "./Sky";
+import { RetroPass } from "./retro";
+import { Scoreboard, type BoardEntry } from "./Scoreboard";
+import { World } from "./World";
 
 const LOOK_KEY = "mg:island-look";
 
@@ -71,12 +76,15 @@ interface Remote {
 
 type Phase = "none" | "lobby" | "voting" | "briefing" | "results" | "final";
 
+/** Carrera de la torre: `armed` = parado en la largada; `running` = subiendo. */
+type Run = "idle" | "armed" | "running";
+
 /** Opciones de arranque sin sala (ver devRoom.ts). */
 export interface HubDevOptions {
   me: string;
   code: string;
   roster: string[];
-  day?: number;
+  dread?: number;
   weather?: Weather;
 }
 
@@ -85,7 +93,7 @@ function readLook(): number {
     const v = Number(localStorage.getItem(LOOK_KEY));
     if (Number.isInteger(v) && v >= 0 && v < LOOKS.length) return v;
   } catch {
-    // sin storage: sin gorro
+    // sin storage: sin accesorio
   }
   return 0;
 }
@@ -99,21 +107,32 @@ function hashString(s: string): number {
   return h >>> 0;
 }
 
+/** "1:12.34" */
+export function formatClimb(ms: number): string {
+  const total = Math.max(0, ms) / 1000;
+  const m = Math.floor(total / 60);
+  const s = total - m * 60;
+  return `${m}:${s.toFixed(2).padStart(5, "0")}`;
+}
+
 /**
- * La Isla: escena, muñecos, red y presentacion de las fases de la sala.
+ * La Feria: escena, muñecos, red, la torre y la presentacion de las fases de la sala.
  *
- * Implementa `HubPresenter`: el mismo `RoomMode` que corre en cada juego llama
- * aca `showVoting` / `showBriefing` / `showResults` / `showFinal` / `showLobby`,
- * y la isla los traduce a portales encendidos, la plataforma LISTO, el pedestal
- * y el panel del HUD. Pararse en un portal o en la plataforma es exactamente lo
- * mismo que tocar el boton del overlay: llama al mismo `onVote` / `onReady`.
+ * Implementa `HubPresenter`: el mismo `RoomMode` que corre en cada juego llama aca
+ * `showVoting` / `showBriefing` / `showResults` / `showFinal` / `showLobby`, y la
+ * feria los traduce a afiches encendidos, el escenario LISTO, el televisor y el panel
+ * del HUD. Pararse en una chapa o en el escenario es exactamente lo mismo que tocar
+ * el boton del overlay: llama al mismo `onVote` / `onReady`.
  */
 export class Hub implements HubPresenter {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera: THREE.PerspectiveCamera;
-  private readonly sky: Sky;
-  private readonly island: Island;
+  private readonly retro = new RetroPass();
+  private readonly night: Night;
+  private readonly world: World;
+  private readonly scoreboard = new Scoreboard();
+  private readonly fireworks = new Fireworks();
   private readonly hud: Hud;
   private readonly input: InputController;
   private readonly player = new Player();
@@ -133,6 +152,14 @@ export class Hub implements HubPresenter {
   private roster: string[] = [];
   private look = readLook();
 
+  /** Reloj compartido: Date.now() del server = Date.now() local + offset (ver `onPong`). */
+  private clockOffset = 0;
+  private bestRtt = Infinity;
+
+  private run: Run = "idle";
+  private runStart = 0;
+  private crown: LbCrown | null = null;
+
   private phase: Phase = "none";
   private voting: VotingView | null = null;
   private voteLocal: { round: number; id: string } | null = null;
@@ -147,17 +174,23 @@ export class Hub implements HubPresenter {
 
   constructor(container: HTMLElement) {
     this.container = container;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    // Sin antialias: la imagen se dibuja chica y se estira con pixeles duros (retro.ts).
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.domElement.className = "isl-canvas";
     container.append(this.renderer.domElement);
 
-    this.camera = new THREE.PerspectiveCamera(CAM_FOV, 1, 0.05, 900);
+    this.camera = new THREE.PerspectiveCamera(CAM_FOV, 1, 0.05, 400);
     // Primera persona: yaw alrededor de Y, despues pitch (si no, mirar arriba inclina el horizonte).
     this.camera.rotation.order = "YXZ";
-    this.sky = new Sky(this.scene);
-    this.island = new Island(lobbyGames);
-    this.scene.add(this.island.group);
+    this.night = new Night(this.scene);
+    this.world = new World(lobbyGames);
+    this.scene.add(this.world.group);
+    // El marcador vive en la plaza y choca como el resto.
+    this.world.group.add(this.scoreboard.group);
+    this.world.world.circles.push(...this.scoreboard.colliders);
+    this.scene.add(this.fireworks.group);
+    this.world.tower.setRecord("Sin record", false);
 
     this.hud = new Hud(container);
     this.input = new InputController(container);
@@ -170,6 +203,7 @@ export class Hub implements HubPresenter {
     window.addEventListener("resize", this.resize);
     requestAnimationFrame(this.tick);
     window.setInterval(this.sendPos, POS_SEND_MS);
+    window.setInterval(() => this.socket?.ping(), CLOCK_PING_MS);
   }
 
   // ---------- Arranque ----------
@@ -193,40 +227,86 @@ export class Hub implements HubPresenter {
     this.code = opts.code;
     this.roster = opts.roster;
     this.hud.setTop(this.code, "dev");
-    if (opts.day !== undefined) this.sky.setDay(opts.day, true);
-    if (opts.weather) this.sky.setWeather(opts.weather);
+    if (opts.dread !== undefined) this.night.setDread(opts.dread, true);
+    if (opts.weather) this.night.setWeather(opts.weather);
     this.syncAvatars();
     this.connect();
+  }
+
+  /**
+   * Dev: una fila de muñecos quietos delante del spawn, uno por accesorio y el ultimo
+   * con la corona, para revisarlos de cerca sin abrir varios navegadores.
+   */
+  devDolls(): void {
+    const n = LOOKS.length + 1;
+    for (let i = 0; i < n; i++) {
+      const a = new Avatar(seatColor(i), i < LOOKS.length ? LOOKS[i] : "Corona", i % LOOKS.length, i);
+      a.root.position.set((i - (n - 1) / 2) * 1.1, 0, SPAWN_Z - 1.2);
+      if (i === LOOKS.length) a.setCrown(true);
+      a.animate(0.016, 0, true, 0);
+      this.scene.add(a.root, a.shadow);
+      a.shadow.position.set(a.root.position.x, 0.03, a.root.position.z);
+    }
   }
 
   showNoRoom(): void {
     this.hud.setTop("", "");
     this.hud.showMessage(
-      "La Isla",
+      "La Feria",
       "Entra desde una sala",
-      "La Isla es la sala 3D: se abre al crear una sala 3D en Salas, o con el link que te pasaron.",
+      "La Feria es la sala 3D: se abre al crear una sala 3D en Salas, o con el link que te pasaron.",
       { label: "Ir a las salas", onClick: () => (window.location.href = "/rooms/"), primary: true },
     );
   }
 
   private connect(): void {
     if (!isGameServerConfigured()) {
-      this.hud.setNotice("Sin game server: la sala funciona, pero no ves a los demas en la isla.");
+      this.hud.setNotice("Sin game server: la sala funciona, pero no ves a los demas en la feria.");
       return;
     }
     void resolveGameServerUrl().then((url) => {
       if (!url) return;
       const socket = new LobbySocket(url, this.code, this.me, this.look, () => this.roster);
       this.socket = socket;
-      socket.onInit((players) => players.forEach((p) => this.applyRemote(p, p.look)));
+      socket.onInit((players, crown) => {
+        players.forEach((p) => this.applyRemote(p, p.look));
+        this.setCrown(crown, false);
+        socket.ping();
+      });
       socket.onHi((p, look) => this.ensureRemote(p, look));
       socket.onBye((p) => this.dropRemote(p));
       socket.onPos((pos) => this.applyRemote(pos));
       socket.onEmote((p, e) => {
         if (p !== this.me) this.remotes.get(p)?.avatar.showEmote(EMOTES[e] ?? "");
       });
+      socket.onPong((c, t) => this.onPong(c, t));
+      socket.onSummit((s) => {
+        if (s.p !== this.me) this.hud.announce(`${s.p} llego a la cima: ${formatClimb(s.ms)}`);
+      });
+      socket.onCrown((c) => this.setCrown(c, true));
       void socket.connect();
     });
+  }
+
+  /**
+   * Reloj del server: se queda con la muestra de menor ida y vuelta (la que menos
+   * jitter comio). Lo que se mueve en la torre sale de este reloj, asi todos lo ven en
+   * el mismo lugar.
+   */
+  private onPong(sent: number, serverNow: number): void {
+    const now = Date.now();
+    const rtt = now - sent;
+    if (rtt < 0 || rtt > 5000) return;
+    // Una muestra vieja con buen RTT se va gastando: los relojes derivan.
+    this.bestRtt += 2;
+    if (rtt > this.bestRtt) return;
+    this.bestRtt = rtt;
+    this.clockOffset = serverNow + rtt / 2 - now;
+  }
+
+  /** Segundos del reloj compartido (el de la torre). */
+  private worldTime(): number {
+    return ((Date.now() + this.clockOffset) % 86_400_000) / 1000;
   }
 
   // ---------- Sala ----------
@@ -271,6 +351,7 @@ export class Hub implements HubPresenter {
       const color = seatColor(this.seatOf(name));
       const avatar = new Avatar(color, name, look, hashString(name));
       avatar.visible = false;
+      avatar.setCrown(this.crown?.p === name);
       this.scene.add(avatar.root, avatar.shadow);
       r = { avatar, color, look, x: 0, y: 0, z: 0, yaw: 0, tx: 0, ty: 0, tz: 0, tyaw: 0, flags: 0, speed: 0, vy: 0, seen: false };
       this.remotes.set(name, r);
@@ -286,6 +367,7 @@ export class Hub implements HubPresenter {
     r.avatar.dispose();
     r.avatar = new Avatar(color, name, r.look, hashString(name));
     r.avatar.visible = r.seen;
+    r.avatar.setCrown(this.crown?.p === name);
     r.color = color;
     this.scene.add(r.avatar.root, r.avatar.shadow);
   }
@@ -338,6 +420,69 @@ export class Hub implements HubPresenter {
     if (this.lastLobby) this.showLobby(this.lastLobby);
   }
 
+  // ---------- La Torre ----------
+
+  /**
+   * Carrera de la torre: se arma parado en la largada, arranca al salir de ella y
+   * termina al pararse en la cima. Tocar el piso del claro fuera de la largada la
+   * anula (hay que volver a empezar).
+   */
+  private updateRun(): void {
+    const p = this.player;
+    const tower = this.world.tower;
+    const onStart = p.onGround && tower.onStart(p.x, p.z);
+    if (onStart) {
+      if (this.run !== "armed") {
+        this.run = "armed";
+        this.hud.setRun("En la largada");
+      }
+      return;
+    }
+    if (this.run === "armed") {
+      this.run = "running";
+      this.runStart = performance.now();
+    }
+    if (this.run !== "running") return;
+    const ms = performance.now() - this.runStart;
+    if (p.onGround) {
+      this.run = "idle";
+      this.hud.setRun(null);
+      this.hud.flash("Al piso");
+      return;
+    }
+    if (p.standingOn === tower.topBox) {
+      this.run = "idle";
+      this.hud.setRun(null);
+      this.finishClimb(ms);
+      return;
+    }
+    this.hud.setRun(formatClimb(ms));
+  }
+
+  private finishClimb(ms: number): void {
+    this.hud.flash(`Cima: ${formatClimb(ms)}`);
+    if (ms < MIN_CLIMB_MS) return;
+    if (this.socket?.connected) {
+      this.socket.sendTop(ms);
+    } else if (!this.crown || ms < this.crown.ms) {
+      // Sin server (dev sin red): la corona es local.
+      this.setCrown({ p: this.me, ms }, true);
+    }
+  }
+
+  /** El record de la sala cambio de dueño (o llego con el join). */
+  private setCrown(crown: LbCrown | null, announce: boolean): void {
+    const prev = this.crown?.p;
+    this.crown = crown;
+    for (const [name, r] of this.remotes) r.avatar.setCrown(crown?.p === name);
+    this.world.tower.setRecord(crown ? `Record: ${crown.p} ${formatClimb(crown.ms)}` : "Sin record", !!crown);
+    this.hud.setRecord(crown ? `${crown.p} ${formatClimb(crown.ms)}` : null, crown?.p === this.me);
+    if (announce && crown) {
+      if (crown.p === this.me) this.hud.announce(prev && prev !== this.me ? `Le sacaste la corona a ${prev}` : "La corona es tuya");
+      else this.hud.announce(`${crown.p} tiene la corona: ${formatClimb(crown.ms)}`);
+    }
+  }
+
   // ---------- HubPresenter ----------
 
   private lastLobby: HubLobbyView | null = null;
@@ -347,13 +492,15 @@ export class Hub implements HubPresenter {
       this.phase = phase;
       if (phase !== "voting") {
         this.voting = null;
-        this.island.setVoting(null, {}, null);
+        this.world.setVoting(null, {}, null);
       }
       if (phase !== "briefing") {
         this.briefing = null;
-        this.island.setReady(false, false);
+        this.world.setReady(false, false);
       }
       if (phase !== "lobby") this.lastLobby = null;
+      if (phase !== "results" && phase !== "final") this.scoreboard.set(null, false, "");
+      this.fireworks.setActive(phase === "final");
     }
     const labels: Record<Phase, string> = {
       none: "",
@@ -370,7 +517,7 @@ export class Hub implements HubPresenter {
   showLobby(view: HubLobbyView): void {
     this.enter("lobby");
     this.lastLobby = view;
-    this.island.setFeatured(null, "LA ISLA", `SALA ${view.code}`);
+    this.world.setFeatured(null, `SALA ${view.code}`);
     this.hud.showLobby(view, { name: LOOKS[this.look], next: () => this.nextLook() });
   }
 
@@ -378,7 +525,7 @@ export class Hub implements HubPresenter {
     this.enter("voting");
     this.voting = view;
     if (this.voteLocal && this.voteLocal.round !== (view.round ?? 0)) this.voteLocal = null;
-    this.island.setFeatured(null, "VOTEN", "Parate en un portal");
+    this.world.setFeatured(null, "VOTEN");
     this.renderVoting();
   }
 
@@ -389,17 +536,28 @@ export class Hub implements HubPresenter {
     const server = view.myVote;
     const mine = this.voteLocal?.id ?? server;
     const counts = { ...view.counts };
+    const voters: Record<string, string[]> = {};
+    for (const [id, list] of Object.entries(view.voters ?? {})) voters[id] = [...list];
     if (mine && mine !== server) {
       counts[mine] = (counts[mine] ?? 0) + 1;
       if (server) counts[server] = Math.max(0, (counts[server] ?? 0) - 1);
+      // Optimista tambien en los nombres: me muevo de un afiche al otro al toque.
+      if (server) voters[server] = (voters[server] ?? []).filter((p) => p !== this.me);
+      (voters[mine] ??= []).push(this.me);
+    }
+    // El propio va primero: si no, con varios votos quedaba escondido en el "+N".
+    for (const list of Object.values(voters)) {
+      const k = list.indexOf(this.me);
+      if (k > 0) list.unshift(...list.splice(k, 1));
     }
     if (this.voteLocal && server === this.voteLocal.id) this.voteLocal = null;
-    this.island.setVoting(
-      view.options.map((o) => ({ id: o.id, accent: o.accent ?? "#4dabf7" })),
+    this.world.setVoting(
+      view.options.map((o) => ({ id: o.id, accent: o.accent ?? "#ff3b30" })),
       counts,
       mine,
+      voters,
     );
-    this.hud.showVoting({ ...view, counts, onVote: (id) => this.vote(id) }, mine);
+    this.hud.showVoting({ ...view, counts, voters, onVote: (id) => this.vote(id) }, mine);
   }
 
   private vote(id: string): void {
@@ -416,8 +574,8 @@ export class Hub implements HubPresenter {
     this.enter("briefing");
     this.briefing = view;
     const ready = view.iAmReady || this.readyLocalRound === view.round;
-    this.island.setReady(true, ready);
-    this.island.setFeatured(view.gameId ?? null, view.gameTitle, "");
+    this.world.setReady(true, ready);
+    this.world.setFeatured(view.gameId ?? null, view.gameTitle);
     this.hud.showBriefing({ ...view, onReady: () => this.ready() }, ready);
   }
 
@@ -432,19 +590,33 @@ export class Hub implements HubPresenter {
   showResults(view: ResultsView): void {
     this.enter("results");
     const gameId = games.find((g) => g.title === view.gameTitle)?.id ?? null;
-    this.island.setFeatured(gameId, view.gameTitle, "");
+    this.world.setFeatured(gameId, view.gameTitle);
+    const gained = new Map(view.rows.map((r) => [r.player, r.points]));
+    this.setBoard(view.totals, false, `r${view.roundNo}`, gained);
     this.hud.showResults(view);
   }
 
   showFinal(totals: TotalEntry[], me: string, opts?: FinalView): void {
     this.enter("final");
-    const winners = totals.filter((t) => t.rank === 1).map((t) => t.player);
-    this.island.setFeatured(null, "FINAL", winners.length === 1 ? `Gano ${winners[0]}` : winners.length > 1 ? "Empate" : "");
+    this.world.setFeatured(null, "FIN");
+    this.setBoard(totals, true, "final");
     this.hud.showFinal(totals, me, opts ?? { hostAction: null, waitingText: null });
   }
 
+  /** Columnas de la plaza con los puntos acumulados (y lo que sumo cada uno en la ronda). */
+  private setBoard(totals: TotalEntry[], final: boolean, key: string, gained?: Map<string, number>): void {
+    const entries: BoardEntry[] = totals.map((t) => ({
+      player: t.player,
+      color: seatColor(this.seatOf(t.player)),
+      points: t.points,
+      rank: t.rank,
+      gained: gained?.get(t.player),
+    }));
+    this.scoreboard.set(entries, final, key);
+  }
+
   showWaiting(_entries: WaitingEntry[], _me: string): void {
-    // La isla no juega, asi que nunca espera un puntaje propio.
+    // La feria no juega, asi que nunca espera un puntaje propio.
   }
 
   showSpectator(): void {
@@ -454,12 +626,12 @@ export class Hub implements HubPresenter {
 
   showConnecting(): void {
     this.enter("none");
-    this.hud.showMessage("La Isla", "Conectando...", "Buscando la sala.");
+    this.hud.showMessage("La Feria", "Conectando...", "Buscando la sala.");
   }
 
   showError(message: string): void {
     this.enter("none");
-    this.hud.showMessage("La Isla", "Ups", message, {
+    this.hud.showMessage("La Feria", "Ups", message, {
       label: "Volver a las salas",
       onClick: () => (window.location.href = "/rooms/"),
       primary: true,
@@ -467,7 +639,7 @@ export class Hub implements HubPresenter {
   }
 
   setStrip(_text: string | null, _lights?: StripLight[]): void {
-    // La isla tiene su propia barra (Hud.setTop).
+    // La feria tiene su propia barra (Hud.setTop).
   }
 
   setTimeText(text: string | null): void {
@@ -478,10 +650,13 @@ export class Hub implements HubPresenter {
     this.hud.hidePanel();
   }
 
-  // ---------- Cielo ----------
+  // ---------- La noche ----------
 
-  /** Hora del dia segun la sala: lobby a la mañana, cada ronda jugada avanza, la final es de noche. */
-  private updateDay(): void {
+  /**
+   * Cuanto empeoro la noche segun la sala: el lobby esta "abierto", cada ronda jugada
+   * la oscurece y la final es roja. El clima sale de una semilla (sala + rondas).
+   */
+  private updateDread(): void {
     const room = this.room;
     if (!room) return;
     const status = room.status();
@@ -491,21 +666,20 @@ export class Hub implements HubPresenter {
     if (status === "briefing") done = Math.max(0, round - 1);
     else if (status === "results" || status === "voting" || status === "playing") done = round;
 
-    let day = DAY_LOBBY;
-    if (status === "finished") day = DAY_FINAL;
-    else if (status !== "lobby" && total > 0) day = DAY_LOBBY + ((DAY_LAST_ROUND - DAY_LOBBY) * done) / total;
-    this.sky.setDay(day);
+    let dread = DREAD_LOBBY;
+    if (status === "finished") dread = DREAD_FINAL;
+    else if (status !== "lobby" && total > 0) dread = DREAD_LOBBY + ((DREAD_LAST_ROUND - DREAD_LOBBY) * done) / total;
+    this.night.setDread(dread);
 
-    // Clima: igual para todos (semilla = sala + rondas jugadas). Lobby y final, despejado.
     const key = `${this.code}:${status === "finished" ? "fin" : status === "lobby" ? "lobby" : done}`;
     if (key !== this.weatherKey) {
       this.weatherKey = key;
       let w: Weather = "clear";
       if (status !== "finished" && status !== "lobby" && done > 0) {
         const r = (hashString(key) % 1000) / 1000;
-        w = r < 0.6 ? "clear" : r < 0.85 ? "cloudy" : "rain";
+        w = r < 0.55 ? "clear" : r < 0.8 ? "fog" : "rain";
       }
-      this.sky.setWeather(w);
+      this.night.setWeather(w);
     }
   }
 
@@ -515,6 +689,7 @@ export class Hub implements HubPresenter {
     requestAnimationFrame(this.tick);
     const dt = Math.min(MAX_DT, (now - this.last) / 1000);
     this.last = now;
+    const t = this.worldTime();
 
     const look = this.input.consumeLook();
     this.camYaw += look.yaw;
@@ -527,27 +702,34 @@ export class Hub implements HubPresenter {
     const dir = { x: m.side * cos - m.forward * sin, z: -m.side * sin - m.forward * cos };
     const p = this.player;
     p.yaw = this.camYaw + Math.PI;
-    p.update(dt, dir, this.input.consumeJump(), this.island);
+    p.update(dt, dir, this.input.consumeJump(), this.world.world, t);
     this.hud.setJoystick(this.input.joystick);
     if (p.respawned) {
       p.respawned = false;
       this.hud.flash("Ups");
     }
+    if (p.knocked) this.hud.flash("Pum");
+    this.updateRun();
 
-    // Pisar un portal es votar; subirse a la plataforma, marcar listo.
-    if (p.grounded && this.voting) {
-      const id = this.island.portalAt(p.x, p.z);
+    // Pisar una chapa es votar; subirse al escenario, marcar listo.
+    if (p.onGround && this.voting) {
+      const id = this.world.portalAt(p.x, p.z);
       if (id) this.vote(id);
     }
-    if (p.grounded && this.briefing && this.island.onReadyPad(p.x, p.y, p.z)) this.ready();
+    if (this.briefing && this.world.onReadyPad(p.standingOn)) this.ready();
 
     this.updateRemotes(dt);
     this.updateCamera(dt);
     this.updateAim();
-    this.updateDay();
-    this.sky.update(dt, this.camera.position);
-    this.island.update(dt);
-    this.renderer.render(this.scene, this.camera);
+    this.updateDread();
+    this.night.update(dt, this.camera.position);
+    this.world.setDread(this.night.current);
+    this.world.update(dt, t);
+    this.scoreboard.update(dt);
+    this.world.setTvSink(this.scoreboard.raise);
+    this.fireworks.update(dt);
+    this.retro.setTint(this.night.tint);
+    this.retro.render(this.renderer, this.scene, this.camera, dt);
   };
 
   private updateRemotes(dt: number): void {
@@ -577,15 +759,10 @@ export class Hub implements HubPresenter {
   }
 
   private placeShadow(avatar: Avatar, x: number, y: number, z: number): void {
-    const g = this.island.groundAt(x, z);
-    if (g === -Infinity || y < g - 0.5) {
-      avatar.shadow.visible = false;
-      return;
-    }
+    const g = this.world.supportAt(x, y, z);
     avatar.shadow.visible = avatar.root.visible;
-    avatar.shadow.position.set(x, g + 0.02, z);
-    const s = Math.max(0.4, 1 - (y - g) * 0.15);
-    avatar.shadow.scale.setScalar(s);
+    avatar.shadow.position.set(x, g + 0.03, z);
+    avatar.shadow.scale.setScalar(Math.max(0.35, 1 - (y - g) * 0.12));
   }
 
   /** Ojos del muñeco, con un balanceo apenas perceptible al caminar. */
@@ -602,14 +779,14 @@ export class Hub implements HubPresenter {
   private aimed(): { portal: string } | { ready: true } | null {
     if (!this.voting && !this.briefing) return null;
     this.aim.setFromCamera(this.screenCenter, this.camera);
-    return this.island.pick(this.aim, AIM_RANGE);
+    return this.world.pick(this.aim, AIM_RANGE);
   }
 
   private updateAim(): void {
     this.hud.setAim(this.input.locked, this.aimed() !== null);
   }
 
-  /** Clic con el mouse capturado: apuntar a un portal vota; a la plataforma, listo. */
+  /** Clic con el mouse capturado: apuntar a un afiche vota; al escenario, listo. */
   private aimClick(): void {
     const hit = this.aimed();
     if (!hit) return;
@@ -636,6 +813,7 @@ export class Hub implements HubPresenter {
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
     this.renderer.setSize(w, h);
+    this.retro.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.fov = w < h ? CAM_FOV_PORTRAIT : CAM_FOV;
     this.camera.updateProjectionMatrix();

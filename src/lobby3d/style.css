@@ -1,9 +1,13 @@
-/* La Isla: HUD crema con borde de tinta sobre la escena (ver DESIGN.md). */
+/* La Feria: HUD de videocasetera sobre la escena (ver DESIGN.md, "Cinta Gastada"). */
 
 :root {
-  --isl-ink: #173042;
-  --isl-cream: #fff8ea;
-  --isl-sun: #ffcf4a;
+  --isl-text: #e8e4d8;
+  --isl-dim: #9d978a;
+  --isl-bg: rgba(8, 8, 10, 0.72);
+  --isl-bg-solid: rgba(8, 8, 10, 0.88);
+  --isl-line: rgba(232, 228, 216, 0.22);
+  --isl-red: #ff3b30;
+  --isl-gold: #ffcf4a;
 }
 
 * {
@@ -15,9 +19,9 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #cfeaf5;
-  font-family: "Archivo", "Trebuchet MS", "Segoe UI", sans-serif;
-  color: var(--isl-ink);
+  background: #050506;
+  font-family: "VT323", "Courier New", monospace;
+  color: var(--isl-text);
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
@@ -32,12 +36,14 @@ body {
   display: block;
   width: 100%;
   height: 100%;
+  image-rendering: pixelated;
 }
 
 .isl-hud {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
 }
 
 .isl-hud > * {
@@ -48,52 +54,71 @@ body {
 .isl-top {
   position: absolute;
   top: 10px;
-  left: 10px;
-  right: 10px;
+  left: 12px;
+  right: 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px 7px 14px;
-  background: var(--isl-cream);
-  border: 2.5px solid var(--isl-ink);
-  border-radius: 999px;
-  font-weight: 800;
-  font-size: 13px;
-  letter-spacing: 0.5px;
-  box-shadow: 0 3px 0 var(--isl-ink);
+  gap: 12px;
+  padding: 4px 8px;
+  background: var(--isl-bg);
+  border: 1px solid var(--isl-line);
+  font-size: 20px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
 }
 
-.isl-top__code {
-  text-transform: uppercase;
+.isl-top__rec {
+  color: var(--isl-red);
+}
+
+.isl-top__rec::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--isl-red);
+  animation: isl-rec 1.2s steps(1) infinite;
+}
+
+@keyframes isl-rec {
+  50% {
+    opacity: 0;
+  }
 }
 
 .isl-top__phase {
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: var(--isl-ink);
-  color: var(--isl-cream);
-  font-size: 11px;
-  text-transform: uppercase;
+  color: var(--isl-dim);
 }
 
-.isl-top__phase:empty {
+.isl-top__phase:empty,
+.isl-top__crown:empty {
   display: none;
+}
+
+.isl-top__crown {
+  color: var(--isl-gold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.isl-top__crown.is-mine {
+  text-shadow: 0 0 8px rgba(255, 207, 74, 0.8);
 }
 
 .isl-top__clock {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .isl-top__home {
-  margin-left: 6px;
-  padding: 4px 12px;
-  border: 2px solid var(--isl-ink);
-  border-radius: 999px;
-  color: var(--isl-ink);
+  padding: 0 8px;
+  border: 1px solid var(--isl-line);
+  color: var(--isl-text);
   text-decoration: none;
-  font-size: 11px;
-  text-transform: uppercase;
 }
 
 .isl-top__clock:empty + .isl-top__home {
@@ -103,36 +128,32 @@ body {
 /* ---------- Panel de la fase ---------- */
 .isl-panel {
   position: absolute;
-  top: 64px;
+  top: 58px;
   left: 12px;
   width: 340px;
-  max-height: calc(100% - 120px);
+  max-height: calc(100% - 110px);
   display: flex;
   flex-direction: column;
-  background: var(--isl-cream);
-  border: 2.5px solid var(--isl-ink);
-  border-radius: 18px;
-  box-shadow: 0 4px 0 var(--isl-ink);
+  background: var(--isl-bg);
+  border: 1px solid var(--isl-line);
   overflow: hidden;
 }
 
 .isl-panel__toggle {
   align-self: flex-end;
-  margin: 8px 10px 0 0;
-  padding: 3px 10px;
-  border: 2px solid var(--isl-ink);
-  border-radius: 999px;
+  margin: 6px 8px 0 0;
+  padding: 0 8px;
+  border: 1px solid var(--isl-line);
   background: none;
   font: inherit;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 16px;
   text-transform: uppercase;
-  color: var(--isl-ink);
+  color: var(--isl-dim);
   cursor: pointer;
 }
 
 .isl-panel__body {
-  padding: 0 16px 16px;
+  padding: 0 14px 14px;
   overflow-y: auto;
   touch-action: pan-y;
 }
@@ -142,41 +163,38 @@ body {
 }
 
 .isl-kicker {
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 16px;
   letter-spacing: 1px;
   text-transform: uppercase;
-  opacity: 0.6;
+  color: var(--isl-red);
 }
 
 .isl-title {
-  margin: 2px 0 10px;
-  font-size: 22px;
-  font-weight: 900;
-  line-height: 1.1;
+  margin: 0 0 8px;
+  font-size: 30px;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .isl-sub {
-  margin: 12px 0 6px;
-  font-size: 11px;
-  font-weight: 800;
+  margin: 10px 0 4px;
+  font-size: 16px;
   letter-spacing: 1px;
   text-transform: uppercase;
-  opacity: 0.6;
+  color: var(--isl-dim);
 }
 
 .isl-text {
-  margin: 0 0 10px;
-  font-size: 14px;
-  line-height: 1.35;
+  margin: 0 0 8px;
+  font-size: 19px;
+  line-height: 1.15;
 }
 
 .isl-hint-text {
-  margin: 6px 0 10px;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.35;
-  opacity: 0.8;
+  margin: 6px 0 8px;
+  font-size: 18px;
+  line-height: 1.15;
+  color: var(--isl-dim);
 }
 
 .isl-list {
@@ -185,29 +203,26 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
 }
 
 .isl-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
-  border: 2px solid rgba(23, 48, 66, 0.18);
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 700;
+  padding: 3px 8px;
+  border-left: 2px solid var(--isl-line);
+  font-size: 20px;
 }
 
 .isl-row.is-me {
-  border-color: var(--isl-ink);
-  background: #fff1c9;
+  border-left-color: var(--isl-red);
+  background: rgba(255, 59, 48, 0.12);
 }
 
 .isl-row__rank {
   min-width: 18px;
-  font-weight: 900;
-  opacity: 0.6;
+  color: var(--isl-dim);
 }
 
 .isl-row__name {
@@ -219,64 +234,65 @@ body {
 }
 
 .isl-row__value {
-  font-weight: 900;
   text-align: right;
 }
 
 .isl-row__value small {
   display: block;
-  font-size: 11px;
-  font-weight: 600;
-  opacity: 0.7;
+  font-size: 15px;
+  color: var(--isl-dim);
 }
 
 .isl-row--vote {
   cursor: pointer;
-  border-left: 6px solid var(--accent, #4dabf7);
+}
+
+.isl-row__voters {
+  display: block;
+  font-size: 15px;
+  color: var(--isl-gold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .isl-row--vote:hover {
-  border-color: var(--isl-ink);
-  border-left-color: var(--accent, #4dabf7);
+  background: rgba(232, 228, 216, 0.08);
 }
 
 .isl-thumb {
   width: 34px;
   height: 34px;
-  border-radius: 8px;
   object-fit: cover;
-  border: 2px solid var(--isl-ink);
+  image-rendering: pixelated;
+  filter: sepia(0.4) contrast(1.1) brightness(0.8);
 }
 
 .isl-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #b9b3a6;
+  width: 8px;
+  height: 8px;
+  background: #3d3a37;
   flex: none;
 }
 
 .isl-dot.is-on {
-  background: #37b24d;
+  background: #6aa84f;
 }
 
 .isl-tag {
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 15px;
   text-transform: uppercase;
-  opacity: 0.6;
+  color: var(--isl-dim);
 }
 
 .isl-kick {
-  padding: 2px 8px;
-  border: 2px solid var(--isl-ink);
-  border-radius: 999px;
+  padding: 0 6px;
+  border: 1px solid var(--isl-line);
   background: none;
   font: inherit;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 15px;
   text-transform: uppercase;
-  color: var(--isl-ink);
+  color: var(--isl-dim);
   cursor: pointer;
 }
 
@@ -287,28 +303,27 @@ body {
 }
 
 .isl-choice {
-  min-width: 38px;
-  padding: 6px 10px;
-  border: 2px dashed var(--isl-ink);
-  border-radius: 999px;
+  min-width: 36px;
+  padding: 0 8px;
+  border: 1px dashed var(--isl-line);
   background: none;
   font: inherit;
-  font-weight: 800;
-  color: var(--isl-ink);
+  font-size: 20px;
+  color: var(--isl-text);
   cursor: pointer;
 }
 
 .isl-choice.is-on {
   border-style: solid;
-  background: var(--isl-ink);
-  color: var(--isl-cream);
+  border-color: var(--isl-red);
+  color: var(--isl-red);
 }
 
 .isl-actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 6px;
+  margin-top: 10px;
 }
 
 .isl-actions--inline {
@@ -318,64 +333,93 @@ body {
 }
 
 .isl-btn {
-  padding: 11px 16px;
-  border: 2.5px solid var(--isl-ink);
-  border-radius: 999px;
+  padding: 4px 12px;
+  border: 1px solid var(--isl-line);
   background: none;
   font: inherit;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.8px;
+  font-size: 20px;
+  letter-spacing: 1px;
   text-transform: uppercase;
-  color: var(--isl-ink);
+  color: var(--isl-text);
   cursor: pointer;
 }
 
 .isl-btn--small {
-  padding: 5px 12px;
-  font-size: 11px;
+  padding: 0 8px;
+  font-size: 16px;
 }
 
 .isl-btn--primary {
-  background: var(--isl-ink);
-  color: var(--isl-cream);
+  border-color: var(--isl-red);
+  color: var(--isl-red);
 }
 
-.isl-btn--primary:hover:not(:disabled) {
-  background: var(--isl-sun);
-  color: var(--isl-ink);
+.isl-btn--primary:hover:not(:disabled),
+.isl-btn:hover:not(:disabled) {
+  background: rgba(255, 59, 48, 0.15);
 }
 
 .isl-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: default;
 }
 
 .isl-count {
-  margin-top: 10px;
+  margin-top: 8px;
   text-align: center;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 20px;
 }
 
 .isl-howto {
   margin-bottom: 6px;
+  font-family: "Segoe UI", sans-serif;
+  font-size: 13px;
 }
 
 /* ---------- Avisos, joystick y botones ---------- */
 .isl-notice {
   position: absolute;
   left: 50%;
-  top: 62px;
+  top: 56px;
   transform: translateX(-50%);
-  max-width: min(420px, calc(100% - 24px));
-  padding: 6px 14px;
-  background: var(--isl-cream);
-  border: 2px solid var(--isl-ink);
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
+  max-width: min(460px, calc(100% - 24px));
+  padding: 2px 10px;
+  background: var(--isl-bg);
+  font-size: 17px;
   text-align: center;
+}
+
+.isl-run {
+  position: absolute;
+  left: 50%;
+  top: 60px;
+  transform: translateX(-50%);
+  padding: 0 12px;
+  background: var(--isl-bg);
+  border: 1px solid var(--isl-gold);
+  color: var(--isl-gold);
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none !important;
+}
+
+.isl-announce {
+  position: absolute;
+  left: 50%;
+  top: 104px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  padding: 2px 14px;
+  background: var(--isl-bg-solid);
+  border-left: 3px solid var(--isl-gold);
+  font-size: 22px;
+  opacity: 0;
+  pointer-events: none !important;
+  transition: opacity 0.25s steps(3);
+}
+
+.isl-announce.is-on {
+  opacity: 1;
 }
 
 .isl-stick {
@@ -384,9 +428,9 @@ body {
   width: 104px;
   height: 104px;
   margin: -52px 0 0 -52px;
-  border: 3px solid rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(232, 228, 216, 0.5);
   border-radius: 50%;
-  background: rgba(23, 48, 66, 0.18);
+  background: rgba(8, 8, 10, 0.3);
   pointer-events: none !important;
 }
 
@@ -398,8 +442,7 @@ body {
   height: 44px;
   margin: -22px 0 0 -22px;
   border-radius: 50%;
-  background: var(--isl-cream);
-  border: 3px solid var(--isl-ink);
+  background: rgba(232, 228, 216, 0.75);
 }
 
 .isl-controls {
@@ -410,55 +453,51 @@ body {
 }
 
 .isl-jump {
-  width: 86px;
-  height: 86px;
+  width: 84px;
+  height: 84px;
   border-radius: 50%;
-  border: 3px solid var(--isl-ink);
-  background: var(--isl-sun);
+  border: 2px solid var(--isl-red);
+  background: rgba(8, 8, 10, 0.6);
   font: inherit;
-  font-size: 13px;
-  font-weight: 900;
-  color: var(--isl-ink);
-  box-shadow: 0 4px 0 var(--isl-ink);
+  font-size: 22px;
+  color: var(--isl-red);
   touch-action: none;
 }
 
 .isl-emotes {
   position: absolute;
   right: 12px;
-  bottom: 14px;
+  bottom: 12px;
   display: flex;
   gap: 6px;
 }
 
 .isl-emote {
-  padding: 6px 12px;
-  border: 2px solid var(--isl-ink);
-  border-radius: 999px;
-  background: var(--isl-cream);
+  padding: 0 8px;
+  border: 1px solid var(--isl-line);
+  background: var(--isl-bg);
   font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--isl-ink);
+  font-size: 18px;
+  color: var(--isl-text);
   cursor: pointer;
 }
 
 .isl-emote kbd {
   margin-right: 5px;
   font: inherit;
-  opacity: 0.5;
+  color: var(--isl-dim);
 }
 
 .isl-hint {
   position: absolute;
   left: 50%;
-  bottom: 14px;
+  bottom: 12px;
   transform: translateX(-50%);
-  padding: 5px 12px;
-  border-radius: 999px;
-  background: rgba(255, 248, 234, 0.8);
-  font-size: 12px;
-  font-weight: 700;
+  padding: 0 10px;
+  background: var(--isl-bg);
+  font-size: 17px;
+  color: var(--isl-dim);
+  white-space: nowrap;
   pointer-events: none !important;
 }
 
@@ -467,32 +506,27 @@ body {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 8px;
-  height: 8px;
-  margin: -4px 0 0 -4px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 0 0 2px rgba(23, 48, 66, 0.55);
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  background: rgba(232, 228, 216, 0.8);
   pointer-events: none !important;
-  transition: transform 0.12s ease, background 0.12s ease;
+  transition: transform 0.12s steps(2);
 }
 
 .isl-crosshair.is-target {
-  transform: scale(2.2);
-  background: var(--isl-sun);
+  transform: scale(2.2) rotate(45deg);
+  background: var(--isl-red);
 }
 
 .isl-lockhint {
   position: absolute;
   left: 50%;
-  top: calc(50% + 22px);
+  top: calc(50% + 20px);
   transform: translateX(-50%);
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: rgba(23, 48, 66, 0.72);
-  color: var(--isl-cream);
-  font-size: 12px;
-  font-weight: 700;
+  padding: 0 10px;
+  background: var(--isl-bg);
+  font-size: 18px;
   pointer-events: none !important;
 }
 
@@ -503,25 +537,22 @@ body {
 .isl-flash {
   position: absolute;
   left: 50%;
-  bottom: 70px;
-  transform: translate(-50%, 10px);
-  padding: 8px 20px;
-  border: 2.5px solid var(--isl-ink);
-  border-radius: 18px;
-  background: #ffffff;
-  font-size: 20px;
-  font-weight: 900;
+  bottom: 64px;
+  transform: translateX(-50%);
+  padding: 2px 16px;
+  background: var(--isl-bg-solid);
+  border: 1px solid var(--isl-line);
+  font-size: 28px;
   opacity: 0;
   pointer-events: none !important;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.2s steps(3);
 }
 
 .isl-flash.is-on {
   opacity: 1;
-  transform: translate(-50%, 0);
 }
 
-/* Celular: panel abajo, SALTAR a la derecha y las reacciones encima. */
+/* Celular: SALTAR a la derecha y las reacciones encima. */
 @media (pointer: coarse) {
   .isl-controls {
     display: block;
@@ -529,7 +560,7 @@ body {
 
   .isl-emotes {
     right: 12px;
-    bottom: 118px;
+    bottom: 116px;
     flex-direction: column;
     align-items: flex-end;
   }
@@ -541,24 +572,17 @@ body {
   }
 }
 
+/* Angosto: la barra se queda con REC, sala y reloj (la fase y la corona las dice el panel). */
 @media (max-width: 720px) {
   .isl-top {
-    font-size: 11px;
+    font-size: 17px;
+    gap: 8px;
   }
 
-  .isl-top__clock {
-    white-space: nowrap;
-  }
-}
-
-/* Angosto: la fase ya la dice el panel, la barra se queda con sala y reloj. */
-@media (max-width: 480px) {
-  .isl-top__phase {
+  .isl-top__phase,
+  .isl-top__crown {
     display: none;
   }
-}
-
-@media (max-width: 720px) {
 
   .isl-panel {
     top: auto;
@@ -569,10 +593,16 @@ body {
   }
 
   .isl-title {
-    font-size: 18px;
+    font-size: 24px;
   }
 
-  .isl-notice {
-    top: 58px;
+  .isl-run {
+    top: 50px;
+    font-size: 26px;
+  }
+
+  .isl-announce {
+    top: 88px;
+    font-size: 18px;
   }
 }
