@@ -14,6 +14,10 @@ function collectHtmlEntries(): Record<string, string> {
   const roomsHtml = resolve(root, "rooms/index.html");
   if (existsSync(roomsHtml)) entries.rooms = roomsHtml;
 
+  // La Isla: la sala 3D (src/lobby3d/). Tampoco es un juego.
+  const lobbyHtml = resolve(root, "rooms/lobby/index.html");
+  if (existsSync(lobbyHtml)) entries.lobby3d = lobbyHtml;
+
   // Pagina del salon de la fama (ranking de lideres de salas). Tampoco es juego.
   const fameHtml = resolve(root, "fame/index.html");
   if (existsSync(fameHtml)) entries.fame = fameHtml;

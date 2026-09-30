@@ -23,6 +23,7 @@ export const meta: GameEntry = {
   order: 1030,
   added: "2026-09-25",
   mobile: true,
+  roomsOnly: true,
   /**
    * El server corta solo a los 90s (y al que no cruzo para entonces lo deja afuera).
    * Esto es la red por si el server se cae DESPUES de largar.

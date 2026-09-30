@@ -20,6 +20,7 @@ export const meta: GameEntry = {
   order: 280,
   added: "2026-07-07",
   mobile: true,
+  roomsOnly: true,
 
 };
 
