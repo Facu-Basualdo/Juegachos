@@ -311,6 +311,108 @@ export function signTexture(text: string, opts: { fg?: string; bg?: string; w?: 
   return crispTexture(c);
 }
 
+/**
+ * Carita de una reaccion, dibujada (no son emojis: el repo los prohibe). Una cara de
+ * arpillera como la de los muñecos, con la expresion de cada reaccion. Se usa sobre la
+ * cabeza del muñeco y en los botones del HUD.
+ */
+export function drawEmoteFace(ctx: CanvasRenderingContext2D, id: string, S: number): void {
+  const c = S / 2;
+  const r = S * 0.44;
+  ctx.clearRect(0, 0, S, S);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  // Cara
+  ctx.fillStyle = id === "enojo" ? "#b8483e" : "#b89f78";
+  ctx.strokeStyle = "#1a1512";
+  ctx.lineWidth = S * 0.05;
+  ctx.beginPath();
+  ctx.arc(c, c, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  const ink = "#15110e";
+  const eyeY = c - S * 0.08;
+  const ex = S * 0.15;
+  const dot = (x: number, y: number, rr: number): void => {
+    ctx.fillStyle = ink;
+    ctx.beginPath();
+    ctx.arc(x, y, rr, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  const line = (pts: number[][], w = S * 0.05, color = ink): void => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (const [x, y] of pts.slice(1)) ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+  switch (id) {
+    case "risa":
+      // Ojos cerrados de risa y boca grande abierta.
+      line([[c - ex - S * 0.07, eyeY + 2], [c - ex, eyeY - S * 0.05], [c - ex + S * 0.07, eyeY + 2]]);
+      line([[c + ex - S * 0.07, eyeY + 2], [c + ex, eyeY - S * 0.05], [c + ex + S * 0.07, eyeY + 2]]);
+      ctx.fillStyle = "#3a1410";
+      ctx.beginPath();
+      ctx.moveTo(c - S * 0.2, c + S * 0.06);
+      ctx.lineTo(c + S * 0.2, c + S * 0.06);
+      ctx.arc(c, c + S * 0.06, S * 0.2, 0, Math.PI);
+      ctx.fill();
+      break;
+    case "sorpresa":
+      dot(c - ex, eyeY, S * 0.065);
+      dot(c + ex, eyeY, S * 0.065);
+      line([[c - ex - S * 0.07, eyeY - S * 0.13], [c - ex + S * 0.05, eyeY - S * 0.15]], S * 0.035);
+      line([[c + ex - S * 0.05, eyeY - S * 0.15], [c + ex + S * 0.07, eyeY - S * 0.13]], S * 0.035);
+      ctx.fillStyle = "#3a1410";
+      ctx.beginPath();
+      ctx.ellipse(c, c + S * 0.17, S * 0.08, S * 0.11, 0, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    case "enojo":
+      dot(c - ex, eyeY + S * 0.02, S * 0.045);
+      dot(c + ex, eyeY + S * 0.02, S * 0.045);
+      line([[c - ex - S * 0.1, eyeY - S * 0.12], [c - S * 0.04, eyeY - S * 0.03]]);
+      line([[c + ex + S * 0.1, eyeY - S * 0.12], [c + S * 0.04, eyeY - S * 0.03]]);
+      line([[c - S * 0.16, c + S * 0.22], [c, c + S * 0.14], [c + S * 0.16, c + S * 0.22]]);
+      break;
+    case "burla":
+      // Guiño y la lengua afuera.
+      line([[c - ex - S * 0.07, eyeY], [c - ex + S * 0.07, eyeY]]);
+      dot(c + ex, eyeY, S * 0.055);
+      line([[c - S * 0.17, c + S * 0.1], [c + S * 0.17, c + S * 0.1]]);
+      ctx.fillStyle = "#c0504d";
+      ctx.beginPath();
+      ctx.moveTo(c - S * 0.02, c + S * 0.1);
+      ctx.lineTo(c + S * 0.14, c + S * 0.1);
+      ctx.arc(c + S * 0.06, c + S * 0.12, S * 0.08, 0, Math.PI);
+      ctx.fill();
+      break;
+    case "llanto":
+      line([[c - ex - S * 0.07, eyeY - S * 0.04], [c - ex + S * 0.06, eyeY + S * 0.01]]);
+      line([[c + ex + S * 0.07, eyeY - S * 0.04], [c + ex - S * 0.06, eyeY + S * 0.01]]);
+      line([[c - S * 0.15, c + S * 0.22], [c, c + S * 0.14], [c + S * 0.15, c + S * 0.22]]);
+      ctx.fillStyle = "#4f81bd";
+      for (const x of [c - ex, c + ex]) {
+        ctx.beginPath();
+        ctx.moveTo(x, eyeY + S * 0.06);
+        ctx.quadraticCurveTo(x - S * 0.06, eyeY + S * 0.2, x, eyeY + S * 0.22);
+        ctx.quadraticCurveTo(x + S * 0.06, eyeY + S * 0.2, x, eyeY + S * 0.06);
+        ctx.fill();
+      }
+      break;
+  }
+}
+
+/** Textura de la carita (para el sprite sobre la cabeza). */
+export function emoteFaceTexture(id: string): THREE.CanvasTexture {
+  return cached(`emote:${id}`, () => {
+    const [c, ctx] = canvas(128);
+    drawEmoteFace(ctx, id, 128);
+    return crispTexture(c);
+  });
+}
+
 export interface LabelTexture {
   texture: THREE.CanvasTexture;
   /** Ancho / alto, para escalar el sprite sin deformarlo. */

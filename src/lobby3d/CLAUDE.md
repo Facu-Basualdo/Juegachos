@@ -201,13 +201,47 @@ del `gap`.
   nada por la red. La ceniza arranca "en el piso" (apagada): si arrancara en el aire
   caeria al cargar la pagina en cualquier fase.
 
+## Reacciones y sonido (`Sounds.ts`)
+
+- **Reacciones**: las mismas cinco de Bomba Palabra / Cadena de Palabras (risa,
+  sorpresa, enojo, burla, llanto; `EMOTES` en `constants.ts`, teclas 1-5 o los botones),
+  con **sus audios** (`public/sfx/emotes/<id>.mp3`, la excepcion del repo a sintetizar
+  todo). Por la red viaja el **indice** (`lb:emote.e`), asi que el orden de `EMOTES` no
+  se toca; el server acepta 0..7 y no hubo que redesplegarlo. Sin emojis: la carita se
+  dibuja en canvas (`drawEmoteFace` en `textures.ts`), sobre la cabeza del muñeco y en
+  los botones del HUD. El muñeco ademas hace un **gesto** corto (`Avatar.applyEmote`):
+  se sacude de risa, salta de sorpresa, tiembla de enojo, cabecea en la burla, baja la
+  cabeza con las manos en la cara si llora. La reaccion ajena suena **mas bajo cuanto
+  mas lejos** y del lado donde esta (`StereoPanner` respecto de adonde mira uno); la
+  propia se ve en pantalla (`Hud.flashEmote`: en primera persona uno no se ve).
+  Cooldown local `EMOTE_COOLDOWN_MS` (1 s) para no mandar lo que el server descarta.
+  Si un mp3 falta o no decodifica, suena un blip sintetizado.
+- **Final**: fanfarria de **cornetas** al entrar (`playHornFanfare`: sierras apenas
+  desafinadas con tremolo, filtradas y con caida de tono) y una suelta cada 3.5-8.5 s
+  mientras dura; cada **bengala** silba al subir (`playLaunch`, ruido con un pasabanda
+  que sube) y revienta con estallido grave y chisporroteo (`playBurst`), enganchado a
+  `Fireworks.onLaunch` / `onBurst`. Sin sonido la final "parecia un velorio"
+  (programador). Todo sintetizado con Web Audio.
+- Un solo `AudioContext`; se destraba en el primer `pointerdown` / `keydown`
+  (`unlockAudio`). Probarlo headless: no se escucha, pero se puede contar cuantos
+  osciladores / fuentes se crean envolviendo `AudioContext` en un `addInitScript`.
+- **Gotcha de las pruebas**: el server exige codigos de sala de 4+ caracteres
+  (`sanitizeCode`). Con `?code=EMO` el join se ignora en silencio y los jugadores no se
+  ven; parece un bug de red y no lo es.
+
 ## Controles
 
 Compu: un clic en la escena **captura el mouse** (pointer lock) y el mouse mira; ESC
 lo suelta para usar el panel (sin captura tambien se mira arrastrando). WASD / flechas
-caminan relativo a la mirada, ESPACIO salta, 1-4 reacciones ("Hola", "GG", "Jaja",
-"Vamos"). Celu: un dedo en la mitad izquierda es un joystick flotante y uno en la mitad
+caminan relativo a la mirada, ESPACIO salta, 1-5 reacciones (ver "Reacciones y sonido").
 derecha mira; boton SALTAR y botones de reaccion. El panel se puede ocultar.
+
+La leyenda de controles de la compu es una tira abajo a la izquierda con **los mismos
+iconos del briefing de las salas** (`renderHowTo` de `src/shared/howtoView.ts`, con
+`CONTROLS` en `Hud.ts`), no texto. Se la re-estiliza en `style.css` para la feria
+(tarjetas en fila, sin redondeo, VT323, acento rojo) con selectores que empiezan en
+`.isl-hud`: los estilos del renderer se inyectan en runtime despues del CSS de la pagina
+y a igual especificidad ganaban ellos. En el celu no se muestra (estan los botones).
 
 ## Probar sin Supabase (`game/devRoom.ts`)
 

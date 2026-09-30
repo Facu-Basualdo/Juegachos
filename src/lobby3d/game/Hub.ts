@@ -25,6 +25,7 @@ import {
   DREAD_FINAL,
   DREAD_LAST_ROUND,
   DREAD_LOBBY,
+  EMOTE_COOLDOWN_MS,
   EMOTES,
   EYE_HEIGHT,
   FLAG_GROUNDED,
@@ -52,6 +53,7 @@ import { Night, type Weather } from "./Night";
 import { Player } from "./Player";
 import { RetroPass } from "./retro";
 import { Scoreboard, type BoardEntry } from "./Scoreboard";
+import { playBurst, playEmote, playHorn, playHornFanfare, playLaunch, preloadEmotes, unlockAudio } from "./Sounds";
 import { World } from "./World";
 
 const LOOK_KEY = "mg:island-look";
@@ -168,6 +170,9 @@ export class Hub implements HubPresenter {
   private weatherKey = "";
 
   private last = performance.now();
+  private lastEmoteAt = 0;
+  /** Proxima corneta suelta durante la final (ms de performance.now). */
+  private nextHornAt = 0;
   private lastSent = "";
   private lastSentAt = 0;
   private placed = false;
@@ -198,6 +203,12 @@ export class Hub implements HubPresenter {
     this.hud.onEmote((i) => this.emote(i));
     this.input.onEmote((i) => this.emote(i));
     this.input.onAimClick(() => this.aimClick());
+
+    // Sonido: el navegador lo tiene suspendido hasta el primer gesto.
+    preloadEmotes();
+    for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, unlockAudio, { passive: true });
+    this.fireworks.onLaunch = () => playLaunch(0.8);
+    this.fireworks.onBurst = () => playBurst(0.8);
 
     this.resize();
     window.addEventListener("resize", this.resize);
@@ -276,9 +287,7 @@ export class Hub implements HubPresenter {
       socket.onHi((p, look) => this.ensureRemote(p, look));
       socket.onBye((p) => this.dropRemote(p));
       socket.onPos((pos) => this.applyRemote(pos));
-      socket.onEmote((p, e) => {
-        if (p !== this.me) this.remotes.get(p)?.avatar.showEmote(EMOTES[e] ?? "");
-      });
+      socket.onEmote((p, e) => this.remoteEmote(p, e));
       socket.onPong((c, t) => this.onPong(c, t));
       socket.onSummit((s) => {
         if (s.p !== this.me) this.hud.announce(`${s.p} llego a la cima: ${formatClimb(s.ms)}`);
@@ -399,11 +408,34 @@ export class Hub implements HubPresenter {
   }
 
   private emote(i: number): void {
-    const text = EMOTES[i];
-    if (!text) return;
-    // Los demas ven el globo sobre tu muñeco; vos, un cartel en pantalla.
-    this.hud.flash(text);
+    const emote = EMOTES[i];
+    if (!emote) return;
+    const now = performance.now();
+    // Mismo cooldown que el server (lo descartaria en silencio).
+    if (now - this.lastEmoteAt < EMOTE_COOLDOWN_MS) return;
+    this.lastEmoteAt = now;
+    // Los demas ven la carita sobre tu muñeco; vos, en pantalla. El sonido, todos.
+    this.hud.flashEmote(emote.id, emote.label);
+    playEmote(emote.id);
     this.socket?.sendEmote(i);
+  }
+
+  /**
+   * Reaccion de otro: la carita y el gesto sobre su muñeco, y el sonido mas bajo cuanto
+   * mas lejos este, del lado donde esta (izquierda / derecha de adonde uno mira).
+   */
+  private remoteEmote(player: string, e: number): void {
+    const emote = EMOTES[e];
+    const r = this.remotes.get(player);
+    if (!emote || player === this.me || !r) return;
+    r.avatar.showEmote(emote.id);
+    const dx = r.x - this.player.x;
+    const dz = r.z - this.player.z;
+    const dist = Math.hypot(dx, dz);
+    const gain = Math.max(0.2, Math.min(1, 1.3 - dist / 25));
+    // Derecha de la camara = (cos yaw, -sin yaw).
+    const pan = dist > 0.5 ? (dx * Math.cos(this.camYaw) - dz * Math.sin(this.camYaw)) / dist : 0;
+    playEmote(emote.id, gain, pan * 0.8);
   }
 
   private nextLook(): void {
@@ -501,6 +533,10 @@ export class Hub implements HubPresenter {
       if (phase !== "lobby") this.lastLobby = null;
       if (phase !== "results" && phase !== "final") this.scoreboard.set(null, false, "");
       this.fireworks.setActive(phase === "final");
+      if (phase === "final") {
+        playHornFanfare();
+        this.nextHornAt = performance.now() + 4000;
+      }
     }
     const labels: Record<Phase, string> = {
       none: "",
@@ -728,6 +764,11 @@ export class Hub implements HubPresenter {
     this.scoreboard.update(dt);
     this.world.setTvSink(this.scoreboard.raise);
     this.fireworks.update(dt);
+    // Durante la final, alguna corneta suelta de vez en cuando.
+    if (this.phase === "final" && now > this.nextHornAt) {
+      this.nextHornAt = now + 3500 + Math.random() * 5000;
+      playHorn(0, [294, 349, 392, 440][Math.floor(Math.random() * 4)], 0.7);
+    }
     this.retro.setTint(this.night.tint);
     this.retro.render(this.renderer, this.scene, this.camera, dt);
   };

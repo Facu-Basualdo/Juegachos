@@ -1,7 +1,7 @@
 import * as THREE from "three";
-import { EMOTE_MS, SPEED } from "./constants";
-import { psxBasic, psxLambert } from "./retro";
-import { bubbleTexture, clothTexture, labelSprite, nameTexture, setSpriteLabel, shadowTexture } from "./textures";
+import { EMOTE_MS, SPEED, type EmoteId } from "./constants";
+import { LABEL_LAYER, psxBasic, psxLambert } from "./retro";
+import { clothTexture, emoteFaceTexture, labelSprite, nameTexture, shadowTexture } from "./textures";
 import { makeCrown } from "./Tower";
 
 const BURLAP = "#8a7a5e";
@@ -50,6 +50,9 @@ export class Avatar {
   private hat: THREE.Object3D | null = null;
   private bubble: THREE.Sprite | null = null;
   private bubbleUntil = 0;
+  /** Reaccion en curso (el gesto del cuerpo) y cuando arranco. */
+  private emote: EmoteId | null = null;
+  private emoteAt = 0;
   private phase = 0;
   private idle = Math.random() * 10;
 
@@ -211,17 +214,73 @@ export class Avatar {
     if (this.label) this.label.material.opacity = offline ? 0.35 : 1;
   }
 
-  showEmote(text: string): void {
-    const label = bubbleTexture(text);
+  /** Reaccion: la carita flota sobre la cabeza y el muñeco hace su gesto. */
+  showEmote(id: EmoteId): void {
     if (!this.bubble) {
-      this.bubble = labelSprite(label, 0.5);
+      this.bubble = new THREE.Sprite(new THREE.SpriteMaterial({ depthTest: false, transparent: true }));
+      this.bubble.renderOrder = 11;
+      this.bubble.layers.set(LABEL_LAYER);
+      this.bubble.scale.set(0.55, 0.55, 1);
       this.root.add(this.bubble);
-    } else {
-      setSpriteLabel(this.bubble, label, 0.5);
     }
+    this.bubble.material.map = emoteFaceTexture(id);
+    this.bubble.material.needsUpdate = true;
     this.bubble.visible = true;
     this.bubble.position.y = LABEL_Y + 0.5;
     this.bubbleUntil = performance.now() + EMOTE_MS;
+    this.emote = id;
+    this.emoteAt = performance.now();
+  }
+
+  /**
+   * Gesto de la reaccion, encima de la animacion de caminar: se sacude de risa, salta
+   * de sorpresa, tiembla de enojo, cabecea burlandose o baja la cabeza con las manos en
+   * la cara si llora. Devuelve true mientras dura (las manos quedan a cargo del gesto).
+   */
+  private applyEmote(k: number): boolean {
+    if (!this.emote) return false;
+    const t = (performance.now() - this.emoteAt) / 1000;
+    const life = EMOTE_MS / 1000;
+    if (t > life) {
+      this.emote = null;
+      this.head.rotation.set(0, 0, 0);
+      return false;
+    }
+    const fade = Math.min(1, (life - t) * 4);
+    switch (this.emote) {
+      case "risa":
+        this.rig.position.y += Math.abs(Math.sin(t * 22)) * 0.06 * fade;
+        this.head.rotation.x = -0.3 * fade;
+        this.setHand(this.leftHand, -0.42, 0.72, 0.25, k);
+        this.setHand(this.rightHand, 0.42, 0.72, 0.25, k);
+        return true;
+      case "sorpresa": {
+        const jump = t < 0.45 ? Math.sin((t / 0.45) * Math.PI) * 0.35 : 0;
+        this.rig.position.y += jump;
+        this.head.rotation.x = -0.15 * fade;
+        this.setHand(this.leftHand, -0.3, 1.55, 0.25, k);
+        this.setHand(this.rightHand, 0.3, 1.55, 0.25, k);
+        return true;
+      }
+      case "enojo":
+        this.rig.position.x = Math.sin(t * 60) * 0.03 * fade;
+        this.head.rotation.x = 0.15 * fade;
+        this.setHand(this.leftHand, -0.35, 0.95, 0.35, k);
+        this.setHand(this.rightHand, 0.35, 0.95, 0.35, k);
+        return true;
+      case "burla":
+        this.head.rotation.z = Math.sin(t * 10) * 0.35 * fade;
+        this.setHand(this.leftHand, -0.62, 0.9 + Math.sin(t * 10) * 0.1, 0, k);
+        this.setHand(this.rightHand, 0.18, 1.45, 0.34, k);
+        return true;
+      case "llanto":
+        this.head.rotation.x = 0.4 * fade;
+        this.rig.position.y += Math.sin(t * 14) * 0.015;
+        this.setHand(this.leftHand, -0.14, 1.42, 0.34, k);
+        this.setHand(this.rightHand, 0.14, 1.42, 0.34, k);
+        return true;
+    }
+    return false;
   }
 
   /**
@@ -257,7 +316,14 @@ export class Avatar {
       this.setHand(this.rightHand, 0.6, 1.42, 0, k);
     }
 
-    if (this.bubble?.visible && performance.now() > this.bubbleUntil) this.bubble.visible = false;
+    this.rig.position.x = 0;
+    this.applyEmote(k);
+    if (this.bubble?.visible) {
+      // La carita sube apenas y se va.
+      const left = this.bubbleUntil - performance.now();
+      this.bubble.position.y = LABEL_Y + 0.5 + (1 - Math.max(0, left) / EMOTE_MS) * 0.25;
+      if (left <= 0) this.bubble.visible = false;
+    }
   }
 
   private setHand(hand: THREE.Mesh, x: number, y: number, z: number, k: number): void {

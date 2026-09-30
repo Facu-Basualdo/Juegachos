@@ -1,11 +1,31 @@
+import type { HowToAction } from "../../shared/howto";
 import { renderHowTo } from "../../shared/howtoView";
 import type { BriefingView, FinalView, ResultsView, TotalEntry, VotingView } from "../../shared/room/RoomOverlay";
 import type { HubLobbyView } from "../../shared/room/roomMode";
 import { TOTAL_ROUNDS_OPTIONS } from "../../shared/room/types";
 import { EMOTES } from "./constants";
+import { drawEmoteFace } from "./textures";
+
+/** Carita de una reaccion en un canvas (botones del HUD y el cartel propio). */
+function faceCanvas(id: string, size: number): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = c.height = size * 2;
+  c.style.width = c.style.height = `${size}px`;
+  drawEmoteFace(c.getContext("2d")!, id, size * 2);
+  return c;
+}
 import type { JoystickView } from "./InputController";
 
 type Action = { label: string; onClick: () => void; primary?: boolean; disabled?: boolean };
+
+/** Controles de la feria en la compu (la tira de abajo). */
+const CONTROLS: HowToAction[] = [
+  { title: "Caminar", icons: ["wasd"] },
+  { title: "Mirar", icons: ["mouse"] },
+  { title: "Saltar", icons: ["space"] },
+  { title: "Reacciones", icons: ["keys:1 2 3 4 5"] },
+  { title: "Soltar mouse", icons: ["esc"] },
+];
 
 /**
  * HUD de La Feria: la pantalla de una videocasetera (DESIGN.md, "Cinta Gastada"):
@@ -108,18 +128,24 @@ export class Hud {
 
     this.emotes = document.createElement("div");
     this.emotes.className = "isl-emotes";
-    EMOTES.forEach((text, i) => {
+    EMOTES.forEach((emote, i) => {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "isl-emote";
-      b.innerHTML = `<kbd>${i + 1}</kbd>${text}`;
+      b.title = `${emote.label} (${i + 1})`;
+      b.append(faceCanvas(emote.id, 40));
+      const k = document.createElement("kbd");
+      k.textContent = String(i + 1);
+      b.append(k);
       b.addEventListener("click", () => this.emoteCb(i));
       this.emotes.append(b);
     });
 
+    // Controles con los mismos iconos del briefing de las salas (src/shared/howto.ts),
+    // en una tira abajo. Solo en la compu: en el celu estan los botones en pantalla.
     const hint = document.createElement("div");
     hint.className = "isl-hint";
-    hint.textContent = "WASD camina - mouse mira - ESPACIO salta - 1 a 4 reacciones - ESC suelta el mouse";
+    hint.append(renderHowTo({ intro: "", actions: CONTROLS }, { intro: false, compact: true }));
 
     // Mira del centro: se agranda cuando apunta a algo que se puede tocar.
     this.crosshair = document.createElement("div");
@@ -212,6 +238,12 @@ export class Hud {
     this.crosshair.classList.toggle("is-locked", locked);
     this.crosshair.classList.toggle("is-target", target);
     this.lockHint.classList.toggle("is-hidden", locked);
+  }
+
+  /** Reaccion propia: la carita y su nombre en pantalla (en primera persona no te ves). */
+  flashEmote(id: string, label: string): void {
+    this.flash(label);
+    this.flashEl.prepend(faceCanvas(id, 34));
   }
 
   flash(text: string): void {

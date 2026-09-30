@@ -473,32 +473,105 @@ body {
 }
 
 .isl-emote {
-  padding: 0 8px;
+  position: relative;
+  width: 48px;
+  height: 48px;
+  padding: 3px;
   border: 1px solid var(--isl-line);
   background: var(--isl-bg);
-  font: inherit;
-  font-size: 18px;
-  color: var(--isl-text);
   cursor: pointer;
 }
 
+.isl-emote canvas {
+  display: block;
+}
+
+.isl-emote:hover {
+  border-color: var(--isl-red);
+}
+
 .isl-emote kbd {
-  margin-right: 5px;
+  position: absolute;
+  right: 2px;
+  bottom: 0;
   font: inherit;
+  font-size: 14px;
   color: var(--isl-dim);
 }
 
+/* Abajo a la izquierda: a la derecha estan los botones de reacciones. */
 .isl-hint {
   position: absolute;
-  left: 50%;
-  bottom: 12px;
-  transform: translateX(-50%);
-  padding: 0 10px;
-  background: var(--isl-bg);
-  font-size: 17px;
-  color: var(--isl-dim);
-  white-space: nowrap;
+  left: 12px;
+  bottom: 10px;
+  color: var(--isl-text);
+  opacity: 0.85;
   pointer-events: none !important;
+}
+
+/* La tira reusa el renderer del briefing (howtoView.ts): se la achica y se la pinta
+   con los colores de la feria (texto claro, acento rojo, fondo de videocasetera). Los
+   selectores llevan `.isl-hud` adelante a proposito: los estilos del renderer se
+   inyectan en runtime, despues de este archivo, y a igual especificidad ganaban ellos. */
+.isl-hud .isl-hint .mg-ht {
+  --ht-accent: var(--isl-red);
+  margin: 0;
+  max-width: none;
+  width: auto;
+  font-family: "Segoe UI", sans-serif;
+}
+
+.isl-hud .isl-hint .mg-ht__grid {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+/* Cada tarjeta en una fila: titulo a la izquierda, iconos a la derecha. */
+.isl-hud .isl-hint .mg-ht__card {
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  padding: 3px 8px;
+  gap: 8px;
+  border-radius: 0;
+  background: var(--isl-bg);
+  border: 1px solid var(--isl-line);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.isl-hud .isl-hint .mg-ht__title {
+  font-family: "VT323", "Courier New", monospace;
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: 1px;
+}
+
+.isl-hud .isl-hint .mg-ht__icons {
+  gap: 2px;
+}
+
+.isl-hud .isl-hint .mg-ht__svg {
+  width: 24px;
+  height: 24px;
+}
+
+.isl-hud .isl-hint .mg-ht__cap {
+  display: none;
+}
+
+.isl-hud .isl-hint .mg-kc {
+  min-width: 17px;
+  height: 17px;
+  padding: 0 3px;
+  font-size: 9px;
+  border-width: 1px;
+  border-radius: 3px;
+  box-shadow: 0 1px 0 currentColor;
+}
+
+.isl-hud .isl-hint .mg-kc--space {
+  min-width: 52px;
 }
 
 /* ---------- Primera persona ---------- */
@@ -535,6 +608,9 @@ body {
 }
 
 .isl-flash {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   position: absolute;
   left: 50%;
   bottom: 64px;
@@ -550,6 +626,13 @@ body {
 
 .isl-flash.is-on {
   opacity: 1;
+}
+
+/* Compu angosta: la tira de controles ocupa todo el ancho y las reacciones suben. */
+@media (pointer: fine) and (max-width: 1050px) {
+  .isl-emotes {
+    bottom: 52px;
+  }
 }
 
 /* Celular: SALTAR a la derecha y las reacciones encima. */

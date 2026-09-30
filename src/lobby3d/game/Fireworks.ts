@@ -50,6 +50,9 @@ export class Fireworks {
   private readonly confetti: THREE.InstancedMesh;
   private readonly confettiState: Float32Array;
   private active = false;
+  /** Avisos para el sonido (el Hub los engancha a `Sounds`). */
+  onLaunch: () => void = () => {};
+  onBurst: () => void = () => {};
   private launchTimer = 0;
   private readonly m = new THREE.Matrix4();
   private readonly q = new THREE.Quaternion();
@@ -136,9 +139,11 @@ export class Fireworks {
     b.age = 0;
     b.rising = true;
     b.points.visible = true;
+    this.onLaunch();
   }
 
   private explode(b: Burst): void {
+    this.onBurst();
     b.rising = false;
     b.age = 0;
     b.mat.color.set(COLORS[Math.floor(Math.random() * COLORS.length)]);

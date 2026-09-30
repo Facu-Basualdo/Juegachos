@@ -115,8 +115,23 @@ export function seatColor(seat: number): string {
   return SEAT_COLORS[((seat % SEAT_COLORS.length) + SEAT_COLORS.length) % SEAT_COLORS.length];
 }
 
-/** Reacciones (texto, sin emojis): teclas 1-4 o el boton en el celu. */
-export const EMOTES = ["Hola", "GG", "Jaja", "Vamos"];
+/**
+ * Reacciones: las mismas cinco de Bomba Palabra / Cadena de Palabras, con sus audios
+ * (`public/sfx/emotes/<id>.mp3`). Teclas 1-5 o los botones. El indice es lo que viaja
+ * por la red (`lb:emote.e`), asi que **el orden no se cambia**; el server acepta 0..7.
+ * Sin emojis: la cara se dibuja en canvas (`emoteFaceTexture`).
+ */
+export const EMOTES = [
+  { id: "risa", label: "Risa" },
+  { id: "sorpresa", label: "Sorpresa" },
+  { id: "enojo", label: "Enojo" },
+  { id: "burla", label: "Burla" },
+  { id: "llanto", label: "Llanto" },
+] as const;
+
+export type EmoteId = (typeof EMOTES)[number]["id"];
+/** Cooldown de las reacciones (el server tiene el suyo de 0.9 s y descarta el resto). */
+export const EMOTE_COOLDOWN_MS = 1000;
 /** Cuanto dura el globo de una reaccion. */
 export const EMOTE_MS = 2600;
 
