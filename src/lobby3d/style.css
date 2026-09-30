@@ -1,0 +1,578 @@
+/* La Isla: HUD crema con borde de tinta sobre la escena (ver DESIGN.md). */
+
+:root {
+  --isl-ink: #173042;
+  --isl-cream: #fff8ea;
+  --isl-sun: #ffcf4a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #cfeaf5;
+  font-family: "Archivo", "Trebuchet MS", "Segoe UI", sans-serif;
+  color: var(--isl-ink);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+.isl-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.isl-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.isl-hud > * {
+  pointer-events: auto;
+}
+
+/* ---------- Barra de arriba ---------- */
+.isl-top {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px 7px 14px;
+  background: var(--isl-cream);
+  border: 2.5px solid var(--isl-ink);
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 3px 0 var(--isl-ink);
+}
+
+.isl-top__code {
+  text-transform: uppercase;
+}
+
+.isl-top__phase {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--isl-ink);
+  color: var(--isl-cream);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.isl-top__phase:empty {
+  display: none;
+}
+
+.isl-top__clock {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.isl-top__home {
+  margin-left: 6px;
+  padding: 4px 12px;
+  border: 2px solid var(--isl-ink);
+  border-radius: 999px;
+  color: var(--isl-ink);
+  text-decoration: none;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.isl-top__clock:empty + .isl-top__home {
+  margin-left: auto;
+}
+
+/* ---------- Panel de la fase ---------- */
+.isl-panel {
+  position: absolute;
+  top: 64px;
+  left: 12px;
+  width: 340px;
+  max-height: calc(100% - 120px);
+  display: flex;
+  flex-direction: column;
+  background: var(--isl-cream);
+  border: 2.5px solid var(--isl-ink);
+  border-radius: 18px;
+  box-shadow: 0 4px 0 var(--isl-ink);
+  overflow: hidden;
+}
+
+.isl-panel__toggle {
+  align-self: flex-end;
+  margin: 8px 10px 0 0;
+  padding: 3px 10px;
+  border: 2px solid var(--isl-ink);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--isl-ink);
+  cursor: pointer;
+}
+
+.isl-panel__body {
+  padding: 0 16px 16px;
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+
+.isl-panel.is-collapsed .isl-panel__body > :not(.isl-kicker):not(.isl-title) {
+  display: none;
+}
+
+.isl-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.isl-title {
+  margin: 2px 0 10px;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.isl-sub {
+  margin: 12px 0 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.isl-text {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.isl-hint-text {
+  margin: 6px 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  opacity: 0.8;
+}
+
+.isl-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.isl-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 2px solid rgba(23, 48, 66, 0.18);
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.isl-row.is-me {
+  border-color: var(--isl-ink);
+  background: #fff1c9;
+}
+
+.isl-row__rank {
+  min-width: 18px;
+  font-weight: 900;
+  opacity: 0.6;
+}
+
+.isl-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.isl-row__value {
+  font-weight: 900;
+  text-align: right;
+}
+
+.isl-row__value small {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.isl-row--vote {
+  cursor: pointer;
+  border-left: 6px solid var(--accent, #4dabf7);
+}
+
+.isl-row--vote:hover {
+  border-color: var(--isl-ink);
+  border-left-color: var(--accent, #4dabf7);
+}
+
+.isl-thumb {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 2px solid var(--isl-ink);
+}
+
+.isl-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #b9b3a6;
+  flex: none;
+}
+
+.isl-dot.is-on {
+  background: #37b24d;
+}
+
+.isl-tag {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.isl-kick {
+  padding: 2px 8px;
+  border: 2px solid var(--isl-ink);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--isl-ink);
+  cursor: pointer;
+}
+
+.isl-choices {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.isl-choice {
+  min-width: 38px;
+  padding: 6px 10px;
+  border: 2px dashed var(--isl-ink);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-weight: 800;
+  color: var(--isl-ink);
+  cursor: pointer;
+}
+
+.isl-choice.is-on {
+  border-style: solid;
+  background: var(--isl-ink);
+  color: var(--isl-cream);
+}
+
+.isl-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.isl-actions--inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin: 0 0 4px;
+}
+
+.isl-btn {
+  padding: 11px 16px;
+  border: 2.5px solid var(--isl-ink);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--isl-ink);
+  cursor: pointer;
+}
+
+.isl-btn--small {
+  padding: 5px 12px;
+  font-size: 11px;
+}
+
+.isl-btn--primary {
+  background: var(--isl-ink);
+  color: var(--isl-cream);
+}
+
+.isl-btn--primary:hover:not(:disabled) {
+  background: var(--isl-sun);
+  color: var(--isl-ink);
+}
+
+.isl-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.isl-count {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.isl-howto {
+  margin-bottom: 6px;
+}
+
+/* ---------- Avisos, joystick y botones ---------- */
+.isl-notice {
+  position: absolute;
+  left: 50%;
+  top: 62px;
+  transform: translateX(-50%);
+  max-width: min(420px, calc(100% - 24px));
+  padding: 6px 14px;
+  background: var(--isl-cream);
+  border: 2px solid var(--isl-ink);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.isl-stick {
+  position: absolute;
+  display: none;
+  width: 104px;
+  height: 104px;
+  margin: -52px 0 0 -52px;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  background: rgba(23, 48, 66, 0.18);
+  pointer-events: none !important;
+}
+
+.isl-stick__knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border-radius: 50%;
+  background: var(--isl-cream);
+  border: 3px solid var(--isl-ink);
+}
+
+.isl-controls {
+  position: absolute;
+  right: 16px;
+  bottom: 18px;
+  display: none;
+}
+
+.isl-jump {
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  border: 3px solid var(--isl-ink);
+  background: var(--isl-sun);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--isl-ink);
+  box-shadow: 0 4px 0 var(--isl-ink);
+  touch-action: none;
+}
+
+.isl-emotes {
+  position: absolute;
+  right: 12px;
+  bottom: 14px;
+  display: flex;
+  gap: 6px;
+}
+
+.isl-emote {
+  padding: 6px 12px;
+  border: 2px solid var(--isl-ink);
+  border-radius: 999px;
+  background: var(--isl-cream);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--isl-ink);
+  cursor: pointer;
+}
+
+.isl-emote kbd {
+  margin-right: 5px;
+  font: inherit;
+  opacity: 0.5;
+}
+
+.isl-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 248, 234, 0.8);
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none !important;
+}
+
+/* ---------- Primera persona ---------- */
+.isl-crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 2px rgba(23, 48, 66, 0.55);
+  pointer-events: none !important;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.isl-crosshair.is-target {
+  transform: scale(2.2);
+  background: var(--isl-sun);
+}
+
+.isl-lockhint {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 22px);
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(23, 48, 66, 0.72);
+  color: var(--isl-cream);
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none !important;
+}
+
+.isl-lockhint.is-hidden {
+  display: none;
+}
+
+.isl-flash {
+  position: absolute;
+  left: 50%;
+  bottom: 70px;
+  transform: translate(-50%, 10px);
+  padding: 8px 20px;
+  border: 2.5px solid var(--isl-ink);
+  border-radius: 18px;
+  background: #ffffff;
+  font-size: 20px;
+  font-weight: 900;
+  opacity: 0;
+  pointer-events: none !important;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.isl-flash.is-on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* Celular: panel abajo, SALTAR a la derecha y las reacciones encima. */
+@media (pointer: coarse) {
+  .isl-controls {
+    display: block;
+  }
+
+  .isl-emotes {
+    right: 12px;
+    bottom: 118px;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .isl-emote kbd,
+  .isl-hint,
+  .isl-lockhint {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .isl-top {
+    font-size: 11px;
+  }
+
+  .isl-top__clock {
+    white-space: nowrap;
+  }
+}
+
+/* Angosto: la fase ya la dice el panel, la barra se queda con sala y reloj. */
+@media (max-width: 480px) {
+  .isl-top__phase {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+
+  .isl-panel {
+    top: auto;
+    bottom: 12px;
+    left: 10px;
+    width: min(340px, calc(100% - 128px));
+    max-height: 40%;
+  }
+
+  .isl-title {
+    font-size: 18px;
+  }
+
+  .isl-notice {
+    top: 58px;
+  }
+}

@@ -272,6 +272,23 @@ a {
   border-color: var(--ink);
 }
 
+/* Sala 3D: mismo boton ancho, con el cielo de la Isla (ver src/lobby3d/DESIGN.md). */
+.btn--island {
+  width: 100%;
+  margin-top: 12px;
+  padding: 16px 20px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #173042;
+  background: linear-gradient(180deg, #9fd8f2 0%, #ffd9a8 100%);
+  border-color: var(--ink);
+}
+
+.btn--island:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ffd9a8 0%, #9fd8f2 100%);
+  color: #173042;
+}
+
 /* ---------- Choices (pills punteadas) ---------- */
 .choices {
   display: flex;

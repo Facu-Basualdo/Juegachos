@@ -22,6 +22,7 @@ export const meta: GameEntry = {
   order: 1020,
   added: "2026-09-25",
   mobile: true,
+  roomsOnly: true,
   /**
    * El server corta solo a los 120s (para entonces la lava ya paso la cima), y la
    * lava alcanza sola a cualquiera que se quede quieto. Esto es la red por si el

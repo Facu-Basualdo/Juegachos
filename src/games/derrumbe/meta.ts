@@ -21,6 +21,7 @@ export const meta: GameEntry = {
   order: 990,
   added: "2026-09-24",
   mobile: true,
+  roomsOnly: true,
   /**
    * El server termina la partida solo (queda uno en pie, o el tope de 120s, y el
    * piso se pudre a partir de los 40s), asi que en teoria esto sobra, como en

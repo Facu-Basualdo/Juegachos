@@ -10,6 +10,7 @@ export const meta: GameEntry = {
   // Volvio al roster (arreglado) en esta fecha; habia entrado el 2026-07-27 y se retiro.
   added: "2026-09-25",
   mobile: true,
+  roomsOnly: true,
 
   order: 950,
   controls: "Mouse o dedo para dibujar (con deshacer), teclado para escribir y adivinar.",

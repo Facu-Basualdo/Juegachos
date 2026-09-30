@@ -22,6 +22,7 @@ export const meta: GameEntry = {
   added: "2026-09-24",
   // Sin probar en un telefono todavia: en iOS abrir el micro cambia la salida de audio.
   mobile: false,
+  roomsOnly: true,
 };
 
 // El puntaje de sala es el puesto (`jugadores - puesto`), que depende de cuantos

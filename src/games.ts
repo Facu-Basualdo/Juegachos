@@ -49,6 +49,14 @@ export interface GameEntry {
    * pero seguir mostrándolo en la landing. Para juegos que no van bien en multijugador. */
   roomsHidden?: boolean;
   /**
+   * El juego existe solo en salas (necesita la sala y el game server; fuera de una
+   * sala muestra "Solo en salas"). Es lo que arma la galeria de la Isla (la sala
+   * 3D, `src/lobby3d/`): sus portadas son los portales, y las votaciones de una
+   * sala 3D sortean solo entre estos juegos. Un juego rooms-only nuevo tiene que
+   * declararlo para aparecer ahi.
+   */
+  roomsOnly?: boolean;
+  /**
    * Tope de tiempo de la ronda **en modo sala**, en segundos. Solo lo declaran los
    * juegos que sin reloj no terminan nunca (o se estiran demasiado): al vencer, cada
    * jugador reporta su parcial y la ronda cierra. Sin este campo la ronda no tiene

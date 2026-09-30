@@ -20,6 +20,7 @@ export const meta: GameEntry = {
   order: 970,
   added: "2026-08-20",
   mobile: true,
+  roomsOnly: true,
   /**
    * El server termina la ronda solo a los 45s pase lo que pase, asi que en teoria
    * esto sobra (como en Basta o Impostor). Esta igual como red: si el server se

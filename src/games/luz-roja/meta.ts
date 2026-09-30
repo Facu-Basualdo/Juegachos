@@ -20,6 +20,7 @@ export const meta: GameEntry = {
   order: 1000,
   added: "2026-09-25",
   mobile: true,
+  roomsOnly: true,
   /**
    * El server corta solo a los 45s (al que no cruzo lo elimina), asi que esto es
    * la red por si el server se cae DESPUES de largar: 45s + congelado + espera del
