@@ -22,6 +22,7 @@ export const meta: GameEntry = {
   order: 1010,
   added: "2026-09-25",
   mobile: true,
+  roomsOnly: true,
   /**
    * El server termina la partida solo (queda uno en pie, se caen todos o se llega a
    * las 20 rondas), asi que esto es la red por si el server se cae DESPUES de

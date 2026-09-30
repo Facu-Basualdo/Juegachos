@@ -496,6 +496,8 @@ export class RoomOverlay {
     roundNo: number;
     totalRounds: number;
     gameTitle: string;
+    /** Id del juego (el overlay no lo usa; la isla 3D si, para su portada). */
+    gameId?: string;
     description: string;
     controls: string;
     /** Como se juega en iconos; si viene, reemplaza a `description` + `controls`. */
@@ -789,3 +791,30 @@ export class RoomOverlay {
     });
   }
 }
+
+/**
+ * Lo que el modo sala le pide a quien dibuja sus fases. El `RoomOverlay` es la
+ * implementacion de siempre (un modal encima de la pagina del juego); la isla 3D
+ * (`src/lobby3d/`) es la otra: las mismas fases, dibujadas en su escena y su HUD.
+ * Asi toda la logica de host / votos / listos / migracion vive una sola vez, en
+ * `roomMode.ts`, y la isla no la duplica.
+ */
+export type RoomPresenter = Pick<
+  RoomOverlay,
+  | "setStrip"
+  | "setTimeText"
+  | "hide"
+  | "showWaiting"
+  | "showResults"
+  | "showBriefing"
+  | "showVoting"
+  | "showFinal"
+  | "showSpectator"
+  | "showConnecting"
+  | "showError"
+>;
+
+export type ResultsView = Parameters<RoomOverlay["showResults"]>[0];
+export type BriefingView = Parameters<RoomOverlay["showBriefing"]>[0];
+export type VotingView = Parameters<RoomOverlay["showVoting"]>[0];
+export type FinalView = NonNullable<Parameters<RoomOverlay["showFinal"]>[2]>;

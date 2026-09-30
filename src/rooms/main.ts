@@ -20,6 +20,8 @@ import {
 } from "../shared/room/api";
 import { RoomChannel } from "../shared/room/channel";
 import { RoomOverlay } from "../shared/room/RoomOverlay";
+import { isLobby3d, roomHubUrl } from "../shared/room/hub";
+import { isGameServerConfigured } from "../shared/server-status";
 import {
   BRIEFING_SECONDS,
   pickVoteOptions,
@@ -240,7 +242,43 @@ function renderHome(joinProblem?: string): void {
       renderLobby(code, player);
     })();
   });
-  createPanel.append(visLabel, visChoices, visHint, createBtn, createError);
+  createPanel.append(visLabel, visChoices, visHint, createBtn);
+
+  // Sala 3D (la Isla): mismas reglas, pero entre ronda y ronda todos caminan por
+  // una isla compartida y votan parandose en un portal. Los otros jugadores se ven
+  // por el game server, asi que sin server configurado no se ofrece.
+  if (isGameServerConfigured()) {
+    const create3dBtn = document.createElement("button");
+    create3dBtn.className = "btn btn--island";
+    create3dBtn.type = "button";
+    create3dBtn.textContent = "Crear sala 3D (la Isla)";
+    const hint3d = document.createElement("p");
+    hint3d.className = "hint";
+    hint3d.textContent =
+      "Entre juego y juego caminan todos por una isla flotante y votan el próximo parándose en su portal. Solo juegos de sala.";
+    create3dBtn.addEventListener("click", () => {
+      void (async () => {
+        createError.textContent = "";
+        const player = requireName();
+        if (!player) return;
+        const settings: RoomSettings = {
+          totalRounds: DEFAULT_TOTAL_ROUNDS,
+          playlist: null,
+          lobby3d: true,
+        };
+        create3dBtn.disabled = true;
+        const code = await createRoom(player, settings, visibility);
+        if (!code) {
+          create3dBtn.disabled = false;
+          createError.textContent = "No se pudo crear la sala. Proba de nuevo.";
+          return;
+        }
+        location.href = roomHubUrl(code);
+      })();
+    });
+    createPanel.append(create3dBtn, hint3d);
+  }
+  createPanel.append(createError);
 
   const browsePanel = buildBrowsePanel(requireName, (problem) => {
     joinError.textContent = problem;
@@ -622,6 +660,11 @@ async function joinFlow(
   }
   if (result === "error") return "No se pudo entrar. Proba de nuevo.";
 
+  // Sala 3D: todo pasa en la isla (ella misma manda al juego si hay ronda en curso).
+  if (isLobby3d(state.room.settings)) {
+    location.href = roomHubUrl(code);
+    return null;
+  }
   // Sala ya en juego: rejoin directo a la ronda vigente.
   if (state.room.status !== "lobby" && state.room.current_game) {
     location.href = roomGameUrl(state.room.current_game, code);
@@ -1002,6 +1045,12 @@ function renderLobby(code: string, player: string): void {
       return;
     }
     state = fresh;
+    // Sala 3D (p.ej. un link viejo al lobby comun): su lobby es la isla.
+    if (isLobby3d(fresh.room.settings)) {
+      teardown();
+      location.href = roomHubUrl(code);
+      return;
+    }
     // La sala arranco (quiza desde otra pestana del host): todos adentro.
     if (fresh.room.status !== "lobby" && fresh.room.current_game) {
       location.href = roomGameUrl(fresh.room.current_game, code);

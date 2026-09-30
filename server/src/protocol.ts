@@ -1240,3 +1240,47 @@ export interface LcServerToClient {
   /** A todos: quien empujo (para la animacion de brazos). */
   "lc:pushfx": (msg: { i: number }) => void;
 }
+
+/* ========================== LA ISLA (namespace /lobby) ========================== */
+
+/**
+ * La sala 3D: relay puro de posiciones entre ronda y ronda (ver
+ * `server/src/games/lobby.ts`). Se duplica en `src/lobby3d/game/LobbyProtocol.ts`.
+ */
+export interface LbPos {
+  /** Nickname del emisor (lo pone el server, no el cliente). */
+  p: string;
+  x: number;
+  y: number;
+  z: number;
+  /** Hacia donde mira (radianes, alrededor de Y). */
+  r: number;
+  /** Bits: 1 = apoyado, 2 = caminando. */
+  f: number;
+}
+
+/** Un jugador ya presente en la isla, para el que llega. */
+export interface LbPlayer extends LbPos {
+  /** Accesorio elegido (indice; lo dibuja el cliente). */
+  look: number;
+}
+
+/** Cliente -> Server. */
+export interface LbClientToServer {
+  "lb:join": (msg: { code: string; nickname: string; roster: string[]; look: number }) => void;
+  "lb:pos": (msg: Omit<LbPos, "p">) => void;
+  /** Reaccion (indice del set del cliente). */
+  "lb:emote": (msg: { e: number }) => void;
+}
+
+/** Server -> Cliente. */
+export interface LbServerToClient {
+  /** Al unirse: los que ya estan, con su ultima posicion. */
+  "lb:init": (msg: { players: LbPlayer[] }) => void;
+  /** Alguien entro (todavia sin posicion). */
+  "lb:hi": (msg: { p: string; look: number }) => void;
+  /** Alguien se fue (todos sus sockets). */
+  "lb:bye": (msg: { p: string }) => void;
+  "lb:pos": (msg: LbPos) => void;
+  "lb:emote": (msg: { p: string; e: number }) => void;
+}

@@ -8,6 +8,8 @@ import {
   closeRound,
   fetchRoomState,
   finishRoom,
+  kickPlayer,
+  leaveRoom,
   openVote,
   reportScore,
   resetRoom,
@@ -17,15 +19,18 @@ import {
   takeOverHost,
   touchRoom,
   updateDeadline,
+  updateSettings,
 } from "./api";
 import { RoomChannel, type LiveData } from "./channel";
-import { RoomOverlay, type StripLight, type WaitingEntry } from "./RoomOverlay";
+import { RoomOverlay, type RoomPresenter, type StripLight, type WaitingEntry } from "./RoomOverlay";
+import { HUB_ID, isLobby3d, roomHubUrl, votePool } from "./hub";
 import { computeTotals, rankRound } from "./points";
 import { clearRoomRuns } from "./roomRun";
 import {
   formatRoundTimeLimit,
   HEARTBEAT_MS,
   NO_TIME_LIMIT,
+  type RoomSettings,
   type RoomState,
   type RoomStatus,
 } from "./types";
@@ -254,10 +259,83 @@ export function initRoomMode(gameId: string, hooks: RoomModeHooks): RoomMode | n
   return controller;
 }
 
-class RoomModeController implements RoomMode {
+// ---------- La isla (sala 3D) ----------
+
+/** Lobby de la sala dibujado por la isla (la partida todavia no arranco). */
+export interface HubLobbyView {
+  code: string;
+  me: string;
+  host: string;
+  /** Registrados, en orden de llegada. */
+  players: string[];
+  /** Registrados conectados ahora. */
+  present: string[];
+  totalRounds: number;
+  /** Hay gente suficiente (2+ conectados) para arrancar. */
+  canStart: boolean;
+  /** Solo el host: abre la votacion del primer juego. */
+  onStart: (() => void) | null;
+  /** Solo el host: cambia la cantidad de juegos de la partida. */
+  onSetRounds: ((n: number) => void) | null;
+  /** Solo el host: expulsa a un jugador. */
+  onKick: ((player: string) => void) | null;
+  onLeave: () => void;
+}
+
+/** Presentador de la isla: las fases de siempre mas el lobby, que en la isla es propio. */
+export interface HubPresenter extends RoomPresenter {
+  showLobby(view: HubLobbyView): void;
+}
+
+/** Lo que la escena de la isla lee de la sala (jugadores, fase, ronda). */
+export interface RoomHub {
+  readonly code: string;
+  readonly me: string;
+  players(): string[];
+  presentPlayers(): string[];
+  isHost(): boolean;
+  status(): RoomStatus;
+  /** Ronda vigente (0 en el lobby) y total de la partida: la hora del dia sale de aca. */
+  currentRound(): number;
+  totalRoundsOrZero(): number;
+  /** Se dispara con cada snapshot nuevo de la sala (o cambio de presencia). */
+  onChange(cb: () => void): void;
+}
+
+/**
+ * Arranca el modo sala en la pagina de la isla. Es el mismo orquestador que usa
+ * cada juego (host, votos, listos, migracion de host, heartbeat), con dos
+ * diferencias: dibuja con el presentador de la isla y nunca juega ni reporta; en
+ * `playing` navega al juego y todo lo demas lo muestra ella. null sin `?code=`
+ * o sin Supabase.
+ */
+export function initRoomHub(presenter: HubPresenter): RoomHub | null {
+  const raw = new URLSearchParams(window.location.search).get("code");
+  const code = raw ? sanitizeCode(raw) : null;
+  if (!code || !getSupabase()) return null;
+  const me = getNickname();
+  if (!me) {
+    window.location.href = `/rooms/?code=${code}`;
+    return null;
+  }
+  const controller = new RoomModeController(HUB_ID, code, me, { getScore: () => 0 }, presenter);
+  void controller.boot();
+  return controller;
+}
+
+class RoomModeController implements RoomMode, RoomHub {
   readonly active = true as const;
 
-  private readonly overlay = new RoomOverlay();
+  private readonly overlay: RoomPresenter;
+  /** Presentador de la isla (solo en la pagina de la isla). */
+  private readonly hubView: HubPresenter | null;
+  /** Esta pagina es la isla, no un juego: nunca juega ni reporta. */
+  private readonly hub: boolean;
+  private readonly changeCbs: Array<() => void> = [];
+  /** Ya se esta saliendo hacia otra pagina (reportando el parcial antes). */
+  private leaving = false;
+  /** Lecturas seguidas de la sala que volvieron vacias (la isla sale si se borro). */
+  private missingReads = 0;
   private channel: RoomChannel | null = null;
   private state: RoomState | null = null;
   /** Ronda que esta pagina esta jugando (fijada al cargar). */
@@ -308,11 +386,20 @@ class RoomModeController implements RoomMode {
   private readonly gameSyncCbs: Array<() => void> = [];
   private readonly gameLiveCbs: Array<(player: string, data: LiveData) => void> = [];
 
-  constructor(gameId: string, code: string, me: string, hooks: RoomModeHooks) {
+  constructor(
+    gameId: string,
+    code: string,
+    me: string,
+    hooks: RoomModeHooks,
+    hubView: HubPresenter | null = null,
+  ) {
     this.gameId = gameId;
     this.code = code;
     this.me = me;
     this.hooks = hooks;
+    this.hub = gameId === HUB_ID;
+    this.hubView = hubView;
+    this.overlay = hubView ?? new RoomOverlay();
   }
 
   async boot(): Promise<void> {
@@ -342,9 +429,9 @@ class RoomModeController implements RoomMode {
     }
 
     this.myRound = state.room.current_round;
-    this.reported = state.scores.some(
-      (s) => s.round_no === this.myRound && s.player === this.me,
-    );
+    // La isla no juega: para ella todo esta "reportado" (nunca manda parciales).
+    this.reported =
+      this.hub || state.scores.some((s) => s.round_no === this.myRound && s.player === this.me);
 
     this.channel = new RoomChannel(this.code, this.me);
     this.channel.onSync(() => {
@@ -416,6 +503,20 @@ class RoomModeController implements RoomMode {
     return this.state?.room.status ?? "lobby";
   }
 
+  // ---------- Contexto de la isla ----------
+
+  currentRound(): number {
+    return this.state?.room.current_round ?? 0;
+  }
+
+  totalRoundsOrZero(): number {
+    return this.state ? this.totalRounds() : 0;
+  }
+
+  onChange(cb: () => void): void {
+    this.changeCbs.push(cb);
+  }
+
   // ---------- Estado ----------
 
   private async refresh(): Promise<void> {
@@ -427,7 +528,15 @@ class RoomModeController implements RoomMode {
     this.refreshing = true;
     const state = await fetchRoomState(this.code);
     this.refreshing = false;
-    if (state) this.applyState(state);
+    if (state) {
+      this.missingReads = 0;
+      this.applyState(state);
+    } else if (this.hub && ++this.missingReads >= 3) {
+      // La sala se borro (se vaciaron todos o la purgo alguien). Tres lecturas
+      // seguidas, para no echar a nadie por un corte de red de un poll.
+      this.navigate("/rooms/");
+      return;
+    }
     if (this.refreshQueued) {
       this.refreshQueued = false;
       void this.refresh();
@@ -445,10 +554,22 @@ class RoomModeController implements RoomMode {
     // reusaria la misma clave (ver clearRoomRuns).
     if (room.status === "lobby" || room.status === "finished") clearRoomRuns(this.code);
 
+    for (const cb of this.changeCbs) cb();
+
     if (this.spectator) {
       this.applySpectator(room);
       return;
     }
+
+    if (this.hub) {
+      this.applyHub();
+      return;
+    }
+
+    // Sala 3D: la pagina del juego solo muestra la partida. Lobby, briefing,
+    // resultados, votacion y final se ven en la isla.
+    const lobby3d = isLobby3d(room.settings);
+    const lobbyUrl = lobby3d ? roomHubUrl(this.code) : `/rooms/?code=${this.code}`;
 
     if (room.status === "lobby") {
       // Solo quien todavia no vio el tablero final va directo al lobby. A los que
@@ -456,7 +577,7 @@ class RoomModeController implements RoomMode {
       // sala (incluido el host): se quedan en el tablero final con su propio boton
       // "Volver a la sala". El que apreto el boton se navega solo (returnToLobby).
       if (!this.finalShown) {
-        this.navigate(`/rooms/?code=${this.code}`);
+        this.navigate(lobbyUrl);
         return;
       }
       if (!this.lobbyReturnRendered) {
@@ -465,11 +586,16 @@ class RoomModeController implements RoomMode {
         this.overlay.showFinal(this.finalTotals ?? [], this.me, {
           hostAction: {
             label: "Volver a la sala",
-            onClick: () => this.navigate(`/rooms/?code=${this.code}`),
+            onClick: () => this.navigate(lobbyUrl),
           },
           waitingText: null,
         });
       }
+      return;
+    }
+    if (lobby3d && room.status !== "playing") {
+      // Si la ronda se cerro con el jugador todavia vivo, el parcial sale antes.
+      void this.leaveForCurrentRound(lobbyUrl);
       return;
     }
     if (room.status === "finished") {
@@ -572,6 +698,137 @@ class RoomModeController implements RoomMode {
   }
 
   /**
+   * La isla sigue a la sala sin jugar nunca: en `playing` navega al juego de la
+   * ronda y el resto de las fases las dibuja ella (con la misma logica de host que
+   * los juegos). A diferencia de la pagina de un juego, la isla sobrevive a varias
+   * partidas seguidas, asi que al volver al lobby limpia lo que se latcheo por
+   * ronda (la revancha vuelve a numerar desde 1 y reusaria las mismas claves).
+   */
+  private applyHub(): void {
+    const state = this.state!;
+    const room = state.room;
+
+    // El anfitrion me expulso (o la sala se reseteo sin mi): afuera, sin el ?code
+    // para que /rooms/ no me vuelva a meter solo.
+    if (!state.players.includes(this.me)) {
+      this.navigate("/rooms/");
+      return;
+    }
+
+    switch (room.status) {
+      case "lobby":
+        if (this.finalShown) {
+          // Otro volvio a la sala: yo sigo mirando el final hasta que quiera.
+          if (!this.lobbyReturnRendered) {
+            this.lobbyReturnRendered = true;
+            this.overlay.showFinal(this.finalTotals ?? [], this.me, {
+              hostAction: {
+                label: "Volver a la sala",
+                onClick: () => {
+                  this.resetHubMatch();
+                  this.applyState();
+                },
+              },
+              waitingText: null,
+            });
+          }
+          return;
+        }
+        this.resetHubMatch();
+        this.renderHubLobby();
+        return;
+      case "finished":
+        if (!this.finalRendered) {
+          this.finalRendered = true;
+          this.finalShown = true;
+          if (!this.finalTotals) this.finalTotals = computeTotals(state);
+          this.overlay.showFinal(this.finalTotals, this.me, {
+            hostAction: { label: "Volver a la sala", onClick: () => void this.returnToLobby() },
+            waitingText: null,
+          });
+        }
+        break;
+      case "playing":
+        if (room.current_game) this.navigate(roomGameUrl(room.current_game, this.code));
+        return;
+      case "briefing":
+        this.renderBriefing();
+        break;
+      case "results":
+        this.renderResults();
+        break;
+      case "voting":
+        this.renderVoting();
+        break;
+    }
+    this.maybeTakeOverHost();
+  }
+
+  /** Olvida lo latcheado de la partida anterior (ver `applyHub`). */
+  private resetHubMatch(): void {
+    this.finalShown = false;
+    this.finalRendered = false;
+    this.lobbyReturnRendered = false;
+    this.finalTotals = null;
+    this.voteScheduledForRound = 0;
+    this.compressedVoteKey = "";
+  }
+
+  private renderHubLobby(): void {
+    const state = this.state!;
+    const room = state.room;
+    const host = this.isHost();
+    const present = this.presentPlayers();
+    this.hubView!.showLobby({
+      code: this.code,
+      me: this.me,
+      host: room.host,
+      players: state.players,
+      present,
+      totalRounds: room.settings.totalRounds,
+      canStart: present.length >= 2 && !this.actionInFlight,
+      onStart: host ? () => void this.hubStart() : null,
+      onSetRounds: host ? (n) => void this.hubSetRounds(n) : null,
+      onKick: host ? (p) => void this.hubKick(p) : null,
+      onLeave: () => void this.hubLeave(),
+    });
+  }
+
+  /** El host arranca la partida: se vota el primer juego, en la isla misma. */
+  private async hubStart(): Promise<void> {
+    const state = this.state;
+    if (!state || !this.isHost() || state.room.status !== "lobby") return;
+    if (this.presentPlayers().length < 2) return;
+    const options = pickVoteOptions(state.room.settings);
+    const deadline = new Date(Date.now() + VOTE_SECONDS * 1000);
+    await this.hostAction(() => openVote(this.code, options, deadline));
+  }
+
+  private async hubSetRounds(totalRounds: number): Promise<void> {
+    const state = this.state;
+    if (!state || !this.isHost() || state.room.status !== "lobby") return;
+    const settings: RoomSettings = { ...state.room.settings, totalRounds, playlist: null };
+    await this.hostAction(() => updateSettings(this.code, settings));
+  }
+
+  private async hubKick(player: string): Promise<void> {
+    if (!this.isHost() || player === this.me) return;
+    await this.hostAction(() => kickPlayer(this.code, player));
+  }
+
+  /** Salir de la sala desde la isla: libera el lugar (y la hereda otro si era el host). */
+  private async hubLeave(): Promise<void> {
+    await leaveRoom(this.code, this.me);
+    this.channel?.ping();
+    this.navigate("/rooms/");
+  }
+
+  /** Juego de la ronda que se esta mostrando: el de la pagina, o el de la sala en la isla. */
+  private roundGame(): string {
+    return this.hub ? (this.state?.room.current_game ?? "") : this.gameId;
+  }
+
+  /**
    * Arranca la partida en cuanto la ronda esta "playing" (una sola vez por
    * pagina), asi todos empiezan juntos sin tocar Enter. Los juegos que no pasan
    * `onStart` siguen esperando el input manual.
@@ -594,13 +851,20 @@ class RoomModeController implements RoomMode {
     void this.submitScore(this.hooks.getScore(), false);
   }
 
-  /** Reporta el parcial si hacia falta y navega a la ronda vigente. */
-  private async leaveForCurrentRound(): Promise<void> {
+  /**
+   * Reporta el parcial si hacia falta y navega a la ronda vigente (o a `url`). Se
+   * llama en cada snapshot mientras la pagina quede vieja, asi que la primera
+   * llamada se queda con la salida: sin eso, la segunda encontraba el reporte en
+   * vuelo, se salteaba el await y navegaba antes de que el parcial se escribiera.
+   */
+  private async leaveForCurrentRound(url?: string): Promise<void> {
+    if (this.leaving) return;
+    this.leaving = true;
     const room = this.state!.room;
     if (!this.reported && this.myRound > 0) {
       await this.submitScore(this.hooks.getScore(), false);
     }
-    this.navigate(roomGameUrl(room.current_game ?? "", this.code));
+    this.navigate(url ?? roomGameUrl(room.current_game ?? "", this.code));
   }
 
   private async submitScore(
@@ -608,8 +872,8 @@ class RoomModeController implements RoomMode {
     finished: boolean,
     rankOpts?: RoomReportOpts,
   ): Promise<void> {
-    // Un espectador no puntua nunca (no esta registrado en la sala).
-    if (this.spectator) return;
+    // Un espectador no puntua nunca (no esta registrado en la sala), y la isla no juega.
+    if (this.spectator || this.hub) return;
     // Red de seguridad contra la partida largada antes de tiempo: si MI ronda
     // todavia no arranco (la sala esta en su briefing, o ni siquiera se leyo el
     // estado), el puntaje no vale y se descarta. Sin latchear `reported`, asi
@@ -776,7 +1040,7 @@ class RoomModeController implements RoomMode {
     const players = state?.players ?? [this.me];
 
     // Orden tipo tabla en vivo: los que ya terminaron primero, por puntaje.
-    const ranked = rankRound(this.gameId, players, roundScores);
+    const ranked = rankRound(this.roundGame(), players, roundScores);
     const rankOf = new Map(ranked.map((r, i) => [r.player, i]));
 
     const entries: WaitingEntry[] = players.map((player) => {
@@ -785,7 +1049,7 @@ class RoomModeController implements RoomMode {
         return {
           player,
           state: "done",
-          scoreText: formatScore(this.gameId, s.score) + (s.finished ? "" : " parcial"),
+          scoreText: formatScore(this.roundGame(), s.score) + (s.finished ? "" : " parcial"),
         };
       }
       return { player, state: present.includes(player) ? "playing" : "offline" };
@@ -806,13 +1070,13 @@ class RoomModeController implements RoomMode {
   private renderResults(): void {
     const state = this.state!;
     const room = state.room;
-    const ranked = rankRound(this.gameId, state.players, this.roundScores());
+    const ranked = rankRound(this.roundGame(), state.players, this.roundScores());
 
     // En juegos "lower" el parcial de quien no llego a terminar no significa nada
     // (rankRound ya los empata a todos detras de los que terminaron): mostrarlo
     // formateado daba numeros de fantasia como "9999 ms" o "3 mov" para alguien
     // que ni resolvio el tablero. Se muestra "sin terminar" en su lugar.
-    const partialIsReal = getDirection(this.gameId) === "higher";
+    const partialIsReal = getDirection(this.roundGame()) === "higher";
 
     const rows = ranked.map((r) => ({
       rank: r.rank,
@@ -821,9 +1085,9 @@ class RoomModeController implements RoomMode {
         r.score === null
           ? "sin jugar"
           : r.finished
-            ? formatScore(this.gameId, r.score)
+            ? formatScore(this.roundGame(), r.score)
             : partialIsReal
-              ? `${formatScore(this.gameId, r.score)} (parcial)`
+              ? `${formatScore(this.roundGame(), r.score)} (parcial)`
               : "sin terminar",
       points: r.points,
     }));
@@ -854,7 +1118,7 @@ class RoomModeController implements RoomMode {
     this.overlay.showResults({
       roundNo: room.current_round,
       totalRounds: this.totalRounds(),
-      gameTitle: this.gameTitle(this.gameId),
+      gameTitle: this.gameTitle(this.roundGame()),
       rows,
       totals: computeTotals(state),
       me: this.me,
@@ -878,6 +1142,8 @@ class RoomModeController implements RoomMode {
 
     this.overlay.showVoting({
       round: voteRound,
+      // Sin ronda jugada todavia es la votacion del primer juego (la de la isla).
+      ...(room.current_round === 0 ? { kicker: "Primera ronda", title: "Elegi el primer juego" } : {}),
       options: optionIds.map((id) => {
         const game = games.find((g) => g.id === id);
         return { id, title: game?.title ?? id, accent: game?.accent, cover: coverUrl(id) };
@@ -900,7 +1166,7 @@ class RoomModeController implements RoomMode {
     const state = this.state!;
     const room = state.room;
     const round = room.current_round;
-    const game = games.find((g) => g.id === this.gameId);
+    const game = games.find((g) => g.id === this.roundGame());
 
     const ready = new Set(
       state.votes
@@ -910,13 +1176,14 @@ class RoomModeController implements RoomMode {
     const readyCount = state.players.filter((p) => ready.has(p)).length;
     const isHost = this.isHost();
 
-    const limit = roomTimeLimitFor(this.gameId);
+    const limit = roomTimeLimitFor(this.roundGame());
 
     this.overlay.showBriefing({
       round,
       roundNo: room.current_round,
       totalRounds: this.totalRounds(),
-      gameTitle: this.gameTitle(this.gameId),
+      gameTitle: this.gameTitle(this.roundGame()),
+      gameId: this.roundGame(),
       description: game?.description ?? "",
       controls: game?.controls ?? "",
       howTo: game?.howTo,
@@ -1009,7 +1276,7 @@ class RoomModeController implements RoomMode {
         if (!fresh || fresh.room.status !== "results" || fresh.room.host !== this.me) return;
         if (fresh.room.current_round !== round) return;
         this.state = fresh;
-        const options = pickVoteOptions();
+        const options = pickVoteOptions(fresh.room.settings);
         const deadline = new Date(Date.now() + VOTE_SECONDS * 1000);
         await this.hostAction(() => openVote(this.code, options, deadline));
       })();
@@ -1123,6 +1390,12 @@ class RoomModeController implements RoomMode {
    * lo apreto directo al lobby, sin tener que esperar a que el lider vuelva.
    */
   private async returnToLobby(): Promise<void> {
+    if (this.hub) {
+      // La isla ya es la sala: se queda y muestra el lobby de la revancha.
+      this.resetHubMatch();
+      await this.hostAction(() => resetRoom(this.code));
+      return;
+    }
     await this.hostAction(() => resetRoom(this.code));
     this.navigate(`/rooms/?code=${this.code}`);
   }
@@ -1188,8 +1461,9 @@ export const VOTE_OPTION_COUNT = 5;
  * la ronda recien terminada) si lo votan. Los candidatos de una misma votacion
  * si son distintos entre si.
  */
-export function pickVoteOptions(): string[] {
-  const pool = roomGames.map((g) => g.id);
+export function pickVoteOptions(settings?: RoomSettings | null): string[] {
+  // En una sala 3D solo se vota entre los juegos de la isla (ver hub.ts).
+  const pool = votePool(settings).map((g) => g.id);
 
   const picked: string[] = [];
   while (picked.length < VOTE_OPTION_COUNT && pool.length > 0) {
