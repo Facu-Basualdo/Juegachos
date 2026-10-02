@@ -1300,3 +1300,128 @@ export interface LbServerToClient {
   /** Nuevo record de la sala: la corona cambia de dueño. */
   "lb:crown": (msg: LbCrown) => void;
 }
+
+/* ========================== POOLNIGHT (namespace /poolnight, prefijo bi:) ========================== */
+
+/**
+ * Pool 1v1 / 2v2 / 4v4 (ver `server/src/games/pool.ts` y `src/games/poolnight/CLAUDE.md`).
+ * El server arbitra: guarda las bolas y las reglas, resuelve cada tiro de una vez con
+ * `simulateShot` y manda a todos el desenlace como TRAMOS de movimiento analiticos
+ * (`bi:play`); el cliente solo los evalua, no decide nada. Se duplica en el cliente de
+ * Pool. Toda hora (`now`, `startAt`, `deadline`...) es del reloj del SERVER, en ms.
+ */
+export type BiPhase = "waiting" | "playing" | "over";
+
+export interface BiSeat {
+  team: 0 | 1;
+  /** Nickname del humano, o null si es un bot de relleno. */
+  nickname: string | null;
+  /** Juega un bot por este asiento (relleno, desconectado o AFK). */
+  bot: boolean;
+  /** El humano esta conectado ahora. */
+  on: boolean;
+}
+
+export interface BiState {
+  phase: BiPhase;
+  /** Jugadores por equipo: 1, 2 o 4. */
+  perTeam: 1 | 2 | 4;
+  /** El asiento `s` es `slot * 2 + equipo`: A1, B1, A2, B2... */
+  seats: BiSeat[];
+  /** Las 16 bolas (0 = blanca) aplanadas: [x, z, vivo (0 o 1), ...]. Vacio antes de la largada. */
+  balls: number[];
+  /** Asiento al que le toca actuar; -1 si no hay (esperando o terminada). */
+  shooter: number;
+  /** El que tira puede mover la blanca (rotura o falta del rival). */
+  cueInHand: boolean;
+  breakShot: boolean;
+  /** Bolas que le quedan en la mesa a cada grupo (equipo 0: lisas, equipo 1: rayadas). */
+  groupsLeft: [number, number];
+  /** Desde esta hora el tirador puede actuar; vence en `deadline`; la partida se corta en `capAt`. */
+  turnStartAt: number;
+  deadline: number;
+  capAt: number;
+  /** Hora del server al armar este mensaje (para estimar el desfase de reloj). */
+  now: number;
+  /** Cantidad de tiros resueltos hasta ahora. */
+  shots: number;
+  winner: 0 | 1 | null;
+  endReason: "eight" | "early_eight" | "scratch_eight" | "cap" | null;
+  /** Puesto de cada equipo (ganador 1, perdedor 2, empate 1 y 1); solo con la partida terminada. */
+  places: [number, number] | null;
+}
+
+/**
+ * Un tramo de movimiento de una bola, desde `t` (s desde `startAt`) hasta el proximo
+ * tramo de la misma bola: [bola, t, x, z, vx, vz, wx, wy, wz, fase], con fase 0 = quieta,
+ * 1 = deslizando, 2 = rodando, 3 = embocada. Solo viajan las bolas que se movieron.
+ */
+export type BiSegment = [number, number, number, number, number, number, number, number, number, number];
+
+/** Un evento sonoro / visual: [t, tipo, bolaA, bolaB, velocidad, x, z], tipo 0 = taco, 1 = bola, 2 = banda, 3 = tronera. */
+export type BiEvent = [number, number, number, number, number, number, number];
+
+export interface BiPlay {
+  /** Numero de tiro (1, 2, 3...). */
+  id: number;
+  seat: number;
+  /** Hora del server en que todos arrancan la animacion. */
+  startAt: number;
+  /** Duracion de la animacion (s). */
+  dur: number;
+  segs: BiSegment[];
+  ev: BiEvent[];
+  foul: "scratch" | "no_contact" | null;
+  /** Ids embocados: de su grupo, del grupo rival. */
+  own: number[];
+  opp: number[];
+  /** La 8 cayo y decidio (no cuenta la de la rotura, que vuelve a la mesa). */
+  eight: boolean;
+  respot: boolean;
+  continues: boolean;
+  /** Proximo tirador; -1 si la partida termino. */
+  next: number;
+  hand: boolean;
+  ended: { winner: 0 | 1 | null; reason: "eight" | "early_eight" | "scratch_eight" | "cap" } | null;
+  nextTurnAt: number;
+  /** El estado DESPUES del tiro. El cliente lo adopta recien cuando termina de animar. */
+  state: BiState;
+}
+
+export type BiRejectReason =
+  | "not_your_turn"
+  | "too_early"
+  | "bad_spot"
+  | "cue_not_placed"
+  | "not_in_hand"
+  | "bad_shot"
+  | "not_playing"
+  | "ended";
+
+/** Cliente -> Server. */
+export interface BiClientToServer {
+  "bi:join": (msg: { code: string; nickname: string; roster: string[]; round: number }) => void;
+  /** Mientras apunta: angulo (rad, atan2(z, x)) y potencia (0-1). Cosmetico: se reenvia a los demas. */
+  "bi:aim": (msg: { a: number; p: number }) => void;
+  /** Acomoda la blanca (rotura o blanca en mano). */
+  "bi:place": (msg: { x: number; z: number }) => void;
+  /** Tira. `x`, `z` (opcionales) apoyan la blanca antes si esta en mano, en un solo paso. */
+  "bi:shot": (msg: { a: number; p: number; ox: number; oy: number; x?: number; z?: number }) => void;
+  /** Medir el reloj del server. */
+  "bi:ping": (msg: { c: number }) => void;
+}
+
+/** Server -> Cliente. */
+export interface BiServerToClient {
+  /** Al unirse: mi asiento (-1 si miro) y el estado. */
+  "bi:init": (msg: { seat: number; state: BiState }) => void;
+  "bi:state": (msg: BiState) => void;
+  "bi:play": (msg: BiPlay) => void;
+  /** Quien esta apuntando (`s` = asiento). El propio se ignora. */
+  "bi:aim": (msg: { s: number; a: number; p: number }) => void;
+  /** Donde esta la blanca mientras se acomoda. */
+  "bi:cue": (msg: { x: number; z: number }) => void;
+  /** Dirigido: la accion no valia. */
+  "bi:reject": (msg: { why: BiRejectReason }) => void;
+  "bi:pong": (msg: { c: number; t: number }) => void;
+}
