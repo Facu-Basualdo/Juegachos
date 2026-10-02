@@ -1,0 +1,525 @@
+/*
+ * Poolnight. Ver DESIGN.md ("Paño y Humo"): un salon a oscuras con un solo rectangulo
+ * encendido. El HUD es chico, oscuro y calido; el neon (ambar) solo se usa para el nombre.
+ */
+
+:root {
+  color-scheme: dark;
+  --night: #07080b;
+  --panel: rgba(14, 9, 6, 0.78);
+  --edge: rgba(255, 181, 74, 0.22);
+  --text: #fff1cf;
+  --muted: rgba(255, 241, 207, 0.6);
+  --amber: #ffb54a;
+  --danger: #ff6a5c;
+  --good: #8fe0a0;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--night);
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  color: var(--text);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+.game-canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.back-link {
+  position: absolute;
+  bottom: 14px;
+  left: 16px;
+  z-index: 40;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.pn {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pn [hidden] {
+  display: none !important;
+}
+
+/* Un aliento sobre la imagen: viñeta calida que se come las esquinas. */
+.pn__vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(4, 2, 1, 0.62) 100%);
+}
+
+.pn__logo {
+  position: absolute;
+  top: 10px;
+  left: 18px;
+  font: italic 700 30px "Brush Script MT", "Segoe Script", "Lucida Handwriting", cursive;
+  color: #fff1cf;
+  text-shadow:
+    0 0 6px var(--amber),
+    0 0 16px #ff9d2e,
+    0 0 34px #ff7a1f;
+  letter-spacing: 1px;
+}
+
+/* ---- equipos ---- */
+
+/* La barra de la sala (codigo, ronda y reloj) ocupa los ~34 px de arriba: el HUD empieza abajo. */
+.pn__teams {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+}
+
+.pn-team {
+  min-width: 150px;
+  padding: 7px 10px 8px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-top: 3px solid var(--team);
+  border-radius: 4px;
+}
+
+.pn-team__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--team);
+}
+
+.pn-team__left {
+  font-size: 18px;
+  color: var(--text);
+}
+
+.pn-team__players {
+  list-style: none;
+  margin: 4px 0 6px;
+}
+
+.pn-p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  padding: 1px 0;
+  color: var(--muted);
+}
+
+.pn-p--me .pn-p__name {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.pn-p--turn .pn-p__name::before {
+  content: "\25B8 ";
+  color: var(--team);
+}
+
+.pn-p--turn {
+  color: var(--text);
+}
+
+.pn-p--off {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.pn-p__bot {
+  font-size: 9px;
+  letter-spacing: 1px;
+  padding: 1px 4px;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  color: var(--muted);
+}
+
+.pn-team__balls {
+  display: flex;
+  gap: 3px;
+}
+
+.pn-ball {
+  display: block;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  box-shadow: inset -2px -2px 3px rgba(0, 0, 0, 0.45);
+}
+
+.pn-ball--gone {
+  opacity: 0.16;
+}
+
+/* ---- turno ---- */
+
+.pn__turn {
+  position: absolute;
+  top: 148px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 190px;
+  text-align: center;
+  padding: 5px 12px 7px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+}
+
+.pn__turn-name {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--team);
+}
+
+.pn__turn--mine .pn__turn-name {
+  color: var(--amber);
+  text-shadow: 0 0 10px rgba(255, 181, 74, 0.7);
+}
+
+.pn__turn-bar {
+  height: 4px;
+  margin-top: 5px;
+  background: rgba(255, 241, 207, 0.12);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.pn__turn-bar i {
+  display: block;
+  height: 100%;
+  background: var(--team);
+  transition: width 0.15s linear;
+}
+
+.pn__turn-bar--low i {
+  background: var(--danger);
+}
+
+/* ---- avisos ---- */
+
+.pn__msg {
+  position: absolute;
+  top: 206px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 16px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.pn__msg--bad {
+  color: var(--danger);
+  border-color: rgba(255, 106, 92, 0.5);
+}
+
+.pn__msg--good {
+  color: var(--good);
+}
+
+.pn__count {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font: italic 800 140px "Brush Script MT", "Segoe Script", "Lucida Handwriting", cursive;
+  color: #fff1cf;
+  text-shadow:
+    0 0 10px var(--amber),
+    0 0 30px #ff9d2e,
+    0 0 70px #ff7a1f;
+}
+
+.pn__count--pop {
+  animation: pn-pop 0.5s ease-out;
+}
+
+@keyframes pn-pop {
+  from {
+    transform: translate(-50%, -50%) scale(1.6);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+.pn__hint {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 80vw;
+  padding: 6px 14px;
+  font-size: 13px;
+  text-align: center;
+  color: var(--muted);
+  background: var(--panel);
+  border-radius: 4px;
+}
+
+/* ---- controles de quien tira ---- */
+
+.pn__power {
+  position: absolute;
+  right: 22px;
+  bottom: 64px;
+  width: 26px;
+  height: 190px;
+  display: flex;
+  align-items: flex-end;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  overflow: hidden;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: ns-resize;
+}
+
+.pn__power i {
+  display: block;
+  width: 100%;
+  height: 0;
+  background: linear-gradient(to top, #8fe0a0, #ffb54a 65%, #ff6a5c);
+}
+
+.pn__spin {
+  position: absolute;
+  left: 22px;
+  bottom: 64px;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fffbe9, #f3ecd8 55%, #b8b09a);
+  border: 2px solid var(--edge);
+  pointer-events: auto;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.pn__spin i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  border-radius: 50%;
+  background: #d02a22;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.pn__btns {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.pn__btn {
+  padding: 9px 14px;
+  font: 800 12px "Trebuchet MS", "Segoe UI", sans-serif;
+  letter-spacing: 2px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pn__btn--shoot {
+  color: #1a1004;
+  background: var(--amber);
+  border-color: var(--amber);
+}
+
+.pn__btn:active {
+  transform: translateY(1px);
+}
+
+/* ---- pantallas ---- */
+
+.pn__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 2, 1, 0.7);
+  pointer-events: auto;
+}
+
+.pn__overlay.hidden {
+  display: none;
+}
+
+.pn__card {
+  max-width: min(460px, 88vw);
+  padding: 26px 30px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+}
+
+.pn__card-title {
+  font: italic 700 40px "Brush Script MT", "Segoe Script", "Lucida Handwriting", cursive;
+  color: #fff1cf;
+  text-shadow:
+    0 0 8px var(--amber),
+    0 0 24px #ff9d2e;
+}
+
+.pn__card-text {
+  margin-top: 10px;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.pn__card-hint {
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pn__card-btn {
+  margin-top: 16px;
+  padding: 10px 20px;
+  font: 800 13px "Trebuchet MS", "Segoe UI", sans-serif;
+  letter-spacing: 2px;
+  color: #1a1004;
+  background: var(--amber);
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pn__results {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.pn__results-team {
+  flex: 1;
+  padding: 8px 10px;
+  border-top: 3px solid var(--team);
+  background: rgba(255, 241, 207, 0.04);
+  border-radius: 4px;
+}
+
+.pn__results-team--mine {
+  background: rgba(255, 241, 207, 0.1);
+}
+
+.pn__results-name {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--team);
+  margin-bottom: 4px;
+}
+
+.pn__results-player {
+  font-size: 14px;
+  padding: 1px 0;
+}
+
+/* ---- celu ---- */
+
+@media (max-width: 640px) {
+  .pn__logo {
+    font-size: 22px;
+    top: 34px;
+    left: 10px;
+  }
+  .pn__teams {
+    top: 70px;
+    gap: 6px;
+  }
+  .pn-team {
+    min-width: 0;
+    padding: 5px 7px 6px;
+  }
+  .pn-p {
+    font-size: 11px;
+  }
+  .pn-ball {
+    width: 10px;
+    height: 10px;
+  }
+  .pn__turn {
+    top: 160px;
+    min-width: 160px;
+  }
+  .pn__msg {
+    top: 212px;
+    font-size: 13px;
+    white-space: normal;
+    max-width: 90vw;
+  }
+  .pn__count {
+    font-size: 96px;
+  }
+  .pn__power {
+    right: 12px;
+    bottom: 60px;
+    height: 150px;
+  }
+  .pn__spin {
+    left: 12px;
+    bottom: 60px;
+    width: 64px;
+    height: 64px;
+  }
+  .pn__hint {
+    bottom: 56px;
+    font-size: 12px;
+  }
+  .pn__results {
+    flex-direction: column;
+  }
+}

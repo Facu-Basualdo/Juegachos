@@ -119,6 +119,7 @@ Esta matriz evalúa los arquetipos comunes de minijuegos web frente a las limita
 | **Saltos Reactivos / Endless Runner** | Detección de precipicios y cálculo de salto con timing perfecto para bots/IA. | **Cinemática Analítica Proyectil ($y = v_0 t - \frac{1}{2}gt^2$) + HFSM** | **Raycasting determinista predictivo** (*Look-ahead probing*). | **Monte Carlo falla:** Disparar simulaciones completas de saltos por ensayo y error consume ciclos innecesarios cuando existe una solución analítica exacta cerrada en $O(1)$. |
 | **Juegos de Precisión / Dardos / Trayectorias** | IA enemiga o asistente de apuntado calculando fuerza y ángulo óptimo. | **Ecuación Balística Cuadrática Cerrada** | **Búsqueda Binaria / Gradiente Unidimensional** si hay fricción de aire (drag). | **Monte Carlo falla:** El *hit-or-miss random sampling* converge lentamente ($O(1/\sqrt{N})$), arriesgando tiros erráticos o caídas drásticas de frames. |
 | **Apilado de Bloques (Stacker Físico)** | Evaluar estabilidad del apilamiento de piezas poligonales. | **Contact Manifolds + Impulse Resolution (Symplectic Euler)** | **Centro de Masa Proyectado** en Polígono de Soporte ($O(1)$ heurístico). | **Monte Carlo falla:** La física de contactos requiere resolución exacta de restricciones LCP (*Linear Complementarity Problem*). Muestrear estados aleatorios genera penetraciones y rebotes fantasmas. |
+| **Billar / Pool (esferas con efecto, por turnos)** | Esferas que ruedan sobre un paño con fricción, chocan entre sí y con bandas, y entran en troneras. | **Paso fijo con sub-stepping + Colisión Continua (tiempo de impacto esfera-esfera analítico) + Modelo Deslizamiento -> Rodadura** (ver 3.5) | **Event-driven** (cola de eventos ordenada por tiempo de impacto) si hace falta precisión exacta o el servidor emite el resultado como línea de tiempo. | **Monte Carlo falla en el loop de física:** el resultado de un tiro debe ser determinista, o cada pantalla vería otro desenlace. Fuera del loop (IA de tiro del bot) sí vale, ver 6.4. |
 | **Juegos de Tablero / Puzzles Arcade (ej. Conecta 4, Tetris AI)** | Selección de jugada óptima bajo turnos o micro-pausas. | **Minimax con Poda $\alpha$-$\beta$ + Heurística de Tablero** | **MCTS** (solo si el factor de ramificación $b > 30$ y la función de evaluación no es lineal). | **Métodos Ingenuos fallan:** Búsqueda aleatoria pura o fuerza bruta sin poda desbordan la memoria (*Heap Allocation*) del navegador y bloquean la UI. |
 
 ---
@@ -488,6 +489,35 @@ export class ConditionNode extends BTNode {
 }
 ```
 
+### 3.5 Arquetipo: Billar / Pool (Esferas con Fricción, CCD y Efecto)
+
+**Cuándo usarlo:** esferas rígidas del mismo radio sobre un plano, con tronera y bandas. No sirve para polígonos ni apilados (para eso, la fila de Contact Manifolds de la matriz).
+
+**Por qué no alcanza con "Symplectic Euler + impulsos" de la fila de apilado.** A potencia máxima la blanca recorre varios radios por paso: sin detección continua atraviesa la bola objetivo (*tunneling*) y el tiro depende del framerate. Tampoco alcanza un coeficiente único de fricción: el "feeling" del pool sale de dos fases distintas.
+
+#### Formulación
+
+1. **Paso fijo + sub-stepping.** `STEP_DT` constante con acumulador (igual que PONG y Manchon, ver CLAUDE.md "Interpolar sobre el reloj del server"). Dentro de cada paso se resuelve por **tiempo de impacto**, no por solapamiento.
+2. **Tiempo de impacto esfera-esfera (forma cerrada).** Con posición relativa $\Delta p$ y velocidad relativa $\Delta v$, chocan cuando $|\Delta p + \Delta v\,t| = 2r$. Es una cuadrática en $t$: $a t^2 + 2 b t + c = 0$ con $a=\Delta v\cdot\Delta v$, $b=\Delta p\cdot\Delta v$, $c=\Delta p\cdot\Delta p-4r^2$. Se toma la menor raíz no negativa dentro del paso, se avanza hasta ahí, se resuelve el choque y se sigue con el resto del paso. Con $b \ge 0$ (se alejan) o discriminante negativo no hay choque.
+3. **Resolución del choque.** Impulso a lo largo de la normal de contacto con restitución $e \approx 0.95$ (bola-bola) y $e \approx 0.75$ (banda), más una fracción de fricción tangencial entre bolas que genera el *throw*. Para esferas iguales sin spin, la bola golpeada sale por la normal y la blanca por la tangente.
+4. **Movimiento sobre el paño en dos fases (cerrado, no por ensayo).** Al arrancar la bola **desliza**: la velocidad de contacto $u = v + \omega \times (-r\hat{n})$ se amortigua con fricción cinética $\mu_s$ (aceleración constante opuesta a $u$) hasta que $u = 0$; ahí **rueda** con fricción de rodadura $\mu_r$ mucho menor (desaceleración constante) hasta detenerse. El **efecto** (top/back/side spin) entra como $\omega$ inicial del taco y es lo que hace que la blanca avance, retroceda o curve tras el golpe.
+5. **Bandas y troneras.** Banda = plano con restitución; las esquinas de tronera son círculos de captura. Una bola cuyo centro entra en el radio de captura se declara embocada y sale de la simulación.
+6. **Reposo.** Una bola con $|v| < \varepsilon$ y $|\omega| < \varepsilon$ se fija en velocidad cero. La mesa está en reposo cuando todas lo están, y recién ahí se evalúa el turno (la regla del juego no corre mientras algo se mueve).
+
+#### Determinismo y red (para el server autoritativo)
+
+- El cliente manda solo el **tiro** (ángulo, potencia, punto de golpe en la bola). Nunca posiciones.
+- El server corre la simulación y difunde el **resultado**. Dos opciones válidas: la línea de tiempo de eventos (choques, embocadas, reposo) con la que cada cliente anima localmente, o keyframes a baja cadencia. **No** reenviar cada paso a 60 Hz: es un tablero compartido por turnos, el tráfico es ráfagas cortas por tiro.
+- No confiar en que dos clientes simulen igual por su cuenta: `Math.sin/cos/atan2` pueden diferir entre motores JS. Por eso la verdad la manda el server y el cliente solo reproduce.
+
+#### Complejidad
+
+Con 15 bolas: $O(N^2)$ = 105 pares por paso, trivial. **No hace falta Spatial Hash Grid** (el veto de all-pairs de la sección 4 aplica a enjambres de cientos). Cero allocations en el loop: `Float32Array` para posición, velocidad y spin, y una cola de eventos preasignada.
+
+#### IA de tiro (bot / asistente de apuntado)
+
+Fuera del loop: enumerar candidatas (bola objetivo x tronera), calcular la **bola fantasma** analíticamente (punto de contacto a $2r$ detrás de la objetivo, en línea con la tronera), y puntuar cada una por dificultad (ángulo de corte, distancias, obstrucciones). Si se quiere afinar, simular unas pocas decenas de tiros candidatos con el mismo motor del server (Monte Carlo acotado, ver 6.4). Nunca dentro del tick de 60 Hz.
+
 ---
 
 ## 4. Guía de Prompting Técnico para Asistentes de Código (LLMs)
@@ -503,6 +533,7 @@ Al delegar la generación de módulos de simulación física e IA a modelos de l
 | **Cinemática Inversa** | `FABRIK algorithm (Forward And Backward Reaching)`, `Tolerance-based convergence`, `Distance Constraint projection`. | VETAR: `Jacobian Transpose/Pseudoinverse matrix operations on CPU`, `Recursive CCD without iteration caps`. |
 | **Sistemas de IA Reactiva** | `Tick-driven Behavior Tree`, `Composite Selector/Sequence`, `Hierarchical State Machine (HFSM)`, `Blackboard pattern`. | VETAR: `Deep nested switch-case without state pattern`, `Asynchronous promise chains inside 60Hz tick`. |
 | **Enjambres y Agentes Multi-objeto** | `Spatial Hash Grid`, `Uniform Grid Partitioning`, `Reynolds Flocking (Separation, Cohesion, Alignment)`, `Bitwise Spatial Hashing`. | VETAR: `All-pairs O(N^2) neighbor checks`, `Array.filter / Array.map per frame`, `GC pressure via object instantiation`. |
+| **Billar / Esferas con Fricción** | `Continuous Collision Detection (sphere-sphere time of impact, quadratic root)`, `Fixed timestep with sub-stepping`, `Sliding-to-rolling friction model`, `Restitution impulse along contact normal`, `Event-driven resolution`. | VETAR: `Overlap-only collision detection (tunneling)`, `Single friction coefficient`, `Variable dt physics`, `Each client simulating its own outcome`, `Math.random() inside the shot resolution`. |
 | **Búsqueda Discreta** | `Alpha-Beta Pruning with Transposition Table`, `Iterative Deepening`, `Bitboard representation`, `Evaluation Heuristic`. | VETAR: `Unbounded MCTS rollouts`, `Memory allocation in recursion`, `Unconstrained minimax depth`. |
 
 ---
