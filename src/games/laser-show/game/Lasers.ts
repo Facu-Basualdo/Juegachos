@@ -1,7 +1,6 @@
 import {
   BEAM_R,
   BODY_R,
-  HIGH_Y,
   LOW_Y,
   MATCH_MS,
   PYLON_R,
@@ -95,8 +94,8 @@ export function difficulty(t: number): number {
   return Math.max(0, Math.min(1, t / 100_000));
 }
 
-export function beamY(h: Height): number {
-  return h === 0 ? LOW_Y : HIGH_Y;
+export function beamY(_h?: Height): number {
+  return LOW_Y;
 }
 
 /** Desde cuando se ve el laser. */
@@ -203,9 +202,8 @@ export function buildShow(seed: number): Show {
   const waves: Wave[] = [];
   let id = 0;
   const pick = <T>(list: readonly T[]): T => list[Math.floor(rand() * list.length)];
-  const randH = (): Height => (rand() < 0.5 ? 0 : 1);
 
-  const addWall = (t: number, ang: number, v: number, h: Height): number => {
+  const addWall = (t: number, ang: number, v: number, h: Height = 0): number => {
     const tm = t + WALL_WARN;
     const t1 = tm + ((2 * WALL_SPAN) / v) * 1000;
     lasers.push({ kind: "wall", id: id++, t0: t, tm, t1, ang, v, h });
@@ -240,14 +238,14 @@ export function buildShow(seed: number): Show {
     }
   };
 
-  // ---- Presentacion: una de cada ----
+  // ---- Presentacion ----
   let t = 1200;
   const introAng = rand() * TWO_PI;
-  waves.push({ t, title: "¡SALTÁ EL ROJO!" });
+  waves.push({ t, title: "¡SALTÁ EL LÁSER!" });
   addWall(t, introAng, 4.2, 0);
   t += 3600;
-  waves.push({ t, title: "¡AGACHATE AL CELESTE!" });
-  addWall(t, introAng + Math.PI, 4.2, 1);
+  waves.push({ t, title: "¡OTRA PARED!" });
+  addWall(t, introAng + Math.PI, 4.2, 0);
   t += 3800;
   waves.push({ t, title: "¡LLUVIA DE RAYOS!" });
   addZones(t, 3, 1.9, 1700);
@@ -285,9 +283,7 @@ export function buildShow(seed: number): Show {
       else if (d < 0.6) n = rand() < 0.5 ? 1 : 2;
       else n = rand() < 0.5 ? 2 : 3;
       if (d > 0.85 && rand() < 0.3) n = 4;
-      const mixed = n > 1 && d > 0.45 && rand() < 0.5;
-      const base = randH();
-      const arms: Height[] = Array.from({ length: n }, (_, k) => (mixed ? ((k % 2) as Height) : base));
+      const arms: Height[] = Array.from({ length: n }, () => 0);
       let speed = (1.0 + 1.4 * d) * (0.9 + 0.2 * rand());
       speed = Math.min(speed, TWO_PI / (n * MIN_ARM_GAP));
       const w = rand() < 0.5 ? speed : -speed;
@@ -301,25 +297,23 @@ export function buildShow(seed: number): Show {
       t += warn + dur * (d < 0.35 ? 1 : 0.85 - 0.5 * d) + breath;
     } else if (kind === "wall") {
       const v = (4.5 + 6.5 * d) * (0.9 + 0.2 * rand());
-      const h = randH();
-      addWall(t, rand() * TWO_PI, v, h);
-      waves.push({ t, title: h === 0 ? "¡PARED RASANTE!" : "¡PARED ALTA!" });
+      addWall(t, rand() * TWO_PI, v, 0);
+      waves.push({ t, title: "¡PARED!" });
       t += 1700 - 700 * d + breath;
     } else if (kind === "double") {
       const v = (4.5 + 5.5 * d) * (0.9 + 0.2 * rand());
       const ang = rand() * TWO_PI;
-      const h = randH();
       const gap = Math.max(650, (MIN_DOUBLE_GAP_M / v) * 1000);
-      addWall(t, ang, v, h);
-      addWall(t + gap, ang, v, (1 - h) as Height);
+      addWall(t, ang, v, 0);
+      addWall(t + gap, ang, v, 0);
       waves.push({ t, title: "¡PARED DOBLE!" });
       t += gap + 1700 - 700 * d + breath;
     } else if (kind === "cross") {
       const v = (4.5 + 5 * d) * (0.9 + 0.2 * rand());
       const ang = rand() * TWO_PI;
       const second = ang + pick([Math.PI / 2, -Math.PI / 2, Math.PI]);
-      addWall(t, ang, v, randH());
-      addWall(t, second, v, randH());
+      addWall(t, ang, v, 0);
+      addWall(t, second, v, 0);
       waves.push({ t, title: "¡CRUZADAS!" });
       t += 2000 - 600 * d + breath;
     } else {

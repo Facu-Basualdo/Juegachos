@@ -333,26 +333,15 @@ body {
 }
 
 .ls-controls__jump {
-  width: 92px;
-  height: 92px;
+  width: 96px;
+  height: 96px;
   font-size: 13px;
 }
 
-.ls-controls__duck {
-  width: 84px;
-  height: 84px;
-  font-size: 9px;
-  border-color: var(--high) !important;
-}
-
-.ls-controls__duck.is-down {
-  background: rgba(63, 216, 255, 0.35);
-}
-
 .ls-controls__push {
-  width: 70px;
-  height: 70px;
-  font-size: 9px;
+  width: 76px;
+  height: 76px;
+  font-size: 10px;
 }
 
 /* Relleno de arriba para abajo: el enfriamiento del empujon. */

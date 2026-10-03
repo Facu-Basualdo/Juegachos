@@ -15,8 +15,6 @@
 
 const JOYSTICK_RANGE = 52;
 const JOYSTICK_DEAD = 8;
-/** Sin CTRL a proposito: CTRL+W (adelante) cierra la pestaña. */
-const DUCK_KEYS = ["ShiftLeft", "ShiftRight", "KeyC"];
 
 export interface JoystickView {
   originX: number;
@@ -29,7 +27,6 @@ export class InputController {
   private readonly keys = new Set<string>();
   private jumpPending = false;
   private pushPending = false;
-  private duckButton = false;
 
   private stickId: number | null = null;
   private originX = 0;
@@ -72,15 +69,6 @@ export class InputController {
     return { originX: this.originX, originY: this.originY, x: this.curX, y: this.curY };
   }
 
-  /** Agacharse se mantiene: tecla o boton apretados. */
-  get duck(): boolean {
-    return this.duckButton || DUCK_KEYS.some((k) => this.keys.has(k));
-  }
-
-  setDuckButton(down: boolean): void {
-    this.duckButton = down;
-  }
-
   consumeJump(): boolean {
     if (!this.jumpPending) return false;
     this.jumpPending = false;
@@ -112,11 +100,10 @@ export class InputController {
     this.keys.delete(e.code);
   };
 
-  /** Al perder el foco no llegan los keyup: sin esto el jugador sigue corriendo (o agachado) solo. */
+  /** Al perder el foco no llegan los keyup: sin esto el jugador sigue corriendo solo. */
   private onBlur = (): void => {
     this.keys.clear();
     this.stickId = null;
-    this.duckButton = false;
   };
 
   private onPointerDown = (e: PointerEvent): void => {

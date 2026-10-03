@@ -5,16 +5,15 @@ export const meta: GameEntry = {
   id: "laser-show",
   title: "Láser Show",
   description:
-    "Un escenario redondo de programa de TV y lásers que lo barren cada vez más rápido. Saltá los rojos, que van rasantes; agachate ante los celestes, que van altos; salí corriendo de la lluvia de rayos y cuidate de los empujones. Gana el último en pie. Solo se juega en salas.",
+    "Un escenario redondo de programa de TV y lásers que lo barren cada vez más rápido. Saltá los lásers que van rasantes, salí corriendo de la lluvia de rayos y cuidate de los empujones. Gana el último en pie. Solo se juega en salas.",
   path: "/games/laser-show/",
   controls:
-    "Movete con WASD o las flechas, saltá con ESPACIO, agachate manteniendo SHIFT o C y empujá con F o clic (en el celu: arrastrá el dedo y tocá SALTAR, AGACHARSE o EMPUJAR). Los lásers rojos se saltan y los celestes se esquivan agachado.",
+    "Movete con WASD o las flechas, saltá con ESPACIO y empujá con F o clic (en el celu: arrastrá el dedo y tocá SALTAR o EMPUJAR). Saltá los lásers y salí de la lluvia de rayos.",
   howTo: {
-    intro: "Saltá los lásers rojos, agachate ante los celestes y salí de la lluvia de rayos.",
+    intro: "Saltá los lásers y salí de la lluvia de rayos.",
     actions: [
       { title: "Movimiento", icons: ["wasd", "arrows", "swipe"] },
       { title: "Saltar", icons: ["space", "btn:SALTAR"] },
-      { title: "Agacharse", icons: ["key:SHIFT", "key:C", "btn:AGACHARSE"], note: "mantener" },
       { title: "Empujar", icons: ["key:F", "click", "btn:EMPUJAR"] },
     ],
   },

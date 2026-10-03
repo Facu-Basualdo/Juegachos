@@ -32,7 +32,6 @@ export class Avatar {
   private readonly label: THREE.Sprite | null = null;
   private phase = 0;
   private pushT = 0;
-  private squash = 1;
 
   constructor(seat: number, name: string | null) {
     const color = seatColor(seat);
@@ -113,14 +112,9 @@ export class Avatar {
 
   /**
    * Animacion por procedimiento: al correr se bambolea y balancea brazos y patitas;
-   * en el aire abre los brazos; agachado se aplasta (con un rebote chico al entrar y
-   * salir, que es lo que lo hace leer como resorte).
+   * en el aire abre los brazos.
    */
-  animate(dt: number, speed: number, grounded: boolean, ducking: boolean): void {
-    const target = ducking ? 0.55 : 1;
-    this.squash += (target - this.squash) * Math.min(1, dt * 22);
-    this.rig.scale.set(1 + (1 - this.squash) * 0.35, this.squash, 1 + (1 - this.squash) * 0.35);
-
+  animate(dt: number, speed: number, grounded: boolean, _ducking?: boolean): void {
     const amount = Math.min(1, speed / SPEED);
     if (grounded) {
       this.phase += dt * (7 + speed * 1.8);

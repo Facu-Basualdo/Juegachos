@@ -14,7 +14,6 @@ import {
   COUNTDOWN_LABELS,
   COUNTDOWN_STEP,
   DEATH_Y,
-  FLAG_DUCK,
   FLAG_GROUNDED,
   FLAG_MOVING,
   MAX_DT,
@@ -115,7 +114,6 @@ export class Game {
   private readonly remotes = new Map<number, Remote>();
   private pushReadyAt = 0;
   private posTimer = 0;
-  private wasDucking = false;
 
   private myTime = -1;
   private reported = false;
@@ -135,7 +133,6 @@ export class Game {
     this.input = new InputController(container);
     this.hud.onJump(() => this.input.requestJump());
     this.hud.onPush(() => this.input.requestPush());
-    this.hud.onDuck((down) => this.input.setDuckButton(down));
 
     this.resize();
     window.addEventListener("resize", this.resize);
@@ -413,7 +410,6 @@ export class Game {
     this.myTime = time;
     this.hud.showCountdown(null);
     this.hud.setSpectating(true);
-    this.input.setDuckButton(false);
     if (this.myAvatar) this.myAvatar.visible = false;
     const title = how === "zap" ? "&iexcl;Te toc&oacute; un l&aacute;ser!" : how === "fall" ? "&iexcl;Te ca&iacute;ste!" : "Fuera del show";
     this.hud.banner(title, `Aguantaste ${formatSeconds(time)}. Mir&aacute; c&oacute;mo siguen los dem&aacute;s.`);
@@ -542,24 +538,20 @@ export class Game {
     const push = this.input.consumePush();
     let wx = 0;
     let wz = 0;
-    let duck = false;
     if (playing) {
       if (jump) this.player.requestJump();
       if (push) this.tryPush();
       const dir = this.input.direction;
       wx = dir.x;
       wz = dir.y;
-      duck = this.input.duck;
     }
-    const events = this.player.update(dt, wx, wz, duck);
+    const events = this.player.update(dt, wx, wz);
     const p = this.player;
 
     if (playing) {
       if (events.jumped) SoundEffects.playJump();
       if (events.landed > 8) SoundEffects.playLand();
-      if (p.ducking && !this.wasDucking) SoundEffects.playDuck();
     }
-    this.wasDucking = p.ducking;
 
     this.posTimer += dt * 1000;
     if (this.posTimer >= POS_SEND_MS) {
@@ -589,7 +581,7 @@ export class Game {
 
   private flags(): number {
     const p = this.player;
-    return (p.grounded ? FLAG_GROUNDED : 0) | (p.moving ? FLAG_MOVING : 0) | (p.ducking ? FLAG_DUCK : 0);
+    return (p.grounded ? FLAG_GROUNDED : 0) | (p.moving ? FLAG_MOVING : 0);
   }
 
   /** Empujon hacia donde mira el muñeco (la posicion va antes: el server mide con la ultima). */
@@ -624,7 +616,7 @@ export class Game {
       r.avatar.root.position.set(r.x, r.y, r.z);
       r.avatar.root.rotation.y = r.yaw;
       const moving = (r.flags & FLAG_MOVING) !== 0;
-      r.avatar.animate(dt, moving ? Math.max(r.speed, 2.5) : 0, (r.flags & FLAG_GROUNDED) !== 0, (r.flags & FLAG_DUCK) !== 0);
+      r.avatar.animate(dt, moving ? Math.max(r.speed, 2.5) : 0, (r.flags & FLAG_GROUNDED) !== 0);
       r.avatar.setOffline(on ? on[seat] === false : false);
       this.placeShadow(r.avatar, r.x, r.y, r.z);
     }
@@ -635,7 +627,7 @@ export class Game {
     if (visible) {
       this.myAvatar.root.position.set(p.x, p.y, p.z);
       this.myAvatar.root.rotation.y = p.yaw;
-      this.myAvatar.animate(dt, Math.hypot(p.vx, p.vz), p.grounded, p.ducking);
+      this.myAvatar.animate(dt, Math.hypot(p.vx, p.vz), p.grounded);
       this.placeShadow(this.myAvatar, p.x, p.y, p.z);
     }
     if (this.myMarker) {
@@ -643,7 +635,7 @@ export class Game {
       ring.visible = visible && this.myAvatar.shadow.visible;
       ring.position.set(p.x, 0.03, p.z);
       arrow.visible = visible;
-      arrow.position.set(p.x, p.y + (p.ducking ? 1.5 : 2.2) + Math.sin(performance.now() / 180) * 0.1, p.z);
+      arrow.position.set(p.x, p.y + 2.2 + Math.sin(performance.now() / 180) * 0.1, p.z);
       arrow.rotation.y += dt * 2.5;
     }
   }

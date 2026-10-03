@@ -35,7 +35,7 @@ const STRIP = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
 const RING_GEO = new THREE.RingGeometry(0.86, 1, 48).rotateX(-Math.PI / 2);
 const DISC_GEO = new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2);
 const COLUMN = new THREE.CylinderGeometry(1, 1, 1, 24, 1, true).translate(0, 0.5, 0);
-const DRONE = new THREE.BoxGeometry(0.5, 0.22, 0.5);
+const DRONE = new THREE.BoxGeometry(0.32, 0.14, 0.32);
 
 let stripTex: THREE.Texture | null = null;
 let glowTex: THREE.Texture | null = null;
@@ -57,8 +57,8 @@ function additive(color: string, opacity: number, map?: THREE.Texture): THREE.Me
 }
 
 /**
- * Un haz: nucleo casi blanco, halo del color de su familia y la franja que deja en el
- * piso (DESIGN.md: el rasante la lleva pegada y fuerte; el alto, tenue).
+ * Un haz: nucleo casi blanco y fino, halo del color de su familia y la franja que deja en el
+ * piso (DESIGN.md: el rasante la lleva pegada y nitida; el alto, tenue).
  */
 class Beam {
   readonly group = new THREE.Group();
@@ -72,13 +72,13 @@ class Beam {
   constructor(h: Height) {
     const color = laserColor(h);
     const coreMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(color).lerp(new THREE.Color("#ffffff"), 0.45),
+      color: new THREE.Color(color).lerp(new THREE.Color("#ffffff"), 0.65),
       transparent: true,
     });
-    const glowMat = additive(color, 0.6);
-    const hazeMat = additive(color, 0.16);
+    const glowMat = additive(color, 0.75);
+    const hazeMat = additive(color, 0.18);
     stripTex ??= stripTexture();
-    this.stripBase = h === 0 ? 0.85 : 0.16;
+    this.stripBase = h === 0 ? 0.75 : 0.12;
     const stripMat = additive(color, this.stripBase, stripTex);
     this.core = new THREE.Mesh(ROD, coreMat);
     this.glow = new THREE.Mesh(ROD, glowMat);
@@ -86,11 +86,11 @@ class Beam {
     this.strip = new THREE.Mesh(STRIP, stripMat);
     const y = beamY(h);
     for (const m of [this.core, this.glow, this.haze]) m.position.y = y;
-    this.core.scale.set(1, 0.05, 0.05);
-    this.glow.scale.set(1, 0.13, 0.13);
-    this.haze.scale.set(1, 0.32, 0.32);
+    this.core.scale.set(1, 0.016, 0.016);
+    this.glow.scale.set(1, 0.042, 0.042);
+    this.haze.scale.set(1, 0.085, 0.085);
     this.strip.position.y = 0.012;
-    this.strip.scale.z = h === 0 ? 0.6 : 1.0;
+    this.strip.scale.z = h === 0 ? 0.20 : 0.28;
     this.strip.renderOrder = 2;
     this.mats = [coreMat, glowMat, hazeMat, stripMat];
     this.group.add(this.core, this.glow, this.haze, this.strip);
@@ -111,11 +111,11 @@ class Beam {
 
   /** `armed` = letal (pleno); si no, fantasma titilante. `fade` 0..1 multiplica todo. */
   look(armed: boolean, fade: number, flicker: number): void {
-    const k = armed ? fade : (0.25 + 0.2 * flicker) * fade;
+    const k = armed ? fade : (0.35 + 0.3 * flicker) * fade;
     this.core.visible = armed;
     this.mats[0].opacity = fade;
-    this.mats[1].opacity = 0.6 * k;
-    this.mats[2].opacity = 0.16 * k;
+    this.mats[1].opacity = 0.75 * k;
+    this.mats[2].opacity = 0.18 * k;
     this.mats[3].opacity = this.stripBase * k;
   }
 
@@ -213,7 +213,7 @@ export class LaserView {
         root.add(arm.group);
         view.beams.push(arm);
         // Destello en la punta, donde el haz se apoya en el aro.
-        const tip = this.sprite(laserColor(h), 0.9);
+        const tip = this.sprite(laserColor(h), 0.42);
         tip.position.set(Math.cos((k * Math.PI * 2) / n) * SPIN_REACH, beamY(h), Math.sin((k * Math.PI * 2) / n) * SPIN_REACH);
         tip.userData.arm = k;
         view.sprites.push(tip);
@@ -232,7 +232,7 @@ export class LaserView {
         drone.position.set(side * WALL_SPAN, beamY(l.h), 0);
         root.add(drone);
         view.extra.push(drone);
-        const glow = this.sprite(laserColor(l.h), 1.1);
+        const glow = this.sprite(laserColor(l.h), 0.48);
         glow.position.set(side * WALL_SPAN, beamY(l.h), 0);
         root.add(glow);
       }

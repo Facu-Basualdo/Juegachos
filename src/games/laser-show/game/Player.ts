@@ -3,8 +3,6 @@ import {
   BODY_H,
   BODY_R,
   COYOTE_TIME,
-  DUCK_H,
-  DUCK_SPEED,
   FOOT_RADIUS,
   GRAVITY,
   GROUND_ACCEL,
@@ -31,9 +29,7 @@ export interface PlayerEvents {
  * mientras la huella de los pies toque el escenario, asi que pararse en el filo
  * alcanza. La torre del centro es un cilindro solido: empuja hacia afuera.
  *
- * Agacharse (`duck`) solo vale en el piso: baja el alto del cuerpo a `DUCK_H` (lo que
- * esquiva el haz alto) y frena a `DUCK_SPEED`. No se puede saltar agachado: primero
- * hay que soltar.
+ * El juego es de saltos reactivos: todos los lasers rasantes se esquivan saltando.
  */
 export class Player {
   x = 0;
@@ -44,7 +40,7 @@ export class Player {
   vz = 0;
   yaw = 0;
   grounded = false;
-  ducking = false;
+  readonly ducking = false;
   private coyote = 0;
   private jumpBuffer = 0;
   private stun = 0;
@@ -56,7 +52,6 @@ export class Player {
     this.yaw = yaw;
     this.vx = this.vy = this.vz = 0;
     this.grounded = false;
-    this.ducking = false;
     this.stun = 0;
   }
 
@@ -66,7 +61,6 @@ export class Player {
     this.vz = vz;
     this.vy = Math.max(this.vy, vy);
     this.grounded = false;
-    this.ducking = false;
     this.coyote = 0;
     this.stun = SHOVE_STUN;
   }
@@ -76,20 +70,20 @@ export class Player {
   }
 
   get bodyHeight(): number {
-    return this.ducking ? DUCK_H : BODY_H;
+    return BODY_H;
   }
 
   get moving(): boolean {
     return Math.hypot(this.vx, this.vz) > 0.4;
   }
 
-  update(dt: number, dirX: number, dirZ: number, duck: boolean): PlayerEvents {
+  update(dt: number, dirX: number, dirZ: number): PlayerEvents {
     const events: PlayerEvents = { jumped: false, landed: 0 };
     let left = dt;
     while (left > 1e-6) {
       const step = Math.min(left, PHYSICS_STEP);
       left -= step;
-      this.step(step, dirX, dirZ, duck, events);
+      this.step(step, dirX, dirZ, events);
     }
     if (Math.hypot(this.vx, this.vz) > 0.3) {
       let diff = Math.atan2(this.vx, this.vz) - this.yaw;
@@ -99,10 +93,9 @@ export class Player {
     return events;
   }
 
-  private step(dt: number, dirX: number, dirZ: number, duck: boolean, events: PlayerEvents): void {
+  private step(dt: number, dirX: number, dirZ: number, events: PlayerEvents): void {
     this.stun = Math.max(0, this.stun - dt);
-    this.ducking = duck && this.grounded;
-    const speed = SPEED * (this.ducking ? DUCK_SPEED : 1);
+    const speed = SPEED;
     const accel = this.stun > 0 ? SHOVE_ACCEL : this.grounded ? GROUND_ACCEL : AIR_ACCEL;
     const k = 1 - Math.exp(-accel * dt);
     this.vx += (dirX * speed - this.vx) * k;
@@ -114,13 +107,12 @@ export class Player {
 
     if (this.grounded && !this.supported()) {
       this.grounded = false;
-      this.ducking = false;
       this.coyote = COYOTE_TIME;
     }
 
     this.jumpBuffer = Math.max(0, this.jumpBuffer - dt);
     this.coyote = Math.max(0, this.coyote - dt);
-    if (this.jumpBuffer > 0 && !this.ducking && (this.grounded || this.coyote > 0)) {
+    if (this.jumpBuffer > 0 && (this.grounded || this.coyote > 0)) {
       this.vy = JUMP_VELOCITY;
       this.grounded = false;
       this.coyote = 0;

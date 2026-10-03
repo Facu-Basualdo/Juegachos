@@ -1,4 +1,4 @@
-import { HIGH_COLOR, LOW_COLOR, seatColor } from "./constants";
+import { LOW_COLOR, seatColor } from "./constants";
 import type { JoystickView } from "./InputController";
 
 /**
@@ -39,7 +39,6 @@ export class Hud {
   private readonly countdownEl: HTMLDivElement;
   private readonly overlayEl: HTMLDivElement;
   private readonly jumpBtn: HTMLButtonElement;
-  private readonly duckBtn: HTMLButtonElement;
   private readonly pushBtn: HTMLButtonElement;
   private readonly stickRing: HTMLDivElement;
   private readonly stickKnob: HTMLDivElement;
@@ -66,8 +65,7 @@ export class Hud {
     const legend = document.createElement("div");
     legend.className = "ls__legend";
     legend.innerHTML = `
-      <span><i style="background:${LOW_COLOR}"></i>ROJO: SALT&Aacute;</span>
-      <span><i style="background:${HIGH_COLOR}"></i>CELESTE: AGACHATE</span>`;
+      <span><i style="background:${LOW_COLOR}"></i>SALT&Aacute; LOS L&Aacute;SERS</span>`;
 
     this.playersEl = document.createElement("ol");
     this.playersEl.className = "ls__players";
@@ -80,9 +78,8 @@ export class Hud {
     const controls = document.createElement("div");
     controls.className = "ls-controls";
     this.pushBtn = this.button("ls-controls__push", "EMPUJAR");
-    this.duckBtn = this.button("ls-controls__duck", "AGACHARSE");
     this.jumpBtn = this.button("ls-controls__jump", "SALTAR");
-    controls.append(this.pushBtn, this.duckBtn, this.jumpBtn);
+    controls.append(this.pushBtn, this.jumpBtn);
 
     this.stickRing = document.createElement("div");
     this.stickRing.className = "ls-stick";
@@ -133,23 +130,6 @@ export class Hud {
       e.preventDefault();
       cb();
     });
-  }
-
-  /** Agacharse se mantiene: avisa al apretar y al soltar (o si el dedo se va del boton). */
-  onDuck(cb: (down: boolean) => void): void {
-    this.duckBtn.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      this.duckBtn.setPointerCapture(e.pointerId);
-      this.duckBtn.classList.add("is-down");
-      cb(true);
-    });
-    const up = (): void => {
-      this.duckBtn.classList.remove("is-down");
-      cb(false);
-    };
-    this.duckBtn.addEventListener("pointerup", up);
-    this.duckBtn.addEventListener("pointercancel", up);
-    this.duckBtn.addEventListener("lostpointercapture", up);
   }
 
   /** Enfriamiento del empujon: 0 = listo, 1 = recien usado. */
