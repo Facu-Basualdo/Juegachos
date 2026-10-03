@@ -16,6 +16,7 @@ import { registerLuzRoja } from "./games/luzroja.js";
 import { registerPistaLoca } from "./games/pistaloca.js";
 import { registerMareaLava } from "./games/marealava.js";
 import { registerLaCuerda } from "./games/lacuerda.js";
+import { registerLaserShow } from "./games/lasershow.js";
 import { registerLobby } from "./games/lobby.js";
 import { impostorWordCount } from "./words-impostor.js";
 
@@ -88,6 +89,7 @@ registerLuzRoja(io);
 registerPistaLoca(io);
 registerMareaLava(io);
 registerLaCuerda(io);
+registerLaserShow(io);
 registerLobby(io);
 
 httpServer.listen(PORT, () => {
