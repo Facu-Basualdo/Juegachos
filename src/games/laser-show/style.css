@@ -1,0 +1,544 @@
+/*
+ * Laser Show. Ver DESIGN.md ("Prime Time"): la grafica de un programa de TV.
+ * Placas violetas con esquinas redondeadas y filete dorado, tipografia gruesa en
+ * mayusculas, numeros tabulares. El rojo y el celeste son de los lasers.
+ */
+
+:root {
+  color-scheme: dark;
+  --studio: #0b0820;
+  --plate: rgba(34, 12, 72, 0.86);
+  --plate-soft: rgba(34, 12, 72, 0.62);
+  --gold: #ffc94a;
+  --text: #ffffff;
+  --low: #ff4a1c;
+  --high: #3fd8ff;
+  --font: "Arial Black", "Segoe UI", "Trebuchet MS", sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--studio);
+  font-family: var(--font);
+  color: var(--text);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+.game-canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.back-link {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 40;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: none;
+}
+
+.ls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ---------- Cronometro ---------- */
+
+.ls__top {
+  position: absolute;
+  /* Debajo de la barra de la sala (RoomOverlay), que va arriba de todo. */
+  top: 38px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 22px 7px;
+  background: var(--plate);
+  border: 2px solid var(--gold);
+  border-radius: 16px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+}
+
+.ls--playing .ls__top {
+  display: flex;
+}
+
+.ls__clock {
+  font-size: 30px;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+  min-width: 110px;
+  text-align: center;
+}
+
+.ls__alive {
+  font-size: 11px;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.ls__alive.is-lap {
+  color: var(--gold);
+  opacity: 1;
+}
+
+/* ---------- Zocalo del locutor ---------- */
+
+.ls__third {
+  position: absolute;
+  top: 112px;
+  left: 50%;
+  padding: 8px 26px;
+  font-size: 22px;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  color: #ffffff;
+  background: linear-gradient(90deg, #c2187a, #6a1bd1);
+  border: 2px solid var(--gold);
+  border-radius: 999px;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translate(-50%, 0) translateX(60vw);
+  transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2), opacity 0.25s;
+}
+
+.ls__third.is-shown {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* ---------- Leyenda de colores ---------- */
+
+.ls__legend {
+  position: absolute;
+  left: 12px;
+  bottom: 14px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  background: var(--plate-soft);
+  border-radius: 12px;
+}
+
+.ls--playing .ls__legend {
+  display: flex;
+}
+
+.ls__legend span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ls__legend i {
+  width: 22px;
+  height: 5px;
+  border-radius: 3px;
+  box-shadow: 0 0 8px currentColor;
+}
+
+/* ---------- Jugadores ---------- */
+
+.ls__players {
+  position: absolute;
+  top: 38px;
+  right: 12px;
+  display: none;
+  flex-direction: column;
+  gap: 3px;
+  list-style: none;
+  min-width: 150px;
+}
+
+.ls--playing .ls__players {
+  display: flex;
+}
+
+.ls__player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  background: var(--plate-soft);
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.ls__player--mine {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+.ls__player--out {
+  opacity: 0.5;
+}
+
+.ls__player--out .ls__player-name {
+  text-decoration: line-through;
+}
+
+.ls__player--offline .ls__player-name {
+  font-style: italic;
+}
+
+.ls__player-dot {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+}
+
+.ls__player-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 110px;
+}
+
+.ls__player-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+
+/* ---------- Avisos ---------- */
+
+.ls__feed {
+  position: absolute;
+  left: 12px;
+  top: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ls__feed-item {
+  padding: 4px 12px;
+  background: var(--plate-soft);
+  border-radius: 999px;
+  font-size: 13px;
+  transition: opacity 0.4s;
+}
+
+.ls__feed-item span {
+  opacity: 0.75;
+  font-size: 11px;
+}
+
+.ls__feed-item.is-gone {
+  opacity: 0;
+}
+
+.ls__banner {
+  position: absolute;
+  left: 50%;
+  top: 32%;
+  transform: translateX(-50%);
+  text-align: center;
+  padding: 12px 28px;
+  background: var(--plate);
+  border: 2px solid var(--gold);
+  border-radius: 18px;
+  max-width: 92vw;
+}
+
+.ls__banner-title {
+  font-size: 30px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.ls__banner--bad .ls__banner-title {
+  color: var(--low);
+}
+
+.ls__banner--good .ls__banner-title {
+  color: var(--gold);
+}
+
+.ls__banner-sub {
+  margin-top: 4px;
+  font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* ---------- Controles tactiles ---------- */
+
+.ls-controls {
+  position: absolute;
+  right: 18px;
+  bottom: 22px;
+  display: none;
+  gap: 10px;
+  align-items: flex-end;
+  pointer-events: auto;
+}
+
+/* Los botones solo existen en pantallas tactiles; en la compu va todo por teclado. */
+@media (pointer: coarse) {
+  .ls--playing:not(.ls--spectating) .ls-controls {
+    display: flex;
+  }
+
+  /* La leyenda sube para no quedar debajo de los botones. */
+  .ls__legend {
+    bottom: 128px;
+  }
+}
+
+.ls-controls button {
+  position: relative;
+  border: 3px solid var(--gold);
+  border-radius: 50%;
+  background: rgba(34, 12, 72, 0.6);
+  color: var(--text);
+  /* Solo la familia: `font: inherit` le ganaria en especificidad al tamaño de cada boton. */
+  font-family: inherit;
+  letter-spacing: 0;
+  padding: 0;
+  touch-action: none;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.ls-controls__jump {
+  width: 96px;
+  height: 96px;
+  font-size: 13px;
+}
+
+.ls-controls__push {
+  width: 76px;
+  height: 76px;
+  font-size: 10px;
+}
+
+/* Relleno de arriba para abajo: el enfriamiento del empujon. */
+.ls-controls__push::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(0, 0, 0, 0.55);
+  transform-origin: top;
+  transform: scaleY(var(--cd, 0));
+}
+
+.ls-controls__push.is-cooling {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.ls-controls button:active {
+  background: rgba(255, 201, 74, 0.3);
+}
+
+.ls-stick {
+  position: absolute;
+  left: -52px;
+  top: -52px;
+  width: 104px;
+  height: 104px;
+  border: 3px solid rgba(255, 201, 74, 0.6);
+  border-radius: 50%;
+  background: rgba(34, 12, 72, 0.25);
+}
+
+.ls-stick__knob {
+  position: absolute;
+  left: 32px;
+  top: 32px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255, 201, 74, 0.8);
+}
+
+/* ---------- Countdown ---------- */
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 25;
+  font-size: 150px;
+  letter-spacing: 4px;
+  color: var(--gold);
+  text-shadow: 0 6px 0 #6a1bd1, 0 0 40px rgba(255, 201, 74, 0.6);
+  opacity: 0;
+}
+
+.countdown.is-shown {
+  animation: countdown-pop 0.75s ease-out;
+}
+
+@keyframes countdown-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  20% { opacity: 1; transform: scale(1.12); }
+  40% { transform: scale(1); }
+  80% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+/* ---------- Carteles ---------- */
+
+.ls__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  pointer-events: auto;
+  z-index: 30;
+}
+
+.ls__overlay[hidden] {
+  display: none;
+}
+
+.ls__card {
+  width: min(420px, 100%);
+  padding: 22px 24px;
+  background: var(--plate);
+  border: 3px solid var(--gold);
+  border-radius: 22px;
+  text-align: center;
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.4);
+}
+
+.ls__card-title {
+  font-size: 28px;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  color: var(--gold);
+}
+
+.ls__card-body {
+  font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.ls__card-btn {
+  margin-top: 16px;
+  padding: 10px 22px;
+  border: 2px solid var(--gold);
+  border-radius: 999px;
+  background: linear-gradient(90deg, #c2187a, #6a1bd1);
+  color: #ffffff;
+  font: inherit;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.ls__results {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.ls__result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+  font-family: var(--font);
+  font-size: 13px;
+}
+
+.ls__result--mine {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+.ls__result-pos {
+  width: 18px;
+  color: var(--gold);
+}
+
+.ls__result-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ls__result-value {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .ls__clock {
+    font-size: 24px;
+    min-width: 86px;
+  }
+
+  .ls__alive {
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+
+  .ls__third {
+    top: 100px;
+    font-size: 16px;
+    padding: 6px 16px;
+  }
+
+  .countdown {
+    font-size: 108px;
+  }
+
+  .ls__banner-title {
+    font-size: 22px;
+  }
+
+  .ls__players {
+    min-width: 0;
+  }
+
+  .ls__player-name {
+    max-width: 64px;
+  }
+
+  .ls__feed {
+    top: 84px;
+  }
+}

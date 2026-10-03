@@ -1301,6 +1301,64 @@ export interface LbServerToClient {
   "lb:crown": (msg: LbCrown) => void;
 }
 
+// ============================================================================
+// Laser Show (namespace `/lasershow`, prefijo `ls:`).
+// ============================================================================
+
+/**
+ * El server es duenio de la semilla del show (los lasers los genera cada cliente con
+ * ella), del reloj y del orden de eliminacion; el movimiento lo simula cada cliente y
+ * aca se reenvia. Cada cliente juzga su propio toque de laser (ver
+ * `games/lasershow.ts`).
+ */
+
+export type LsPhase = "waiting" | "preroll" | "playing" | "over";
+
+export interface LsState {
+  phase: LsPhase;
+  /** Ms para largar ("preroll") o para el final ("playing": tope o vuelta de honor). */
+  msLeft: number;
+  /** Ms desde la largada (negativo en la cuenta regresiva): los lasers salen de aca. */
+  elapsed: number;
+  /** Semilla del show de esta partida. */
+  seed: number;
+  /** Queda uno solo y esta en su vuelta de honor. */
+  lap: boolean;
+  alive: boolean[];
+  /** Ms aguantados por asiento (-1 mientras sigue en pie). */
+  times: number[];
+  on: boolean[];
+}
+
+export interface LsInit extends LsState {
+  seat: number;
+  seats: string[];
+  spawn: { x: number; y: number; z: number; r: number } | null;
+}
+
+/** Cliente -> Server. */
+export interface LsClientToServer {
+  "ls:join": (msg: { code: string; nickname: string; roster: string[]; round: number }) => void;
+  /** f: 1 = en el piso, 2 = moviendose, 4 = agachado. */
+  "ls:pos": (msg: { x: number; y: number; z: number; r: number; f: number }) => void;
+  /** Me toco un laser o me cai del escenario. */
+  "ls:dead": (msg: Record<string, never>) => void;
+  /** Empujo hacia donde miro (`r`, rad). El server decide a quien alcanza. */
+  "ls:push": (msg: { r: number }) => void;
+}
+
+/** Server -> Cliente. */
+export interface LsServerToClient {
+  "ls:init": (msg: LsInit) => void;
+  "ls:state": (msg: LsState) => void;
+  /** Posiciones a 20 Hz, aplanadas: [asiento, x, y, z, rotY, flags, ...]. */
+  "ls:snap": (msg: { p: number[] }) => void;
+  /** Dirigido: te empujaron; aplica este impulso (m/s). `from` = asiento del que empujo. */
+  "ls:shove": (msg: { vx: number; vz: number; vy: number; from: number }) => void;
+  /** A todos: el asiento `i` empujo (para la animacion). */
+  "ls:pushfx": (msg: { i: number }) => void;
+}
+
 /* ========================== POOLNIGHT (namespace /poolnight, prefijo bi:) ========================== */
 
 /**
