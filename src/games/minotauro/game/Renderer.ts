@@ -2,6 +2,7 @@ import { DIRS, E, N, S, W, mulberry32, type Maze } from "./Maze";
 import type { Minotaur } from "./Minotaur";
 import type { Player } from "./Player";
 import { drawDoll, facingOf, type DollLook, type Facing } from "./Doll";
+import { DollStage } from "./Doll3D";
 
 /** Paleta (DESIGN.md "Losa de Creta"). */
 const C = {
@@ -95,7 +96,9 @@ export class Renderer {
   /** Espacio que el HUD deja libre a los costados / arriba / abajo. */
   private margins = { left: 0, right: 0, top: 0, bottom: 0 };
   /** Paso y orientacion de cada muñeco ("" = el propio), derivados de cuanto se movio. */
-  private readonly gait = new Map<string, { x: number; y: number; phase: number; stride: number; facing: Facing }>();
+  private readonly gait = new Map<string, { x: number; y: number; phase: number; stride: number; facing: Facing; yaw: number }>();
+  /** Muñecos en 3D (Three.js); null si no hay WebGL, y entonces van en 2D. */
+  private dolls: DollStage | null | undefined;
   /** Punta de la antorcha propia en celdas (de ahi salen las brasas). */
   private torch = { x: 0, y: 0 };
 
@@ -824,12 +827,12 @@ export class Renderer {
   /**
    * Un muñeco con su antorcha. La orientacion de los rivales sale de hacia donde se
    * movieron (no viaja en el mensaje); la del propio, de `heading`, que tambien gira al
-   * chocar una pared. El paso avanza con la distancia: dos pasos por celda.
+   * chocar una pared. El paso avanza con la distancia: un paso por celda.
    */
   private drawTheseus(key: string, fx: number, fy: number, look: DollLook, time: number, dt: number, facing?: Facing): { x: number; y: number } {
     let g = this.gait.get(key);
     if (!g) {
-      g = { x: fx, y: fy, phase: 0, stride: 0, facing: "s" };
+      g = { x: fx, y: fy, phase: 0, stride: 0, facing: "s", yaw: 0 };
       this.gait.set(key, g);
     }
     const dx = fx - g.x;
@@ -837,16 +840,41 @@ export class Renderer {
     const dist = Math.hypot(dx, dy);
     // Un salto grande es una bajada de nivel o un rival que reaparece: no se camina.
     const moved = dist > 0.0005 && dist < 0.5;
-    if (moved) g.phase += dist * Math.PI * 2;
+    if (moved) g.phase += dist * Math.PI;
     const speed = dt > 0 ? dist / dt : 0;
     const target = moved ? Math.min(1, speed / 3) : 0;
     g.stride += (target - g.stride) * Math.min(1, dt * 14);
     if (target === 0 && g.stride < 0.05) g.phase = 0;
-    g.facing = facing ?? (dist > 0.004 && dist < 0.5 ? facingOf(dx, dy, g.facing) : g.facing);
+    const walking = dist > 0.004 && dist < 0.5;
+    g.facing = facing ?? (walking ? facingOf(dx, dy, g.facing) : g.facing);
+    // Giro continuo (3D): hacia donde mira o hacia donde se mueve, por el camino corto.
+    const want = facing ? { n: Math.PI, e: Math.PI / 2, s: 0, w: -Math.PI / 2 }[facing] : walking ? Math.atan2(dx, dy) : g.yaw;
+    let turn = want - g.yaw;
+    turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+    g.yaw += turn * Math.min(1, dt * 16);
     g.x = fx;
     g.y = fy;
-    const u = this.cell * 0.072;
-    return drawDoll(this.ctx, this.px(fx), this.py(fy) + this.cell * 0.3, u, look, { facing: g.facing, phase: g.phase, stride: g.stride, time });
+    const x = this.px(fx);
+    const y = this.py(fy) + this.cell * 0.22;
+    if (this.dolls === undefined) {
+      try {
+        this.dolls = new DollStage();
+      } catch {
+        this.dolls = null;
+      }
+    }
+    if (!this.dolls) {
+      return drawDoll(this.ctx, x, y, this.cell * 0.072, look, { facing: g.facing, phase: g.phase, stride: g.stride, time });
+    }
+    // Sombra de contacto en el piso (el sprite 3D no trae piso).
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+    ctx.beginPath();
+    ctx.ellipse(x, y, this.cell * 0.2, this.cell * 0.08, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return this.dolls.draw(ctx, key, look, x, y, this.cell, this.dpr, { yaw: g.yaw, phase: g.phase, stride: g.stride, time });
   }
 
   /** Otro Teseo de la sala, con el color de su asiento y su propia antorcha. */

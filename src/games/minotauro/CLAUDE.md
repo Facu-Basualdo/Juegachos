@@ -90,20 +90,34 @@ pagina se cuelga sin error. Por eso: el guard `if (!(unit > 0.5)) return;`, `res
 en el constructor del `Renderer`, y `setMargins` antes del primer `buildLevel`. Se
 encontro pausando la pagina con CDP (`Debugger.pause`); no lo saques.
 
-## Teseo (`Doll.ts`)
+## Teseo en 3D (`Doll3D.ts`, con `Doll.ts` de respaldo)
 
-El jugador es el muñeco de bloques de la casa (el de Marea de Lava, Pista Loca, Derrumbe)
-en tres cuartos desde arriba, con la antorcha levantada; antes era solo una llama y el
-programador pidio "una persona con una antorcha". Rectangulos alineados al pixel, sin
-texturas: a 23x23 mide ~25 px. Mira para cuatro lados (el oeste es el espejo del este)
-y `drawDoll` devuelve la punta de la antorcha, que es de donde salen la llama y las
-brasas. El paso no viaja por la red: el `Renderer` lo deriva de cuanto se movio cada
-muñeco entre cuadros (`gait`, dos pasos por celda; un salto de mas de media celda es una
-bajada o una reaparicion y no se camina). La orientacion propia sale de `heading`, que
-tambien gira al chocar una pared; la de los rivales, de hacia donde se movieron.
-**Los muñecos se dibujan afuera del recorte del tablero**: en la primera fila la cabeza
-y la llama asoman sobre el marco, y recortadas quedaban rotas. Color: `lookFor(asiento)`,
-con el asiento = orden en `players()` (en solo, el 0, remera roja).
+El jugador es el muñeco de bloques de la casa (el de Marea de Lava: mismas medidas, mismas
+texturas pixeladas de 8x8, copiado y no importado) **en 3D**, con la antorcha levantada.
+El programador lo pidio asi en dos pasos: primero "una persona con una antorcha" en vez
+de la llama, y despues "que sea en 3D, no 2D". El laberinto **sigue siendo canvas 2D**:
+`DollStage` tiene un solo `WebGLRenderer` chico fuera de pantalla con una camara
+ortografica fija en tres cuartos (`ELEVATION` 60 grados), renderiza cada muñeco de a uno
+y lo estampa con `drawImage` (por eso `preserveDrawingBuffer`). Lo alumbra una
+`PointLight` en la punta de su propia antorcha mas una hemisferica calida. `draw`
+devuelve la punta de la antorcha proyectada a px, y de ahi salen la llama 2D y las
+brasas. Si no hay WebGL, el `Renderer` cae a `Doll.ts`, el mismo muñeco dibujado en 2D.
+
+- El paso no viaja por la red: el `Renderer` lo deriva de cuanto se movio cada muñeco
+  entre cuadros (`gait`, un paso por celda; un salto de mas de media celda es una bajada
+  o una reaparicion y no se camina). El giro es continuo, por el camino corto: el propio
+  mira segun `heading` (que tambien gira al chocar una pared), los rivales hacia donde
+  se mueven.
+- **Gotcha de lectura, medido en capturas:** visto desde arriba, dos piernas oscuras que
+  se abren ocupan mas ancho que el torso de perfil y forman una cuña que parece un
+  muñeco sentado. Por eso el balanceo es corto (0.28 rad), el pantalon es un poco mas
+  claro que el de Marea de Lava (con la luz naranja el original se iba a negro) y el
+  brazo de la antorcha va bien arriba (horizontal tapaba el torso).
+- **Los muñecos se dibujan afuera del recorte del tablero**: en la primera fila la
+  cabeza y la llama asoman sobre el marco, y recortadas quedaban rotas.
+- Color: `lookFor(asiento)`, con el asiento = orden en `players()` (en solo, el 0,
+  remera roja). Three.js va en el chunk compartido `three.module` (~150 KB gzip), el mismo
+  que ya bajan los juegos 3D de la casa; el codigo propio del juego queda en ~20 KB gzip.
 
 ## HUD
 
