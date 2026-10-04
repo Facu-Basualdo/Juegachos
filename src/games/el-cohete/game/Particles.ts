@@ -3,7 +3,7 @@ import * as THREE from "three";
 /**
  * Un pool de particulas en un solo `THREE.Points` (una llamada de dibujo). Todo vive en
  * Float32Arrays preasignados: nada de `new` por cuadro. Dos pools en la escena: uno
- * aditivo (fuego, chispas) y uno normal (humo blanco y negro, que tiene que tapar).
+ * aditivo (fuego, chispas) y uno normal (humo, que tiene que tapar).
  *
  * El sprite es procedural (sin textura): un disco suave con borde ruidoso para el humo.
  */

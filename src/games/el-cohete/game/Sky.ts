@@ -133,26 +133,10 @@ function moonTexture(): THREE.CanvasTexture {
   return t;
 }
 
-/** Bandas del planeta con anillos. */
-function planetTexture(): THREE.CanvasTexture {
-  const c = document.createElement("canvas");
-  c.width = 64;
-  c.height = 256;
-  const g = c.getContext("2d")!;
-  const cols = ["#e8a35c", "#f3cf8e", "#c7713c", "#f0b978", "#d98a4a", "#f7dca6"];
-  for (let y = 0; y < 256; y += 8) {
-    g.fillStyle = cols[(y / 8 + (y % 24 === 0 ? 1 : 0)) % cols.length];
-    g.fillRect(0, y, 64, 8);
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
 /**
  * El cielo cuenta la altura: noche de ciudad abajo, nubes violetas, y arriba el
- * espacio de los posters atomicos con estrellas de cuatro puntas, el Sputnik y un
- * planeta con anillos. `update` recibe la altura de la camara.
+ * espacio de los posters atomicos con estrellas de cuatro puntas y el Sputnik (los
+ * planetas que se cruzan estan en `Space.ts`). `update` recibe la altura de la camara.
  */
 export class Sky {
   readonly group = new THREE.Group();
@@ -161,7 +145,6 @@ export class Sky {
   private readonly bursts: THREE.Sprite[] = [];
   private readonly clouds: { s: THREE.Sprite; base: number }[] = [];
   private readonly sputnik = new THREE.Group();
-  private readonly planet = new THREE.Group();
   private readonly moon: THREE.Sprite;
 
   constructor() {
@@ -252,22 +235,6 @@ export class Sky {
     }
     this.sputnik.position.set(30, 72, -26);
     this.group.add(this.sputnik);
-
-    // Planeta con anillos, lejos, aparece en las alturas.
-    const ball2 = new THREE.Mesh(new THREE.SphereGeometry(40, 48, 32), new THREE.MeshBasicMaterial({ map: planetTexture() }));
-    const ringGeo = new THREE.RingGeometry(52, 82, 96);
-    const ring = new THREE.Mesh(
-      ringGeo,
-      new THREE.MeshBasicMaterial({ color: "#f3d6a0", side: THREE.DoubleSide, transparent: true, opacity: 0.6 }),
-    );
-    ring.rotation.x = Math.PI / 2.25;
-    this.planet.add(ball2, ring);
-    this.planet.rotation.z = 0.35;
-    // Sobre la linea de mirada de la camara de vuelo (que mira hacia -z y un poco a -x),
-    // y alto: a ~700 de distancia la camara ve hasta ~30 grados arriba, asi que a 480 de
-    // altura queda afuera hasta ~x12 y a x30 ya esta en el medio. Es un premio de altura.
-    this.planet.position.set(-300, 480, -620);
-    this.group.add(this.planet);
   }
 
   /** `alt` = altura de la camara; `time` = reloj. */
@@ -275,7 +242,8 @@ export class Sky {
     // El domo y las estrellas siguen a la camara: estan en el infinito.
     this.dome.position.copy(camPos);
     this.stars.position.copy(camPos);
-    const space = Math.min(1, Math.max(0, (alt - 40) / 120));
+    // El espacio llega hacia x10 (y ~ 95): de ahi en adelante pasan los planetas.
+    const space = Math.min(1, Math.max(0, (alt - 25) / 70));
     (this.dome.material as THREE.ShaderMaterial).uniforms.uSpace.value = space;
     const sm = this.stars.material as THREE.ShaderMaterial;
     sm.uniforms.uTime.value = time;
@@ -285,9 +253,9 @@ export class Sky {
       const tw = 0.6 + 0.4 * Math.sin(time * 1.7 + b.userData.phase);
       m.opacity = (0.25 + space * 0.75) * tw;
     }
+    (this.moon.material as THREE.SpriteMaterial).opacity = 1 - Math.min(1, space * 1.6);
     for (const c of this.clouds) c.s.position.x = c.base + Math.sin(time * 0.05 + c.base) * 3;
     this.sputnik.position.x = 30 - ((time * 3) % 80);
     this.sputnik.rotation.y = time * 0.6;
-    this.planet.rotation.y = time * 0.02;
   }
 }

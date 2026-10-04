@@ -68,7 +68,6 @@ const FLAME_VERT = /* glsl */ `
 const FLAME_FRAG = /* glsl */ `
   uniform float uTime;
   uniform float uPower;
-  uniform float uRed;
   uniform float uInner;
   varying vec2 vUv;
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -85,8 +84,6 @@ const FLAME_FRAG = /* glsl */ `
     vec3 hot = mix(vec3(1.0, 0.97, 0.85), vec3(1.0, 0.85, 0.5), 1.0 - v);
     vec3 warm = mix(vec3(1.0, 0.42, 0.08), vec3(0.95, 0.12, 0.05), 1.0 - v);
     vec3 col = mix(warm, hot, smoothstep(0.55, 1.0, v) * uInner);
-    // Tos de verdad: el fuego se pone rojo oscuro.
-    col = mix(col, vec3(0.75, 0.08, 0.02), uRed);
     float a = body * uPower * (0.75 + 0.25 * n);
     gl_FragColor = vec4(col * (1.4 + uInner), a);
   }`;
@@ -103,8 +100,6 @@ export class Rocket {
   private readonly flameOuter: THREE.Mesh;
   private readonly flameInner: THREE.Mesh;
   private readonly flameMats: THREE.ShaderMaterial[] = [];
-  /** La laca roja: se pone al rojo vivo cuando la tos es la de verdad. */
-  private readonly hot: THREE.MeshStandardMaterial[] = [];
   /** Piezas que salen volando en la explosion (se clonan). */
   readonly parts: THREE.Mesh[] = [];
 
@@ -191,13 +186,11 @@ export class Rocket {
       this.parts.push(f);
     }
     this.parts.push(nose, bell);
-    this.hot.push(hullMat, finMat);
-    for (const m of this.hot) m.emissive.set("#ff2a0a");
 
     // Fuego: dos conos aditivos (afuera naranja, adentro blanco caliente).
     const mk = (radius: number, len: number, inner: number) => {
       const mat = new THREE.ShaderMaterial({
-        uniforms: { uTime: { value: 0 }, uPower: { value: 0 }, uRed: { value: 0 }, uInner: { value: inner } },
+        uniforms: { uTime: { value: 0 }, uPower: { value: 0 }, uInner: { value: inner } },
         vertexShader: FLAME_VERT,
         fragmentShader: FLAME_FRAG,
         transparent: true,
@@ -224,26 +217,17 @@ export class Rocket {
     this.group.add(this.body);
   }
 
-  /**
-   * Estado del motor en el cuadro: `power` 0-1 (apagado a pleno), `red` 0-1 (la tos de
-   * verdad), `stretch` alarga el fuego con la velocidad.
-   */
-  setEngine(time: number, power: number, red: number, stretch: number): void {
+  /** Estado del motor en el cuadro: `power` 0-1 (apagado a pleno), `stretch` alarga el fuego con la velocidad. */
+  setEngine(time: number, power: number, stretch: number): void {
     for (const m of this.flameMats) {
       m.uniforms.uTime.value = time;
       m.uniforms.uPower.value = power;
-      m.uniforms.uRed.value = red;
     }
     const flick = 1 + Math.sin(time * 47) * 0.06 + Math.sin(time * 31) * 0.05;
     const len = Math.max(0.001, power) * stretch * flick;
     this.flameOuter.scale.set(1 + power * 0.1, len, 1 + power * 0.1);
     this.flameInner.scale.set(1, len * (0.9 + 0.1 * Math.sin(time * 23)), 1);
     this.flameOuter.visible = this.flameInner.visible = power > 0.01;
-    this.light.intensity = power * (6 + Math.sin(time * 37) * 1) * (1 - red * 0.4);
-    this.light.color.set(red > 0.2 ? "#ff3a1a" : "#ff8a3a");
-    // El casco al rojo vivo, a los tirones: es la senal de "se viene" que se lee aunque
-    // el humo negro se pierda contra el cielo de noche.
-    const glow = red * (0.35 + 0.65 * Math.abs(Math.sin(time * 19)));
-    for (const m of this.hot) m.emissiveIntensity = glow * 1.6;
+    this.light.intensity = power * (6 + Math.sin(time * 37) * 1);
   }
 }
