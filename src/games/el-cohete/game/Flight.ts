@@ -1,4 +1,4 @@
-import { EDGE, FAKE_DUR, FAKE_GAP, FAKE_MIN_T, FAKE_RATE, GROWTH, MAX_CRASH, warnFor } from "./constants";
+import { EDGE, GROWTH, MAX_CRASH } from "./constants";
 
 /** PRNG con semilla (mulberry32): el mismo vuelo en todos los clientes de la sala. */
 export function mulberry32(seed: number): () => number {
@@ -32,27 +32,16 @@ export function timeAt(m: number): number {
   return Math.log(Math.max(1, m)) / GROWTH;
 }
 
-export interface Cough {
-  /** Cuando empieza (s de vuelo). */
-  t: number;
-  /** Cuanto dura (s). La real dura hasta la explosion. */
-  dur: number;
-  /** true = humo negro, explota al terminar. false = amague de humo blanco. */
-  real: boolean;
-}
-
 /**
- * Un vuelo, decidido entero al despegar: donde explota y cuando tose. Determinista
- * por semilla (nada de `Math.random()` adentro), asi todos los clientes de la sala
- * ven exactamente el mismo cohete.
+ * Un vuelo, decidido entero al despegar: donde explota. Determinista por semilla
+ * (nada de `Math.random()` adentro), asi todos los clientes de la sala ven
+ * exactamente el mismo cohete. No avisa: explota de la nada.
  */
 export class Flight {
   /** Multiplicador al que explota (1.00 = en la plataforma). */
   readonly crash: number;
   /** Segundos de vuelo hasta la explosion. */
   readonly crashT: number;
-  /** Toses ordenadas por tiempo: los amagues y, si hay, el aviso real al final. */
-  readonly coughs: Cough[];
 
   constructor(seed: number) {
     const rand = mulberry32(seed);
@@ -62,26 +51,5 @@ export class Flight {
     const raw = EDGE / Math.max(1e-9, 1 - u);
     this.crash = raw < 1 ? 1 : Math.min(MAX_CRASH, Math.floor(raw * 100) / 100);
     this.crashT = timeAt(this.crash);
-
-    this.coughs = [];
-    const warn = warnFor(this.crash);
-    const realT = this.crashT - warn;
-    // Amagues: proceso de Poisson sobre el vuelo, lejos del despegue y del aviso real.
-    const end = realT - FAKE_GAP;
-    let t = FAKE_MIN_T + -Math.log(1 - rand()) / FAKE_RATE;
-    while (t + FAKE_DUR < end) {
-      this.coughs.push({ t, dur: FAKE_DUR, real: false });
-      t += FAKE_DUR + -Math.log(1 - rand()) / FAKE_RATE;
-    }
-    // Sin tiempo para avisar (explota al despegar o casi) no hay aviso: es la falla de encendido.
-    if (this.crash > 1 && realT > 0.15) this.coughs.push({ t: realT, dur: warn, real: true });
-  }
-
-  /** Tos en curso a los `t` s, con su avance 0-1; null si el motor anda bien. */
-  coughAt(t: number): { cough: Cough; k: number } | null {
-    for (const c of this.coughs) {
-      if (t >= c.t && t < c.t + c.dur) return { cough: c, k: (t - c.t) / c.dur };
-    }
-    return null;
   }
 }

@@ -17,14 +17,14 @@ import {
 } from "./constants";
 import { devRoom, type RoomLink } from "./devRoom";
 import { Flight, hashSeed, multAt } from "./Flight";
-import { fmtMult, Hud, type RivalRow } from "./Hud";
+import { fmtMult, Hud, type LiveView, type RivalRow } from "./Hud";
 import { parseLive, Rivals, type CkLive } from "./Rivals";
 import { SoundEffects } from "./SoundEffects";
 import { Stage } from "./Stage";
 
 type State = "ready" | "countdown" | "bet" | "flight" | "after" | "over";
 
-/** En pantallas tactiles no se nombra la tecla ESPACIO. */
+/** En pantallas tactiles se dice "toca", no "espacio o clic". */
 const TOUCH = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
 
 /** Encendido del motor en la plataforma antes de despegar (s). */
@@ -60,7 +60,6 @@ export class Game {
   /** Momento (ms) en que arranco la cuenta regresiva. */
   private countdownAt = 0;
   private lastCountdownIndex = -1;
-  private lastCough = -1;
   private lastTick = -1;
   private bestJump = 0;
   private resetAt = 0;
@@ -77,8 +76,7 @@ export class Game {
     this.hud = new Hud(container);
     this.hud.setBest(this.best);
     this.hud.showStart(this.best);
-    this.hud.onChip((v) => this.addBet(v));
-    this.hud.onTool((t) => this.tool(t));
+    this.hud.onChip((v) => this.pickBet(v));
     this.hud.onMain((at) => this.main(at));
 
     this.room =
@@ -94,7 +92,7 @@ export class Game {
       if (r && this.state === "flight" && m.f === this.flightNo) {
         this.stage.jump(r.seat, `${r.name} ${fmtMult(m.c / 100)}`);
         SoundEffects.rivalJump();
-        this.hud.toast(`${r.name} se bajó en ${fmtMult(m.c / 100)}`, "info");
+        this.hud.toast(`${r.name} cobró en ${fmtMult(m.c / 100)}`, "info");
       }
     });
 
@@ -123,16 +121,18 @@ export class Game {
       return;
     }
     if (e.repeat) return;
-    if (e.code === "ArrowUp" || e.code === "KeyW") this.tool("double");
-    else if (e.code === "ArrowDown" || e.code === "KeyS") this.tool("half");
-    else if (e.code === "KeyM") this.tool("max");
-    else if (e.code === "Backspace") this.tool("clear");
-    else if (/^Digit[1-4]$/.test(e.code)) this.addBet(CHIP_VALUES[Number(e.code.slice(5)) - 1]);
+    // Teclas 1-4: las fichas del paño; 5: todo.
+    if (/^Digit[1-5]$/.test(e.code)) {
+      const k = Number(e.code.slice(5));
+      this.pickBet(k === 5 ? Infinity : CHIP_VALUES[k - 1]);
+    }
   };
 
-  private onPointerDown = (): void => {
+  private onPointerDown = (e: PointerEvent): void => {
     SoundEffects.unlock();
     if (this.state === "ready" || this.state === "over") this.onStartInput();
+    // En vuelo con fichas arriba no hay paño: se cobra tocando cualquier parte.
+    else if (this.state === "flight" && this.placed > 0 && !this.cashed) this.main(e.timeStamp);
   };
 
   private onStartInput(): void {
@@ -147,19 +147,10 @@ export class Game {
     return this.state === "bet" && this.placed === 0;
   }
 
-  private addBet(v: number): void {
-    if (!this.canEditBet()) return;
-    this.bet = Math.min(this.chips, (this.bet >= MIN_BET ? this.bet : 0) + v);
-    SoundEffects.chip();
-    this.paintTable();
-  }
-
-  private tool(t: "half" | "double" | "max" | "clear"): void {
-    if (!this.canEditBet()) return;
-    if (t === "half") this.bet = Math.max(MIN_BET, Math.floor(this.bet / 2 / MIN_BET) * MIN_BET);
-    else if (t === "double") this.bet = Math.min(this.chips, this.bet * 2);
-    else if (t === "max") this.bet = this.chips;
-    else this.bet = 0;
+  /** Tocar una ficha FIJA la apuesta en ese valor (`Infinity` = todo). */
+  private pickBet(v: number): void {
+    if (!this.canEditBet() || this.chips < MIN_BET) return;
+    this.bet = Math.min(this.chips, v);
     SoundEffects.chip();
     this.paintTable();
   }
@@ -167,18 +158,11 @@ export class Game {
   /** El boton grande: apostar / cancelar en la plataforma, bajarse en vuelo. */
   private main(at: number): void {
     if (this.state === "bet") {
-      if (this.placed > 0) {
-        // En sala se puede retirar la apuesta mientras la ventana siga abierta.
-        if (!this.room) return;
-        this.chips += this.placed;
-        this.placed = 0;
-        SoundEffects.chip();
-      } else {
+      // Apostado queda apostado: el paño se va y no hay como retirarla.
+      if (this.placed > 0) return;
+      {
         const amount = Math.min(this.chips, Math.max(MIN_BET, this.bet));
-        if (this.chips < MIN_BET || amount < MIN_BET) {
-          this.hud.toast("Elegí cuánto apostar", "info");
-          return;
-        }
+        if (this.chips < MIN_BET || amount < MIN_BET) return;
         this.bet = amount;
         this.placed = amount;
         this.chips -= amount;
@@ -208,7 +192,7 @@ export class Game {
     this.bestJump = Math.max(this.bestJump, shown);
     SoundEffects.cashOut(shown >= 3);
     this.stage.jump(this.mySeat(), `${this.room ? this.room.me : "Vos"} ${fmtMult(shown)}`);
-    this.hud.toast(`+${win.toLocaleString("es-AR")}`, "gold");
+    // Sin aviso aparte: el numero gigante ya dice "¡Cobraste +N!".
     this.sendLive(true);
     this.paintTable();
   }
@@ -249,7 +233,6 @@ export class Game {
     this.state = "bet";
     this.placed = 0;
     this.cashed = 0;
-    this.lastCough = -1;
     this.lastTick = -1;
     this.phaseEnd = now + (this.room ? BET_TIME : SOLO_BET_TIME) * 1000;
     if (this.flightNo > 1) {
@@ -321,7 +304,6 @@ export class Game {
   private update(dt: number, now: number): void {
     let mult = 1;
     let ignite = 0;
-    let cough: { real: boolean; k: number } | null = null;
     let phase: "pad" | "flight" | "boom" = "pad";
 
     if (this.state === "countdown") {
@@ -360,17 +342,7 @@ export class Game {
       } else {
         mult = multAt(t);
         phase = "flight";
-        const c = this.flight.coughAt(t);
-        if (c) {
-          cough = { real: c.cough.real, k: c.k };
-          const id = this.flight.coughs.indexOf(c.cough);
-          if (id !== this.lastCough) {
-            this.lastCough = id;
-            if (c.cough.real) SoundEffects.coughReal();
-            else SoundEffects.coughFake();
-          }
-        }
-        SoundEffects.setEngine(mult, cough ? (cough.real ? 0.35 : 0.5) : 1);
+        SoundEffects.setEngine(mult, 1);
       }
     }
 
@@ -383,7 +355,7 @@ export class Game {
       }
     }
 
-    this.stage.update(dt, this.time, { phase, mult, ignite, cough });
+    this.stage.update(dt, this.time, { phase, mult, ignite });
     this.paintFrame(mult, now);
     this.updateLive(dt);
   }
@@ -393,40 +365,54 @@ export class Game {
   /** Lo que cambia cada cuadro: multiplicador, textos de fase y el boton. */
   private paintFrame(mult: number, now: number): void {
     const h = this.hud;
+    const n = (v: number) => Math.floor(v).toLocaleString("es-AR");
+    const hint = TOUCH ? "tocá la pantalla para cobrar" : "espacio o clic para cobrar";
+    let live: LiveView | null = null;
     if (this.state === "bet") {
+      // Antes del despegue el cartel grande es la cuenta regresiva, no un "x1.00" que
+      // no se entiende: lo primero que hay que saber es cuanto falta para apostar.
       const left = Math.max(0, Math.ceil((this.phaseEnd - now) / 1000));
-      h.setMult(1, "pad");
-      h.setPhase(this.placed ? (this.room ? `Despega en ${left}` : "¡Despegue!") : `Hagan sus apuestas · ${left}`);
-      if (this.chips < MIN_BET && !this.placed) h.setMain("off", "Sin fichas", "mirá el vuelo");
-      else if (this.placed) h.setMain(this.room ? "cancel" : "wait", this.room ? "Retirar" : "Encendido", `${this.placed.toLocaleString("es-AR")} en la mesa`);
-      else h.setMain("bet", "Apostar", TOUCH ? "" : "espacio");
+      h.setMult(String(left), "pad");
+      if (this.placed) {
+        live = { big: this.room ? String(left) : "¡YA!", sub: `apostaste ${n(this.placed)}`, hint: this.room ? "segundos para despegar" : "despegando", tone: "wait" };
+      } else if (this.chips < MIN_BET) {
+        h.setPhase("segundos para despegar");
+        h.setSteps("off", "off", "Te quedaste sin fichas");
+        h.setMain("off", "Sin fichas", "mirá el vuelo");
+      } else {
+        h.setPhase("segundos para apostar");
+        h.setSteps("active", "active", "Tocá para apostar");
+        h.setMain("bet", "Apostar", n(Math.min(this.chips, this.bet)));
+      }
     } else if (this.state === "flight") {
       h.setMult(mult, this.cashed ? "cashed" : "flight");
       if (this.placed && !this.cashed) {
-        h.setPhase("¡Bajate a tiempo!");
-        h.setMain("cash", "Bajarme", `+${Math.floor(this.placed * Math.floor(mult * 100) / 100).toLocaleString("es-AR")}`);
+        live = { big: fmtMult(mult), sub: `+${n(this.placed * Math.floor(mult * 100) / 100)} si cobrás ahora`, hint, tone: "cash" };
       } else if (this.cashed) {
-        h.setPhase(`Te bajaste en ${fmtMult(this.cashed)}`);
-        h.setMain("off", "A salvo", `+${Math.floor(this.placed * this.cashed).toLocaleString("es-AR")}`);
+        live = { big: fmtMult(this.cashed), sub: `¡Cobraste +${n(this.placed * this.cashed)}!`, hint: "mirá hasta dónde llega", tone: "won" };
       } else {
-        h.setPhase("Mirá cómo sube");
+        h.setPhase("esta vez no apostaste");
+        h.setSteps("off", "off", "Mirá y apostá en el próximo");
         h.setMain("off", "Sin apuesta", "próximo vuelo");
       }
     } else if (this.state === "after") {
-      h.setMult(this.flight.crash, "boom");
-      h.setPhase(this.flight.crash <= 1 ? "¡Falla de encendido!" : `Explotó en ${fmtMult(this.flight.crash)}`);
-      h.setMain("off", this.cashed ? "Cobraste" : this.placed ? "Perdiste" : "Explotó", this.cashed ? `+${Math.floor(this.placed * this.cashed).toLocaleString("es-AR")}` : this.placed ? `−${this.placed.toLocaleString("es-AR")}` : "");
+      h.setMult(this.flight.crash <= 1 ? "¡BOOM!" : fmtMult(this.flight.crash), "boom");
+      h.setPhase(this.flight.crash <= 1 ? "explotó en el despegue" : "explotó");
+      const lost = this.placed && !this.cashed;
+      h.setSteps("off", "off", this.cashed ? "¡Cobraste a tiempo!" : lost ? "Explotó antes de que cobres" : "Explotó", this.placed ? `Apostaste ${n(this.placed)}` : undefined);
+      h.setMain("off", this.cashed ? "Ganaste" : lost ? "Perdiste" : "Explotó", this.cashed ? `+${n(this.placed * this.cashed)}` : lost ? `−${n(this.placed)}` : "");
     } else if (this.state === "countdown" || this.state === "ready" || this.state === "over") {
-      h.setMult(1, "pad");
-      h.setPhase(this.state === "countdown" ? "Abre la mesa" : "Hagan sus apuestas");
+      h.setMult("¡A JUGAR!", "pad");
+      h.setPhase("abre la mesa");
     }
+    h.setLive(live);
     if (this.rivals && this.room) this.paintRivals();
   }
 
   /** Lo que cambia por evento: fichas, apuesta y vuelo. */
   private paintTable(): void {
     this.hud.setBank(this.chips);
-    this.hud.setBet(this.placed || this.bet, this.canEditBet());
+    this.hud.setBet(this.placed || Math.min(this.bet, this.chips), this.chips + this.placed, this.canEditBet());
     this.hud.setFlight(Math.max(1, this.flightNo), FLIGHTS);
   }
 

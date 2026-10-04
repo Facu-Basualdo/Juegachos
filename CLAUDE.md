@@ -157,7 +157,7 @@ Some room games stream each player's live position over their own **ephemeral br
 | `templo-rodante` | 8 x ~3/s = **24/s** | **No califica.** Manda eventos de pose, no posiciones: el rival se anima solo. |
 | `birome` | 8 x ~3/s = **24/s** (techo 8 x 8.3/s = 67/s) | **No califica.** Manda los quiebres del trazo, no posiciones: la linea del rival se reconstruye exacta. |
 | `dalgona` | 8 x 4/s = **32/s** (solo si cambio algo; sobre el canal de la sala) | **No califica.** Manda el tallado por niveles y el tramo roto, no la galleta: la grieta es determinista y cada pantalla la redibuja. |
-| `el-cohete` | 8 x ~0.5/s = **4/s** (eventos: apostó, se bajó, explotó, vuelo nuevo, keepalive 2 s; sobre el canal de la sala) | **No califica.** El vuelo es determinista por semilla y cada cliente lo simula; solo viajan las decisiones de cada jugador. |
+| `el-cohete` | 8 x ~0.5/s = **4/s** (eventos: apostó, cobró, explotó, vuelo nuevo, keepalive 2 s; sobre el canal de la sala) | **No califica.** El vuelo es determinista por semilla y cada cliente lo simula; solo viajan las decisiones de cada jugador. |
 | La Feria (`lobby3d`) | 8 x 15/s = **120/s** | **Nacio en el server** (`/lobby`, relay + reloj + record de la torre). No es un juego: es la sala 3D entre rondas. |
 | `typing-race` | 8 x ~0.5/s = **4/s** | **No califica.** Emite al completar frase / morir / heartbeat de 2s. Lejisimos del tope. |
 | `monopoly-mundial` | <1/s (solo el host, cada 3s) | **No califica.** Poco volumen; el payload es grande pero eso es otro limite (tamano, 256KB). |

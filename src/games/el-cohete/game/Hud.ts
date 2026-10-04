@@ -5,6 +5,15 @@ import { seatColor } from "./Parachute";
 
 export type MainMode = "bet" | "cancel" | "cash" | "wait" | "off";
 export type MultTone = "pad" | "flight" | "cashed" | "boom";
+export type StepState = "active" | "done" | "off";
+
+/** El numero gigante mientras se vuela con fichas arriba (el paño se va). */
+export interface LiveView {
+  big: string;
+  sub: string;
+  hint: string;
+  tone: "wait" | "cash" | "won";
+}
 
 export interface RivalRow {
   name: string;
@@ -29,14 +38,21 @@ export class Hud {
   private readonly phaseEl: HTMLElement;
   private readonly flightEl: HTMLElement;
   private readonly bankEl: HTMLElement;
-  private readonly betEl: HTMLElement;
   private readonly betBox: HTMLElement;
+  private readonly winEl: HTMLElement;
+  private readonly goBox: HTMLElement;
+  private readonly goTitle: HTMLElement;
+  private readonly betTitle: HTMLElement;
   private readonly mainBtn: HTMLButtonElement;
   private readonly mainLabel: HTMLElement;
   private readonly mainSub: HTMLElement;
   private readonly historyEl: HTMLElement;
   private readonly sideEl: HTMLElement;
   private readonly toastEl: HTMLDivElement;
+  private readonly liveEl: HTMLDivElement;
+  private readonly liveBig: HTMLElement;
+  private readonly liveSub: HTMLElement;
+  private readonly liveHint: HTMLElement;
   private readonly flashEl: HTMLDivElement;
   private readonly fadeEl: HTMLDivElement;
   private readonly countdownEl: HTMLDivElement;
@@ -49,7 +65,8 @@ export class Hud {
   constructor(container: HTMLElement) {
     this.root = document.createElement("div");
     this.root.className = "ck";
-    const chips = CHIP_VALUES.map((v, i) => `<button type="button" class="ck-chip ck-chip--${i}" data-chip="${v}" aria-label="Sumar ${v}"><span>${v}</span></button>`).join("");
+    // Las fichas FIJAN la apuesta (no suman): tocar 250 es apostar 250. La ultima es "todo".
+    const chips = [...CHIP_VALUES.map((v, i) => `<button type="button" class="ck-chip ck-chip--${i}" data-chip="${v}" aria-label="Apostar ${v}"><span>${v}</span></button>`), `<button type="button" class="ck-chip ck-chip--all" data-chip="all" aria-label="Apostar todo"><span>TODO</span></button>`].join("");
     this.root.innerHTML = `
       <div class="ck-marquee" data-tone="pad">
         <div class="ck-marquee__flight" data-k="flight">VUELO 1 / 10</div>
@@ -59,18 +76,16 @@ export class Hud {
       <div class="ck-history" aria-label="Últimos vuelos"><span class="ck-label">Historial</span><ol data-k="history"></ol></div>
       <aside class="ck-side" data-k="side"></aside>
       <div class="ck-table">
-        <div class="ck-bank"><span class="ck-label">Fichas</span><b data-k="bank">1.000</b></div>
-        <div class="ck-bet" data-k="betbox">
-          <div class="ck-bet__head"><span class="ck-label">Apuesta</span><b data-k="bet">100</b></div>
+        <div class="ck-bank"><span class="ck-label">Tus fichas</span><b data-k="bank">1.000</b></div>
+        <div class="ck-step ck-step--bet" data-k="betbox" data-state="active">
+          <div class="ck-step__head"><span class="ck-step__n">1</span><span class="ck-step__t" data-k="bettitle">Elegí cuánto apostar</span></div>
           <div class="ck-chips">${chips}</div>
-          <div class="ck-tools">
-            <button type="button" data-tool="half">½</button>
-            <button type="button" data-tool="double">x2</button>
-            <button type="button" data-tool="max">Todo</button>
-            <button type="button" data-tool="clear" aria-label="Borrar apuesta">Borrar</button>
-          </div>
+          <div class="ck-win" data-k="win"></div>
         </div>
-        <button type="button" class="ck-main" data-mode="bet"><span class="ck-main__label">Apostar</span><span class="ck-main__sub">espacio</span></button>
+        <div class="ck-step ck-step--go" data-k="gobox" data-state="active">
+          <div class="ck-step__head"><span class="ck-step__n">2</span><span class="ck-step__t" data-k="gotitle">Apostá</span></div>
+          <button type="button" class="ck-main" data-mode="bet"><span class="ck-main__label">Apostar</span><span class="ck-main__sub">100</span></button>
+        </div>
       </div>
     `;
     const one = (k: string) => this.root.querySelector<HTMLElement>(`[data-k="${k}"]`)!;
@@ -79,8 +94,11 @@ export class Hud {
     this.phaseEl = one("phase");
     this.flightEl = one("flight");
     this.bankEl = one("bank");
-    this.betEl = one("bet");
     this.betBox = one("betbox");
+    this.winEl = one("win");
+    this.goBox = one("gobox");
+    this.goTitle = one("gotitle");
+    this.betTitle = one("bettitle");
     this.historyEl = one("history");
     this.sideEl = one("side");
     this.mainBtn = this.root.querySelector(".ck-main")!;
@@ -89,6 +107,12 @@ export class Hud {
 
     this.toastEl = document.createElement("div");
     this.toastEl.className = "ck-toast";
+    this.liveEl = document.createElement("div");
+    this.liveEl.className = "ck-live";
+    this.liveEl.innerHTML = `<div class="ck-live__big"></div><div class="ck-live__sub"></div><div class="ck-live__hint"></div>`;
+    this.liveBig = this.liveEl.querySelector(".ck-live__big")!;
+    this.liveSub = this.liveEl.querySelector(".ck-live__sub")!;
+    this.liveHint = this.liveEl.querySelector(".ck-live__hint")!;
     this.flashEl = document.createElement("div");
     this.flashEl.className = "ck-flash";
     this.fadeEl = document.createElement("div");
@@ -110,17 +134,17 @@ export class Hud {
 
     // Los controles del paño no arrancan nada ni llegan al listener del container.
     this.root.querySelector(".ck-table")!.addEventListener("pointerdown", (e) => e.stopPropagation());
+    this.root.append(this.liveEl);
     container.append(this.root, this.toastEl, this.countdownEl, this.flashEl, this.fadeEl, this.overlayEl);
   }
 
   // ---------- Eventos del paño ----------
 
+  /** Ficha tocada: su valor, o `Infinity` para "todo". */
   onChip(cb: (value: number) => void): void {
-    for (const b of this.root.querySelectorAll<HTMLButtonElement>("[data-chip]")) b.addEventListener("click", () => cb(Number(b.dataset.chip)));
-  }
-
-  onTool(cb: (tool: "half" | "double" | "max" | "clear") => void): void {
-    for (const b of this.root.querySelectorAll<HTMLButtonElement>("[data-tool]")) b.addEventListener("click", () => cb(b.dataset.tool as "half" | "double" | "max" | "clear"));
+    for (const b of this.root.querySelectorAll<HTMLButtonElement>("[data-chip]")) {
+      b.addEventListener("click", () => cb(b.dataset.chip === "all" ? Infinity : Number(b.dataset.chip)));
+    }
   }
 
   /** El boton principal va por pointerdown: bajarse tiene que ser instantaneo. */
@@ -147,8 +171,10 @@ export class Hud {
     el.textContent = value;
   }
 
-  setMult(m: number, tone: MultTone): void {
-    this.text("mult", fmtMult(m), this.multEl);
+  /** Cartel grande: el multiplicador, o un texto (la cuenta para el despegue). */
+  setMult(m: number | string, tone: MultTone): void {
+    this.text("mult", typeof m === "string" ? m : fmtMult(m), this.multEl);
+    if (typeof m === "string") m = 1;
     if (this.sig.tone !== tone) {
       this.sig.tone = tone;
       this.marquee.dataset.tone = tone;
@@ -174,14 +200,30 @@ export class Hud {
     this.text("bank", fmt(chips), this.bankEl);
   }
 
-  setBet(amount: number, editable: boolean): void {
-    this.text("bet", fmt(amount), this.betEl);
-    const e = String(editable);
-    if (this.sig.editable !== e) {
-      this.sig.editable = e;
-      this.betBox.classList.toggle("is-locked", !editable);
-      for (const b of this.betBox.querySelectorAll<HTMLButtonElement>("button")) b.disabled = !editable;
+  /**
+   * La apuesta elegida: marca la ficha que corresponde, apaga las que no alcanzan y
+   * escribe lo que se gana en un ejemplo (lo que hace entender el juego de un vistazo).
+   */
+  setBet(amount: number, chips: number, editable: boolean): void {
+    const s = `${amount}|${chips}|${editable}`;
+    if (this.sig.bet === s) return;
+    this.sig.bet = s;
+    for (const b of this.betBox.querySelectorAll<HTMLButtonElement>("[data-chip]")) {
+      const v = b.dataset.chip === "all" ? chips : Number(b.dataset.chip);
+      const picked = b.dataset.chip === "all" ? amount === chips && !CHIP_VALUES.includes(amount as (typeof CHIP_VALUES)[number]) : amount === v;
+      b.classList.toggle("is-picked", picked && amount > 0);
+      b.disabled = !editable || v > chips || chips <= 0;
     }
+    // El ejemplo explica el juego mientras se elige; despues de apostar ya no hace falta.
+    this.winEl.innerHTML = amount > 0 && editable ? `Si cobrás en <b>x2</b> te llevás <b>${fmt(amount * 2)}</b>` : "";
+  }
+
+  /** Estado de cada paso del paño y el titulo del paso 2. */
+  setSteps(bet: StepState, go: StepState, goTitle: string, betTitle = "Elegí cuánto apostar"): void {
+    if (this.betBox.dataset.state !== bet) this.betBox.dataset.state = bet;
+    if (this.goBox.dataset.state !== go) this.goBox.dataset.state = go;
+    this.text("gotitle", goTitle, this.goTitle);
+    this.text("bettitle", betTitle, this.betTitle);
   }
 
   setMain(mode: MainMode, label: string, sub: string): void {
@@ -192,6 +234,23 @@ export class Hud {
     this.mainBtn.disabled = mode === "off" || mode === "wait";
     this.mainLabel.textContent = label;
     this.mainSub.textContent = sub;
+  }
+
+  /**
+   * Con fichas arriba: se va el paño (y la marquesina) y queda el numero gigante. `null`
+   * lo saca y vuelve el paño.
+   */
+  setLive(v: LiveView | null): void {
+    const on = v !== null;
+    if (this.sig.live !== String(on)) {
+      this.sig.live = String(on);
+      this.root.classList.toggle("ck--flying", on);
+    }
+    if (!v) return;
+    this.text("lbig", v.big, this.liveBig);
+    this.text("lsub", v.sub, this.liveSub);
+    this.text("lhint", v.hint, this.liveHint);
+    if (this.liveEl.dataset.tone !== v.tone) this.liveEl.dataset.tone = v.tone;
   }
 
   pushHistory(crash: number): void {
@@ -268,11 +327,12 @@ export class Hud {
     this.overlayBody.innerHTML = `
       <p class="ck-eyebrow">Casino · desde 1957</p>
       <h1 class="ck-logo">El Cohete</h1>
-      <p class="ck-tagline">Subí. Aguantá. Bajate a tiempo.</p>
-      <div class="ck-smoke-legend">
-        <span><i class="ck-puff ck-puff--white"></i>Humo blanco: amague</span>
-        <span><i class="ck-puff ck-puff--black"></i>Humo negro: ¡se viene!</span>
-      </div>
+      <p class="ck-tagline">Apostá, mirá cómo sube y cobrá antes de que explote.</p>
+      <ol class="ck-rules">
+        <li><b>1</b><span>Elegí cuánto apostar y tocá <i>APOSTAR</i>.</span></li>
+        <li><b>2</b><span>El cohete despega y tu premio se multiplica: x1.5, x2, x5…</span></li>
+        <li><b>3</b><span>Tocá la pantalla para <i>COBRAR</i> cuando quieras. Si explota antes, perdés lo apostado.</span></li>
+      </ol>
       ${best !== null ? `<p class="ck-best">Récord · ${fmt(best)} fichas</p>` : ""}
       <p class="ck-hint">presioná ENTER o tocá para entrar a la mesa</p>
     `;

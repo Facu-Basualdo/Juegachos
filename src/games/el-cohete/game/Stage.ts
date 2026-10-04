@@ -8,6 +8,8 @@ import { Parachute } from "./Parachute";
 import { Particles } from "./Particles";
 import { NOZZLE_Y, Rocket } from "./Rocket";
 import { Sky } from "./Sky";
+import { SoundEffects } from "./SoundEffects";
+import { Space } from "./Space";
 
 /** Altura por unidad de multiplicador: y = ALT_K * (m - 1). Acelera con el multiplicador. */
 const ALT_K = 10;
@@ -23,8 +25,6 @@ export interface StageView {
   mult: number;
   /** 0-1 de encendido en la plataforma (el motor calienta antes de despegar). */
   ignite: number;
-  /** Tos en curso: null o { real, k } con k el avance 0-1. */
-  cough: { real: boolean; k: number } | null;
 }
 
 /**
@@ -41,6 +41,7 @@ export class Stage {
   private readonly camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 4000);
   private readonly city = new City();
   private readonly sky = new Sky();
+  private readonly space = new Space();
   private readonly rocket = new Rocket();
   private readonly fire = new Particles(1400, true);
   private readonly smoke = new Particles(2200, false);
@@ -59,7 +60,9 @@ export class Stage {
   private lastY = REST_Y;
   private padTime = 0;
   private flashT = 1;
-  private coughShown = false;
+  /** Proximo fuego artificial sobre el casino (solo en la plataforma). */
+  private fireworkIn = 1.5;
+  private speed = 0;
   /** Altura del cohete (para la HUD: "x de altura"). */
   rocketY = REST_Y;
 
@@ -77,7 +80,7 @@ export class Stage {
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     const env = pmrem.fromScene(neonEnvironment(), 0.03).texture;
     pmrem.dispose();
-    for (const g of [this.rocket.group, this.sky.group]) {
+    for (const g of [this.rocket.group, this.sky.group, this.space.group]) {
       g.traverse((o) => {
         const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
         if (m && m.isMeshStandardMaterial) m.envMap = env;
@@ -93,7 +96,7 @@ export class Stage {
     signGlow.position.set(1.6, 4.2, -3.2);
     this.scene.add(signGlow);
 
-    this.scene.add(this.sky.group, this.city.group, this.rocket.group, this.smoke.points, this.fire.points);
+    this.scene.add(this.sky.group, this.space.group, this.city.group, this.rocket.group, this.smoke.points, this.fire.points);
     this.rocket.group.position.y = REST_Y;
 
     // Onda expansiva: anillo que mira a la camara.
@@ -145,7 +148,6 @@ export class Stage {
     for (const d of this.debris) this.scene.remove(d.mesh);
     this.debris.length = 0;
     this.shake = 0;
-    this.coughShown = false;
   }
 
   /** Despegue: nube de humo en la plataforma y el brazo de la torre se retira. */
@@ -215,43 +217,32 @@ export class Stage {
     this.phase = view.phase === "boom" && this.phase !== "boom" ? this.phase : view.phase;
     const r = this.rocket;
     let power = 0;
-    let red = 0;
 
     if (view.phase === "pad") {
       this.padTime += dt;
       power = view.ignite * (0.35 + 0.15 * Math.sin(time * 30));
       r.group.position.y = REST_Y;
+      this.speed = 0;
       if (view.ignite > 0.05) this.puffPad(dt, view.ignite);
+      this.fireworkIn -= dt;
+      if (this.fireworkIn <= 0) {
+        this.fireworkIn = 1.2 + Math.random() * 2.2;
+        this.firework();
+      }
     } else if (view.phase === "flight") {
       const y = REST_Y + ALT_K * (view.mult - 1);
       r.group.position.y = y;
       const speed = (y - this.lastY) / Math.max(1e-4, dt);
       this.lastY = y;
+      this.speed = speed;
       power = 1;
-      let shakeAmp = 0.01 + Math.min(0.03, speed * 0.0008);
-      if (view.cough) {
-        if (view.cough.real) {
-          // Tos de verdad: el fuego se pone rojo y se corta a los tirones, humo negro espeso.
-          red = 1;
-          power = 0.25 + 0.7 * Math.abs(Math.sin(time * 41) * Math.sin(time * 17));
-          shakeAmp = 0.05 + view.cough.k * 0.09;
-          this.emitCough(dt, true);
-        } else {
-          // Amague: el fuego baja de golpe, bocanada blanca, y vuelve.
-          power = 0.35 + 0.65 * Math.min(1, view.cough.k * 2.2) * (view.cough.k > 0.25 ? 1 : 0.4);
-          shakeAmp = 0.03;
-          if (!this.coughShown) this.emitCough(dt, false);
-        }
-        this.coughShown = true;
-      } else {
-        this.coughShown = false;
-      }
+      const shakeAmp = 0.01 + Math.min(0.03, speed * 0.0008);
       r.body.position.set((Math.random() - 0.5) * shakeAmp, 0, (Math.random() - 0.5) * shakeAmp);
       r.body.rotation.z = Math.sin(time * 1.3) * 0.02;
-      this.trail(dt, speed, view.cough?.real ?? false);
+      this.trail(dt, speed);
     }
     this.rocketY = r.group.position.y;
-    r.setEngine(time, power, red, 1 + Math.min(0.9, view.phase === "flight" ? (view.mult - 1) * 0.1 : 0));
+    r.setEngine(time, power, 1 + Math.min(0.9, view.phase === "flight" ? (view.mult - 1) * 0.1 : 0));
 
     // Piezas de la explosion.
     for (const d of this.debris) {
@@ -283,6 +274,7 @@ export class Stage {
     this.city.update(time, dt);
     this.updateCamera(dt, time, view);
     this.sky.update(time, this.camera.position.y, this.camera.position);
+    this.space.update(time, dt, this.camera.position.y, this.speed);
 
     // Fogonazo: el bloom se dispara un instante.
     this.flashT = Math.min(1, this.flashT + dt / 0.5);
@@ -317,6 +309,21 @@ export class Stage {
     this.camera.lookAt(this.camLook);
   }
 
+  /** Fuego artificial lejos, sobre la avenida: el casino festeja mientras se apuesta. */
+  private firework(): void {
+    const colors = [0xff3d8b, 0x2ee6d6, 0xffd36a, 0xfff4e0];
+    const c = colors[Math.floor(Math.random() * colors.length)];
+    const x = (Math.random() - 0.5) * 70;
+    const y = 16 + Math.random() * 12;
+    const z = -45 - Math.random() * 30;
+    for (let i = 0; i < 70; i++) {
+      const d = randDir(this.tmp).multiplyScalar(6 + Math.random() * 3);
+      this.fire.emit(x, y, z, d.x, d.y, d.z, 1.2 + Math.random() * 0.5, c, 0x5a1a30, 0.55, 0.1, 1, 1.3, 2.5);
+    }
+    this.fire.emit(x, y, z, 0, 0, 0, 0.25, 0xffffff, c, 3, 6, 0.6, 0);
+    SoundEffects.firework();
+  }
+
   /** Humo de calentamiento en la plataforma antes de despegar. */
   private puffPad(dt: number, k: number): void {
     this.smokeAcc += dt * 40 * k;
@@ -329,50 +336,19 @@ export class Stage {
   }
 
   /** Estela del escape: humo que queda en el aire y chispas del fuego. */
-  private trail(dt: number, speed: number, black: boolean): void {
+  private trail(dt: number, speed: number): void {
     const p = this.rocket.group.position;
-    const rate = black ? 150 : 30 + Math.min(40, speed * 1.5);
-    this.smokeAcc += dt * rate;
+    this.smokeAcc += dt * (30 + Math.min(40, speed * 1.5));
     while (this.smokeAcc >= 1) {
       this.smokeAcc -= 1;
       const y = p.y + NOZZLE_Y - 0.4 - Math.random() * 1.2;
-      const c0 = black ? 0x140f10 : 0x8e8296;
-      const c1 = black ? 0x221a1c : 0x362c42;
-      this.smoke.emit(p.x + (Math.random() - 0.5) * 0.3, y, p.z + (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * (black ? 1.4 : 0.6), -1 - Math.random(), (Math.random() - 0.5) * (black ? 1.4 : 0.6), black ? 2.6 : 3.0, c0, c1, black ? 0.5 : 0.35, black ? 3.0 : 2.0, black ? 1 : 0.45, 0.9);
+      this.smoke.emit(p.x + (Math.random() - 0.5) * 0.3, y, p.z + (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.6, -1 - Math.random(), (Math.random() - 0.5) * 0.6, 3.0, 0x8e8296, 0x362c42, 0.35, 2.0, 0.45, 0.9);
       if (Math.random() < 0.5) {
-        this.fire.emit(p.x + (Math.random() - 0.5) * 0.2, p.y - 0.3, p.z, (Math.random() - 0.5) * 1.5, -4 - Math.random() * 3, (Math.random() - 0.5) * 1.5, 0.35, black ? 0xff5a2a : 0xffc070, 0xff3a10, 0.12, 0.02, 1, 1.5);
+        this.fire.emit(p.x + (Math.random() - 0.5) * 0.2, p.y - 0.3, p.z, (Math.random() - 0.5) * 1.5, -4 - Math.random() * 3, (Math.random() - 0.5) * 1.5, 0.35, 0xffc070, 0xff3a10, 0.12, 0.02, 1, 1.5);
       }
     }
   }
 
-  /** Bocanada de una tos: blanca y de una vez (amague) o negra y continua (de verdad). */
-  private emitCough(dt: number, real: boolean): void {
-    const p = this.rocket.group.position;
-    const n = real ? Math.ceil(dt * 120) : 60;
-    for (let i = 0; i < n; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const v = real ? 1.6 : 3.2;
-      // Gris claro y no blanco puro: el blanco pasaba el umbral del bloom y la bocanada
-      // se leia como un resplandor en vez de humo.
-      const c0 = real ? 0x2c100a : 0xd6d0da;
-      const c1 = real ? 0x161012 : 0x9a92a2;
-      this.smoke.emit(
-        p.x + Math.cos(a) * 0.35,
-        p.y - 0.25 + Math.random() * 0.4,
-        p.z + Math.sin(a) * 0.35,
-        Math.cos(a) * v,
-        -0.6 + Math.random() * 1.2,
-        Math.sin(a) * v,
-        real ? 1.8 : 1.3,
-        c0,
-        c1,
-        real ? 0.6 : 0.55,
-        real ? 2.6 : 2.6,
-        real ? 1 : 0.95,
-        1.4,
-      );
-    }
-  }
 }
 
 /**

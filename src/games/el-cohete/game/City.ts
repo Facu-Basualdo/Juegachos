@@ -167,6 +167,44 @@ function streetsTexture(): THREE.CanvasTexture {
   return t;
 }
 
+/** Cartel del costado del dirigible: "EL COHETE" en neon con una fila de bombitas. */
+function blimpSignTexture(): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 128;
+  const g = c.getContext("2d")!;
+  g.fillStyle = "#14081e";
+  g.beginPath();
+  g.roundRect(4, 4, 504, 120, 26);
+  g.fill();
+  g.font = "64px Monoton, Righteous, sans-serif";
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  for (const [blur, col] of [
+    [26, "#ff3d8b"],
+    [8, "#ff3d8b"],
+    [2, "#fff4f8"],
+  ] as const) {
+    g.shadowColor = "#ff3d8b";
+    g.shadowBlur = blur;
+    g.fillStyle = col;
+    g.fillText("EL COHETE", 256, 66);
+  }
+  g.shadowBlur = 8;
+  g.shadowColor = "#ffd36a";
+  g.fillStyle = "#fff1c9";
+  for (let x = 24; x < 500; x += 22) {
+    g.beginPath();
+    g.arc(x, 14, 3.4, 0, Math.PI * 2);
+    g.arc(x, 114, 3.4, 0, Math.PI * 2);
+    g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
 const BEAM_FRAG = /* glsl */ `
   varying vec2 vUv;
   uniform float uAlpha;
@@ -189,6 +227,9 @@ export class City {
   private readonly neons: { mesh: THREE.Mesh; base: THREE.Color; flicker: number }[] = [];
   private readonly beams: { mesh: THREE.Mesh; phase: number; speed: number }[] = [];
   private readonly arm: THREE.Group;
+  /** Dirigible con letrero que cruza el cielo detras del casino. */
+  private readonly blimp = new THREE.Group();
+  private readonly blimpLight: THREE.Mesh;
   private readonly beacon: THREE.Mesh;
   private armOpen = 0;
 
@@ -353,6 +394,8 @@ export class City {
     ground.position.y = -60;
     this.group.add(ground);
 
+    this.blimpLight = this.buildBlimp();
+
     // ---- Reflectores que barren el cielo ----
     for (const [x, z, ph] of [
       [-34, -30, 0],
@@ -376,6 +419,41 @@ export class City {
       this.group.add(beam);
       this.beams.push({ mesh: beam, phase: ph, speed: 0.18 + rand() * 0.12 });
     }
+  }
+
+  /** Dirigible plateado, con gondola, aletas y el letrero de neon a los costados. */
+  private buildBlimp(): THREE.Mesh {
+    const silver = new THREE.MeshLambertMaterial({ color: "#9a96a8", emissive: "#1a1424" });
+    const hull = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 20), silver);
+    hull.scale.set(7, 2.1, 2.1);
+    this.blimp.add(hull);
+    for (const [y, z, rx] of [
+      [1.4, 0, 0],
+      [-1.4, 0, 0],
+      [0, 1.4, Math.PI / 2],
+      [0, -1.4, Math.PI / 2],
+    ]) {
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.4, 0.1), silver);
+      fin.position.set(-6.2, y, z);
+      fin.rotation.x = rx;
+      this.blimp.add(fin);
+    }
+    const gondola = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.6, 0.8), new THREE.MeshLambertMaterial({ color: "#2a1830", emissive: "#3a2a10" }));
+    gondola.position.y = -2.2;
+    this.blimp.add(gondola);
+    const signMat = new THREE.MeshBasicMaterial({ map: blimpSignTexture(), toneMapped: false, transparent: true });
+    for (const side of [1, -1]) {
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(8, 2), signMat);
+      sign.position.set(0, 0, side * 2.12);
+      if (side < 0) sign.rotation.y = Math.PI;
+      this.blimp.add(sign);
+    }
+    const light = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), new THREE.MeshBasicMaterial({ toneMapped: false }));
+    light.position.set(0, -2.6, 0);
+    this.blimp.add(light);
+    this.blimp.position.set(-60, 15, -40);
+    this.group.add(this.blimp);
+    return light;
   }
 
   /** Brazo de la torre: 0 pegado al cohete, 1 retirado (al despegar). */
@@ -403,6 +481,11 @@ export class City {
       b.mesh.rotation.x = Math.cos(time * b.speed * 0.8 + b.phase) * 0.25 - 0.1;
     }
     this.arm.rotation.y += (-this.armOpen * 1.6 - this.arm.rotation.y) * Math.min(1, dt * 4);
+    // El dirigible cruza de izquierda a derecha, despacio, meciendose.
+    this.blimp.position.x = -70 + ((time * 1.6) % 140);
+    this.blimp.position.y = 15 + Math.sin(time * 0.4) * 0.6;
+    this.blimp.rotation.z = Math.sin(time * 0.5) * 0.03;
+    (this.blimpLight.material as THREE.MeshBasicMaterial).color.setHex(0xff2a1a).multiplyScalar(Math.sin(time * 3) > 0.6 ? 3 : 0.2);
     (this.beacon.material as THREE.MeshBasicMaterial).color.setHex(0xff2a1a).multiplyScalar(Math.sin(time * 4) > 0 ? 3 : 0.3);
   }
 }
