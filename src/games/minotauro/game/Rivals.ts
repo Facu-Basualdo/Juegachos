@@ -35,7 +35,7 @@ const EASE = 9;
 /**
  * Los otros Teseos: cada jugador baja SUS laberintos (los mismos para todos, por la
  * semilla de la ronda), con su propio Minotauro. De los demas solo llega en que nivel
- * estan, por donde van y si siguen vivos, y se dibujan como llamas palidas cuando
+ * estan, por donde van y si siguen vivos, y se dibujan como muñecos con el color de su asiento cuando
  * comparten nivel con uno. Es una carrera, no un juego cooperativo: nadie choca con
  * nadie.
  */

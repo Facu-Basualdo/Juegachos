@@ -254,7 +254,7 @@ export class Hud {
       <p class="mn-eyebrow">Un laberinto · una antorcha · una bestia</p>
       <h1 class="mn-title">Minotauro</h1>
       <svg class="mn-keyline" viewBox="0 0 560 14" aria-hidden="true"><path d="${keyline(560, 14)}"/></svg>
-      <p class="mn-sub">Seguí la llama · encontrá el ovillo · no lo despiertes</p>
+      <p class="mn-sub">Seguí el hilo · encontrá el ovillo · no lo despiertes</p>
       ${best !== null ? `<p class="mn-best">Optimvm · ${best.toLocaleString("es-AR")} pts</p>` : ""}
       <p class="mn-hint">presioná ENTER o tocá para entrar</p>
     `;

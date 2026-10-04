@@ -18,6 +18,7 @@ import {
   sizeFor,
 } from "./constants";
 import { devRoom, type RoomLink } from "./devRoom";
+import { lookFor } from "./Doll";
 import { Hud } from "./Hud";
 import { Input } from "./Input";
 import { Maze, hashSeed, mulberry32 } from "./Maze";
@@ -45,7 +46,7 @@ const CAUGHT_HOLD = 1.7;
  * `TIME_POINTS` por cada segundo por debajo del par del laberinto.
  *
  * En sala, todos bajan los mismos laberintos (semilla = codigo + ronda), cada uno con
- * su Minotauro, y se ven las llamas de los demas cuando comparten nivel.
+ * su Minotauro, y se ven los muñecos de los demas, cada uno con su antorcha, cuando comparten nivel.
  */
 export class Game {
   private readonly renderer: Renderer;
@@ -353,7 +354,7 @@ export class Game {
     const rivals =
       this.rivals?.list
         .filter((r) => r.level === this.level && this.rivals!.fresh(r))
-        .map((r) => ({ x: r.sx, y: r.sy, name: r.name, alive: r.alive })) ?? [];
+        .map((r) => ({ x: r.sx, y: r.sy, name: r.name, alive: r.alive, look: lookFor(this.seatOf(r.name)) })) ?? [];
     this.renderer.draw(
       {
         maze: this.maze,
@@ -365,6 +366,7 @@ export class Game {
         dread,
         beat: this.beat,
         shake: this.shake,
+        look: lookFor(this.room ? this.seatOf(this.room.me) : 0),
         rivals,
         showPlayer: this.state !== "caught" && this.state !== "over",
         time,
@@ -387,6 +389,11 @@ export class Game {
   }
 
   // ---------- Sala en vivo ----------
+
+  /** Asiento = orden en la sala (el mismo en todos los clientes), para el color del muñeco. */
+  private seatOf(name: string): number {
+    return Math.max(0, this.room?.players().indexOf(name) ?? 0);
+  }
 
   private updateLive(dt: number): void {
     if (!this.room || this.state === "ready") return;

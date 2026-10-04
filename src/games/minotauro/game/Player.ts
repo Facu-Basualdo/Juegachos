@@ -11,7 +11,7 @@ export interface PlayerEvents {
 }
 
 /**
- * La llama del jugador: se mueve de celda a celda, como el Minotauro. Mientras se
+ * Teseo, el jugador: se mueve de celda a celda, como el Minotauro. Mientras se
  * mantiene una direccion apretada sigue caminando; en un cruce prueba primero la
  * ultima direccion apretada y despues las otras que siguen apretadas, asi doblar en
  * una esquina sale natural aunque se suelte una tecla un toque tarde.

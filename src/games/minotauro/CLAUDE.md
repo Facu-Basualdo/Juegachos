@@ -81,7 +81,7 @@ Rendimiento medido en el nivel 8 (23x23) a 1440x900: cuadro p50 8.3 ms, `draw()`
 
 La losa (marco, meandro, rosetas, piso de arenisca, muros con biselado) se pinta **una
 vez por nivel** en un canvas aparte; por cuadro solo van hilo, anforas, ovillo,
-Minotauro, oscuridad, rivales, llama, ojos y particulas. La memoria de lo recorrido es
+Minotauro, oscuridad, ojos, particulas y, afuera del recorte del tablero, los muñecos con su antorcha. La memoria de lo recorrido es
 una textura de 1 px por celda escalada con suavizado (sale el difuminado gratis).
 
 **Gotcha — el cuelgue del meandro:** `meander()` dibuja la greca en pasos de `unit`; si
@@ -89,6 +89,21 @@ el marco mide 0 (el nivel se armaba antes de `setMargins`) el bucle no avanza y 
 pagina se cuelga sin error. Por eso: el guard `if (!(unit > 0.5)) return;`, `resize()`
 en el constructor del `Renderer`, y `setMargins` antes del primer `buildLevel`. Se
 encontro pausando la pagina con CDP (`Debugger.pause`); no lo saques.
+
+## Teseo (`Doll.ts`)
+
+El jugador es el muñeco de bloques de la casa (el de Marea de Lava, Pista Loca, Derrumbe)
+en tres cuartos desde arriba, con la antorcha levantada; antes era solo una llama y el
+programador pidio "una persona con una antorcha". Rectangulos alineados al pixel, sin
+texturas: a 23x23 mide ~25 px. Mira para cuatro lados (el oeste es el espejo del este)
+y `drawDoll` devuelve la punta de la antorcha, que es de donde salen la llama y las
+brasas. El paso no viaja por la red: el `Renderer` lo deriva de cuanto se movio cada
+muñeco entre cuadros (`gait`, dos pasos por celda; un salto de mas de media celda es una
+bajada o una reaparicion y no se camina). La orientacion propia sale de `heading`, que
+tambien gira al chocar una pared; la de los rivales, de hacia donde se movieron.
+**Los muñecos se dibujan afuera del recorte del tablero**: en la primera fila la cabeza
+y la llama asoman sobre el marco, y recortadas quedaban rotas. Color: `lookFor(asiento)`,
+con el asiento = orden en `players()` (en solo, el 0, remera roja).
 
 ## HUD
 
@@ -113,8 +128,8 @@ hilo crece).
   bueno puede bajar mucho tiempo; el tope corta la ronda. El parcial (`getScore`) es el
   puntaje acumulado, comparable con el de los que ya murieron (`"higher"`).
 - **Rivales en vivo** (`Rivals.ts`): por el `broadcastLive` de la sala (`{g:"mn", r, lv,
-  x, y, a, s}`), ~4/s y solo si cambio algo, keepalive cada 2 s. Cada uno ve las llamas
-  palidas de los que estan **en su mismo nivel** y en la estela la lista con el nivel de
+  x, y, a, s}`), ~4/s y solo si cambio algo, keepalive cada 2 s. Cada uno ve los muñecos
+  de los que estan **en su mismo nivel**, con el color de su asiento (orden de `players()`) y en la estela la lista con el nivel de
   cada uno (`†` el que ya murio). La posicion es cosmetica: no afecta al Minotauro ajeno.
 - **`devRoom.ts`**: sala falsa solo en dev (`?dev=Ana&roster=Ana,Beto&code=X`, una
   pestana por jugador, viaja por `BroadcastChannel`). Asi se probo la vista de rivales

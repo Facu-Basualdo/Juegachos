@@ -1,6 +1,7 @@
 import { DIRS, E, N, S, W, mulberry32, type Maze } from "./Maze";
 import type { Minotaur } from "./Minotaur";
 import type { Player } from "./Player";
+import { drawDoll, facingOf, type DollLook, type Facing } from "./Doll";
 
 /** Paleta (DESIGN.md "Losa de Creta"). */
 const C = {
@@ -37,8 +38,10 @@ export interface Scene {
   beat: number;
   /** Temblor de pantalla en px. */
   shake: number;
+  /** Como se ve Teseo (el color de su asiento en la sala; en solo, el 0). */
+  look: DollLook;
   /** Otros jugadores de la sala en este mismo nivel. */
-  rivals: { x: number; y: number; name: string; alive: boolean }[];
+  rivals: { x: number; y: number; name: string; alive: boolean; look: DollLook }[];
   /** Mostrar al jugador (no despues de que lo atrapan). */
   showPlayer: boolean;
   time: number;
@@ -58,7 +61,7 @@ interface Particle {
 /**
  * Dibujo de Minotauro (canvas 2D). La losa (marco con greca, piso de arenisca y muros
  * levantados) se pinta UNA vez por nivel en un canvas aparte; cada cuadro se dibujan
- * encima el hilo, las anforas, el ovillo, el Minotauro y la llama, y despues la
+ * encima el hilo, las anforas, el ovillo, el Minotauro, y despues la
  * oscuridad.
  *
  * La oscuridad es lo que hace el juego (DESIGN.md):
@@ -68,7 +71,7 @@ interface Particle {
  *    sigilo: si no lo ves, el tampoco te ve.
  *  - Lo ya alumbrado queda en la memoria, tenue y con bordes suaves: una textura de
  *    1 px por celda estirada con suavizado.
- *  - Despues de la oscuridad va lo que se ve igual: la llama, el brillo del oro, los
+ *  - Despues de la oscuridad va lo que se ve igual: el brillo del oro, los
  *    ojos del Minotauro despierto y cerca, las brasas.
  */
 export class Renderer {
@@ -91,6 +94,10 @@ export class Renderer {
   cell = 10;
   /** Espacio que el HUD deja libre a los costados / arriba / abajo. */
   private margins = { left: 0, right: 0, top: 0, bottom: 0 };
+  /** Paso y orientacion de cada muñeco ("" = el propio), derivados de cuanto se movio. */
+  private readonly gait = new Map<string, { x: number; y: number; phase: number; stride: number; facing: Facing }>();
+  /** Punta de la antorcha propia en celdas (de ahi salen las brasas). */
+  private torch = { x: 0, y: 0 };
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -163,11 +170,11 @@ export class Renderer {
   }
 
   private emit(s: Scene, dt: number): void {
-    // Brasas que suben de la llama.
+    // Brasas que suben de la antorcha.
     if (s.showPlayer && Math.random() < dt * 14) {
       this.particles.push({
-        x: s.player.fx + (Math.random() - 0.5) * 0.15,
-        y: s.player.fy - 0.1,
+        x: this.torch.x + (Math.random() - 0.5) * 0.08,
+        y: this.torch.y - 0.05,
         vx: (Math.random() - 0.5) * 0.25,
         vy: -0.5 - Math.random() * 0.5,
         life: 0.7 + Math.random() * 0.6,
@@ -247,11 +254,19 @@ export class Renderer {
 
     // ---- Lo que se ve igual en la oscuridad ----
     this.drawGlints(s);
-    for (const r of s.rivals) this.drawRival(r, s.time);
-    if (s.showPlayer) this.drawFlame(s.player.fx, s.player.fy, s.time, s.light);
     this.drawEyes(s);
     this.drawParticles(["ember", "gold", "smoke"]);
     ctx.restore();
+
+    // Los muñecos van afuera del recorte: en la primera fila la cabeza y la antorcha
+    // asoman sobre el marco (es una vista en tres cuartos), y cortadas quedaban rotas.
+    for (const r of s.rivals) this.drawRival(r, s.time, dt);
+    if (s.showPlayer) {
+      const h = s.player.heading;
+      const tip = this.drawTheseus("", s.player.fx, s.player.fy, s.look, s.time, dt, facingOf(Math.cos(h), Math.sin(h), "s"));
+      this.torch = { x: (tip.x - this.inner.x) / this.cell - 0.5, y: (tip.y - this.inner.y) / this.cell - 0.5 };
+      this.drawFlame(tip.x, tip.y, s.time, s.light, 1);
+    }
 
     // Pulso rojo en los bordes cuando el Minotauro esta cerca, al ritmo del latido.
     if (s.dread > 0.05) {
@@ -806,49 +821,71 @@ export class Renderer {
     ctx.restore();
   }
 
-  /** Otra llama de la sala, palida (es "otro Teseo" en el mismo laberinto). */
-  private drawRival(r: { x: number; y: number; name: string; alive: boolean }, time: number): void {
+  /**
+   * Un muñeco con su antorcha. La orientacion de los rivales sale de hacia donde se
+   * movieron (no viaja en el mensaje); la del propio, de `heading`, que tambien gira al
+   * chocar una pared. El paso avanza con la distancia: dos pasos por celda.
+   */
+  private drawTheseus(key: string, fx: number, fy: number, look: DollLook, time: number, dt: number, facing?: Facing): { x: number; y: number } {
+    let g = this.gait.get(key);
+    if (!g) {
+      g = { x: fx, y: fy, phase: 0, stride: 0, facing: "s" };
+      this.gait.set(key, g);
+    }
+    const dx = fx - g.x;
+    const dy = fy - g.y;
+    const dist = Math.hypot(dx, dy);
+    // Un salto grande es una bajada de nivel o un rival que reaparece: no se camina.
+    const moved = dist > 0.0005 && dist < 0.5;
+    if (moved) g.phase += dist * Math.PI * 2;
+    const speed = dt > 0 ? dist / dt : 0;
+    const target = moved ? Math.min(1, speed / 3) : 0;
+    g.stride += (target - g.stride) * Math.min(1, dt * 14);
+    if (target === 0 && g.stride < 0.05) g.phase = 0;
+    g.facing = facing ?? (dist > 0.004 && dist < 0.5 ? facingOf(dx, dy, g.facing) : g.facing);
+    g.x = fx;
+    g.y = fy;
+    const u = this.cell * 0.072;
+    return drawDoll(this.ctx, this.px(fx), this.py(fy) + this.cell * 0.3, u, look, { facing: g.facing, phase: g.phase, stride: g.stride, time });
+  }
+
+  /** Otro Teseo de la sala, con el color de su asiento y su propia antorcha. */
+  private drawRival(r: { x: number; y: number; name: string; alive: boolean; look: DollLook }, time: number, dt: number): void {
     if (!r.alive) return;
     const ctx = this.ctx;
-    const x = this.px(r.x);
-    const y = this.py(r.y);
-    const s = this.cell * 0.22;
     ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    const g = ctx.createRadialGradient(x, y, 0, x, y, s * 3);
-    g.addColorStop(0, "rgba(170, 200, 255, 0.35)");
-    g.addColorStop(1, "rgba(120, 150, 255, 0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(x - s * 3, y - s * 3, s * 6, s * 6);
-    ctx.globalAlpha = 0.75;
-    flamePath(ctx, x, y, s, time + x);
-    ctx.fillStyle = "rgba(200, 220, 255, 0.85)";
-    ctx.fill();
+    ctx.globalAlpha = 0.9;
+    const tip = this.drawTheseus(`r:${r.name}`, r.x, r.y, r.look, time + r.x * 3, dt);
     ctx.restore();
+    this.drawFlame(tip.x, tip.y, time + r.x, 2.2, 0.75);
     ctx.save();
     ctx.font = `600 ${Math.max(9, this.cell * 0.22)}px Cinzel, Georgia, serif`;
     ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(220, 230, 255, 0.75)";
+    const x = this.px(r.x);
     // En la primera fila el nombre arriba quedaria recortado por el borde de la losa.
     const below = r.y < 0.6;
+    const y = below ? this.py(r.y) + this.cell * 0.62 : tip.y - this.cell * 0.3;
     ctx.textBaseline = below ? "top" : "alphabetic";
-    ctx.fillText(r.name.toUpperCase(), x, below ? y + s * 1.6 : y - s * 2.2);
+    const label = r.name.toUpperCase();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.fillText(label, x + 1, y + 1);
+    ctx.fillStyle = r.look.shirt;
+    ctx.fillText(label, x, y);
     ctx.restore();
   }
 
-  private drawFlame(fx: number, fy: number, time: number, light: number): void {
+  /** Llama de antorcha en px; `scale` < 1 para la de los rivales. */
+  private drawFlame(x: number, y: number, time: number, light: number, scale: number): void {
     const ctx = this.ctx;
-    const x = this.px(fx);
-    const y = this.py(fy);
-    const s = this.cell * 0.26 * (0.75 + 0.25 * Math.min(1, light / 3));
+    const s = this.cell * 0.19 * scale * (0.75 + 0.25 * Math.min(1, light / 3));
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    const halo = ctx.createRadialGradient(x, y, 0, x, y, s * 4.5);
-    halo.addColorStop(0, "rgba(255, 190, 90, 0.55)");
-    halo.addColorStop(0.4, "rgba(255, 130, 50, 0.16)");
+    const halo = ctx.createRadialGradient(x, y, 0, x, y, s * 5);
+    halo.addColorStop(0, `rgba(255, 190, 90, ${0.55 * scale})`);
+    halo.addColorStop(0.4, `rgba(255, 130, 50, ${0.16 * scale})`);
     halo.addColorStop(1, "rgba(255, 100, 30, 0)");
     ctx.fillStyle = halo;
-    ctx.fillRect(x - s * 4.5, y - s * 4.5, s * 9, s * 9);
+    ctx.fillRect(x - s * 5, y - s * 5, s * 10, s * 10);
     ctx.restore();
     ctx.save();
     // Tres capas: borde rojo, cuerpo naranja, corazon blanco.

@@ -25,7 +25,8 @@ El HUD es piedra tallada, no interfaz: estelas de piedra a los costados con el t
 | Muro, sombra | `#3a2414` |
 | Greca y relieves | `#e2b07a`, sombra `#7a4a22` |
 | Oro (ovillo, titulos) | `#f6d9a8` a `#c4773b`, brillo `#e8b64a` |
-| Llama | `#fff2c4`, `#ffb347`, `#e8592a` |
+| Llama de la antorcha | `#fff2c4`, `#ffb347`, `#e8592a` |
+| Teseo | remera del asiento (rojo `#e2433b` en solo), pantalon `#34406a`, palo `#6b3f1f` |
 | Hilo de Ariadna | `#b8231b` |
 | Ojos del Minotauro, peligro | `#ff3a1f` |
 | Texto | `#f0d6ac`, apagado `#a9825a` |
@@ -33,7 +34,7 @@ El HUD es piedra tallada, no interfaz: estelas de piedra a los costados con el t
 ## Vocabulario
 
 - **Losa**: el tablero, con su marco de greca y cuatro rosetas.
-- **Llama**: el jugador. Una llamita con brasas que suben.
+- **Teseo**: el jugador. El muñeco de bloques de la casa (el de Marea de Lava: cabeza cubica, remera del color de su asiento, pantalon azul) visto en tres cuartos desde arriba, con la antorcha levantada en la mano. La llama y las brasas salen de la punta de la antorcha. Mira para donde camina y balancea las piernas con el paso; en la sala cada uno tiene el color de su asiento y su nombre arriba en ese color.
 - **Aceite**: anforas chicas tiradas en los rincones sin salida; recargan la antorcha.
 - **Ovillo**: el ovillo de oro, la salida al laberinto de abajo.
 - **Descensos**: los niveles, numerados en romanos.
