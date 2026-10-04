@@ -90,7 +90,7 @@ interface Engine {
 
 /**
  * Sonido de El Cohete: todo sintetizado. El motor es un loop continuo (ruido filtrado
- * mas una sierra grave) que sube de tono con el multiplicador; las toses lo cortan.
+ * mas una sierra grave) que sube de tono con el multiplicador.
  */
 export class SoundEffects {
   private static engine: Engine | null = null;
@@ -162,7 +162,7 @@ export class SoundEffects {
     this.engine = { osc, sub, filter, gain, src };
   }
 
-  /** Cada cuadro: multiplicador (tono) y potencia 0-1 (las toses cortan el motor). */
+  /** Cada cuadro: multiplicador (tono) y potencia 0-1. */
   static setEngine(mult: number, power: number): void {
     const e = this.engine;
     const c = actx;
@@ -189,21 +189,14 @@ export class SoundEffects {
     }, fast ? 100 : 700);
   }
 
-  /** Amague: un "puf" limpio de vapor. */
-  static coughFake(): void {
-    noise(0.22, 0.26, "bandpass", 1400, 600, 0, 1.5);
-    tone("sine", 180, 120, 0.12, 0.08);
+  /** Fuego artificial lejano: pum sordo y chisporroteo. */
+  static firework(): void {
+    tone("sine", 120, 60, 0.35, 0.05);
+    noise(0.3, 0.04, "lowpass", 900, 200);
+    for (let i = 0; i < 6; i++) noise(0.03, 0.015, "highpass", 5000, 3000, 0.15 + i * 0.07 + Math.random() * 0.05);
   }
 
-  /** Tos de verdad: petardeo grave a los tirones, sin pausa. */
-  static coughReal(): void {
-    for (let i = 0; i < 4; i++) {
-      noise(0.07, 0.34, "lowpass", 700, 150, i * 0.09, 2);
-      tone("square", 75, 50, 0.06, 0.06, i * 0.09);
-    }
-  }
-
-  /** Bajarse: caja registradora. */
+  /** Cobrar: caja registradora. */
   static cashOut(big: boolean): void {
     noise(0.05, 0.2, "highpass", 5000, 3000);
     bell(1318.5, 0.02, 0.12);

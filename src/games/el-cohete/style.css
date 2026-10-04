@@ -377,12 +377,12 @@ body {
   left: 50%;
   bottom: 0;
   translate: -50% 0;
-  width: min(880px, 100vw);
+  width: min(900px, 100vw);
   display: grid;
-  grid-template-columns: 150px 1fr 150px;
+  grid-template-columns: 150px 1fr auto;
   align-items: center;
-  gap: 18px;
-  padding: 18px 26px calc(18px + env(safe-area-inset-bottom));
+  gap: 22px;
+  padding: 16px 28px calc(18px + env(safe-area-inset-bottom));
   border-radius: 34px 34px 0 0;
   background:
     radial-gradient(120% 140% at 50% 0%, rgba(255, 255, 255, 0.08), transparent 55%),
@@ -396,8 +396,7 @@ body {
     0 -10px 40px rgba(0, 0, 0, 0.5);
 }
 
-.ck-bank b,
-.ck-bet__head b {
+.ck-bank b {
   display: block;
   font-family: var(--block);
   font-size: 30px;
@@ -406,19 +405,62 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.ck-bet {
+/* Pasos numerados: "1 Elegi cuanto apostar" y "2 Aposta / Cobra". El que toca brilla. */
+.ck-step {
   display: grid;
   justify-items: center;
-  gap: 8px;
+  gap: 10px;
   transition: opacity 0.25s;
 }
 
-.ck-bet.is-locked {
-  opacity: 0.55;
+.ck-step__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--round);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  color: var(--cream);
+  white-space: nowrap;
 }
 
-.ck-bet__head {
-  text-align: center;
+.ck-step__n {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-family: var(--block);
+  font-size: 13px;
+  color: #3a2408;
+  background: linear-gradient(180deg, #ffe7a8, var(--gold-lo));
+  box-shadow: 0 2px 0 #5a3a0c;
+}
+
+.ck-step[data-state="active"] .ck-step__n {
+  animation: step-ping 1.4s ease-in-out infinite;
+}
+
+@keyframes step-ping {
+  50% {
+    box-shadow:
+      0 2px 0 #5a3a0c,
+      0 0 0 6px rgba(255, 211, 106, 0.25);
+  }
+}
+
+.ck-step[data-state="done"] .ck-step__n {
+  background: #2a6a4c;
+  color: #c9f5de;
+}
+
+.ck-step[data-state="off"] {
+  opacity: 0.45;
+}
+
+.ck-step--go[data-state="active"] .ck-step__t {
+  color: var(--bulb-core);
+  text-shadow: 0 0 12px rgba(255, 211, 106, 0.6);
 }
 
 .ck-chips {
@@ -426,12 +468,24 @@ body {
   gap: 12px;
 }
 
+.ck-win {
+  min-height: 18px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ck-win b {
+  font-family: var(--block);
+  font-weight: 400;
+  color: var(--gold);
+}
+
 /* Ficha de arcilla: disco con canto de rayas, aro interior punteado y el valor. */
 .ck-chip {
   --c: #2f6fd6;
   position: relative;
-  width: 54px;
-  height: 54px;
+  width: 58px;
+  height: 58px;
   border-radius: 50%;
   border: 0;
   cursor: pointer;
@@ -446,8 +500,9 @@ body {
     0 4px 0 rgba(0, 0, 0, 0.45),
     0 6px 14px rgba(0, 0, 0, 0.35);
   transition:
-    transform 0.12s,
-    box-shadow 0.12s;
+    transform 0.15s cubic-bezier(0.2, 1.4, 0.4, 1),
+    box-shadow 0.15s,
+    opacity 0.2s;
 }
 
 .ck-chip span {
@@ -460,6 +515,9 @@ body {
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
 }
 
+.ck-chip--0 {
+  --c: #2f6fd6;
+}
 .ck-chip--1 {
   --c: #d23a33;
 }
@@ -470,46 +528,44 @@ body {
 .ck-chip--3 {
   --c: #7d3fc0;
 }
+.ck-chip--all {
+  --c: #c8962f;
+  color: #3a2408;
+  font-size: 11px;
+}
+.ck-chip--all span {
+  border-color: rgba(58, 36, 8, 0.5);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+}
 
-.ck-chip:hover:not(:disabled) {
+/* La ficha elegida sube y se rodea de oro: se ve de lejos cuanto se esta jugando. */
+.ck-chip.is-picked {
+  transform: translateY(-8px) scale(1.08);
+  box-shadow:
+    inset 0 0 0 2px rgba(0, 0, 0, 0.25),
+    0 0 0 3px var(--bulb-core),
+    0 0 18px rgba(255, 211, 106, 0.8),
+    0 10px 16px rgba(0, 0, 0, 0.45);
+}
+
+.ck-chip:hover:not(:disabled):not(.is-picked) {
   transform: translateY(-4px);
 }
 
-.ck-chip:active:not(:disabled) {
-  transform: translateY(1px);
-  box-shadow:
-    inset 0 0 0 2px rgba(0, 0, 0, 0.25),
-    0 1px 0 rgba(0, 0, 0, 0.45);
-}
-
-.ck-tools {
-  display: flex;
-  gap: 8px;
-}
-
-.ck-tools button {
-  font-family: var(--round);
-  font-size: 13px;
-  letter-spacing: 0.06em;
-  padding: 6px 13px;
-  border-radius: 999px;
-  border: 1.5px solid rgba(246, 213, 138, 0.6);
-  background: rgba(0, 0, 0, 0.22);
-  color: var(--gold);
-  cursor: pointer;
-}
-
-.ck-tools button:hover:not(:disabled) {
-  background: rgba(246, 213, 138, 0.15);
-}
-
-.ck-bet button:disabled {
+.ck-chip:disabled {
   cursor: default;
+}
+
+.ck-chip:disabled:not(.is-picked) {
+  opacity: 0.35;
+}
+
+.ck-step--go {
+  justify-self: end;
 }
 
 /* El boton principal: una ficha gigante con aro cromado. */
 .ck-main {
-  justify-self: end;
   position: relative;
   width: 138px;
   height: 138px;
@@ -595,6 +651,113 @@ body {
 .ck-main:disabled {
   cursor: default;
   filter: saturate(0.25) brightness(0.7);
+}
+
+/* ---------- En vuelo con fichas arriba: se va el pano, queda el numero gigante ---------- */
+
+.ck--flying .ck-table {
+  opacity: 0;
+  transform: translateY(110%);
+  pointer-events: none;
+}
+
+.ck--flying .ck-marquee,
+.ck--flying .ck-history {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ck-live {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  justify-items: center;
+  padding: max(28px, 5vh) 16px max(26px, 5vh);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.ck--flying .ck-live {
+  opacity: 1;
+}
+
+.ck-live__big {
+  font-family: var(--block);
+  font-size: clamp(84px, 15vw, 210px);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--bulb-core);
+  text-shadow:
+    0 0 8px rgba(255, 241, 201, 0.95),
+    0 0 30px rgba(255, 211, 106, 0.9),
+    0 0 70px rgba(255, 140, 40, 0.6),
+    0 6px 0 #6b3a10;
+}
+
+.ck-live__sub {
+  margin-top: 6px;
+  font-family: var(--block);
+  font-size: clamp(20px, 3vw, 34px);
+  color: var(--gold);
+  text-shadow:
+    0 2px 0 #3a2408,
+    0 0 16px rgba(0, 0, 0, 0.7);
+}
+
+.ck-live__hint {
+  grid-row: 4;
+  padding: 12px 22px;
+  border-radius: 999px;
+  font-family: var(--round);
+  font-size: clamp(14px, 1.8vw, 18px);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #3a2208;
+  background: linear-gradient(180deg, #fff2b0, #e8b23a);
+  box-shadow:
+    0 0 0 3px #fff1c9,
+    0 0 30px rgba(255, 211, 106, 0.7),
+    0 6px 0 #5a3a08;
+  animation: cash-pulse-pill 0.8s ease-in-out infinite;
+}
+
+.ck-live__hint:empty {
+  display: none;
+}
+
+@keyframes cash-pulse-pill {
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+.ck-live[data-tone="wait"] .ck-live__big {
+  color: var(--cream);
+  text-shadow:
+    0 0 20px rgba(255, 61, 139, 0.7),
+    0 6px 0 #5a0d2e;
+}
+
+.ck-live[data-tone="wait"] .ck-live__hint,
+.ck-live[data-tone="won"] .ck-live__hint {
+  color: var(--cream);
+  background: rgba(14, 8, 26, 0.7);
+  box-shadow: 0 0 0 1px rgba(246, 213, 138, 0.4);
+  animation: none;
+}
+
+.ck-live[data-tone="won"] .ck-live__big {
+  color: #d8fff9;
+  text-shadow:
+    0 0 8px rgba(216, 255, 249, 0.9),
+    0 0 30px rgba(46, 230, 214, 0.85),
+    0 6px 0 #0c4a46;
+}
+
+.ck-live[data-tone="won"] .ck-live__sub {
+  color: #8ff0e0;
 }
 
 /* ---------- Avisos ---------- */
@@ -831,40 +994,42 @@ body {
   color: var(--gold);
 }
 
-.ck-smoke-legend {
-  display: flex;
-  justify-content: center;
-  gap: 22px;
-  margin: 18px 0 4px;
-  font-size: 14px;
-}
-
-.ck-smoke-legend span {
-  display: inline-flex;
-  align-items: center;
+.ck-rules {
+  list-style: none;
+  display: grid;
   gap: 8px;
+  margin: 18px auto 4px;
+  max-width: 420px;
+  text-align: left;
+  font-size: 15px;
+  line-height: 1.35;
 }
 
-.ck-puff {
-  width: 22px;
-  height: 22px;
+.ck-rules li {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.ck-rules b {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  display: inline-block;
+  font-family: var(--block);
+  font-weight: 400;
+  font-size: 13px;
+  color: #3a2408;
+  background: linear-gradient(180deg, #ffe7a8, var(--gold-lo));
 }
 
-.ck-puff--white {
-  background: radial-gradient(circle at 40% 35%, #fff, #e8e2ea 55%, #b9b2bf);
-  box-shadow:
-    8px 3px 0 -4px #f2efe9,
-    -7px 4px 0 -5px #f2efe9;
-}
-
-.ck-puff--black {
-  background: radial-gradient(circle at 40% 35%, #4a4044, #1a1414 60%, #0a0808);
-  box-shadow:
-    8px 3px 0 -4px #1a1414,
-    -7px 4px 0 -5px #1a1414,
-    0 0 12px rgba(255, 59, 47, 0.6);
+.ck-rules i {
+  font-style: normal;
+  font-family: var(--block);
+  font-size: 13px;
+  color: var(--gold);
 }
 
 .ck-best {
@@ -974,13 +1139,15 @@ body {
     font-size: 16px;
   }
 
+  /* En el celu se lee de arriba hacia abajo: primero el paso 1 (fichas a lo ancho),
+     despues tus fichas y el paso 2 con el boton. Con el 2 arriba del 1 no se entendia. */
   .ck-table {
     grid-template-columns: 1fr auto;
     grid-template-areas:
-      "bank main"
-      "bet main";
+      "bet bet"
+      "bank go";
     gap: 8px 12px;
-    padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
     border-radius: 24px 24px 0 0;
   }
 
@@ -988,54 +1155,62 @@ body {
     grid-area: bank;
   }
 
-  .ck-bet {
+  .ck-bank b {
+    font-size: 26px;
+  }
+
+  .ck-step--bet {
     grid-area: bet;
-    justify-items: start;
+    gap: 6px;
   }
 
-  .ck-bet__head {
+  .ck-step--go {
+    grid-area: go;
     display: flex;
-    align-items: baseline;
-    gap: 8px;
+    align-items: center;
+    gap: 10px;
   }
 
-  .ck-bet__head b {
-    font-size: 20px;
+  .ck-step__head {
+    font-size: 13px;
+  }
+
+  .ck-step--go .ck-step__head {
+    max-width: 120px;
+    white-space: normal;
+    text-align: right;
+    flex-direction: row-reverse;
   }
 
   .ck-main {
-    grid-area: main;
-    width: 116px;
-    height: 116px;
+    width: 100px;
+    height: 100px;
   }
 
-  .ck-bank b {
-    font-size: 24px;
+  .ck-main__label {
+    font-size: 15px;
   }
 
   .ck-chips {
-    gap: 8px;
+    gap: 10px;
   }
 
   .ck-chip {
-    width: 44px;
-    height: 44px;
-    font-size: 11px;
-  }
-
-  .ck-chip span {
-    inset: 8px;
-  }
-
-  .ck-tools button {
-    padding: 5px 9px;
+    width: 50px;
+    height: 50px;
     font-size: 12px;
   }
 
-  .ck-smoke-legend {
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
+  .ck-chip span {
+    inset: 9px;
+  }
+
+  .ck-history {
+    bottom: 300px;
+  }
+
+  .ck-side {
+    bottom: 340px;
   }
 
   .ck-card {
