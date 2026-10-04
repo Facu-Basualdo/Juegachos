@@ -1,0 +1,707 @@
+/*
+ * Minotauro. Ver DESIGN.md ("Losa de Creta"): piedra tallada, capitales romanas,
+ * oro gastado y una sola luz calida. Nada de interfaz plana: estelas, tablillas y
+ * relieves.
+ */
+
+:root {
+  color-scheme: dark;
+  --night: #0d0704;
+  --umber: #241509;
+  --stone: #4a2f19;
+  --stone-lo: #2a190c;
+  --sand: #e2b07a;
+  --terra: #c4773b;
+  --gold: #e8b64a;
+  --thread: #b8231b;
+  --danger: #ff3a1f;
+  --pale: #f0d6ac;
+  --muted: #a9825a;
+  --roman: "Cinzel", "Trajan Pro", "Optima", "Palatino Linotype", Georgia, serif;
+  --serif: "Cormorant Garamond", "Palatino Linotype", Georgia, serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  color: var(--pale);
+  font-family: var(--serif);
+  background:
+    radial-gradient(900px 700px at 50% 55%, rgba(120, 64, 24, 0.3), transparent 70%),
+    radial-gradient(1400px 900px at 50% 40%, #2a180b 0%, #170d06 55%, #0b0603 100%);
+  background-color: var(--night);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+/* Lineas finas de piedra sobre todo el fondo. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 220, 170, 0.012) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.05) 0 1px, transparent 1px 4px);
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+.game-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  touch-action: none;
+}
+
+.back-link {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  z-index: 60;
+  font-family: var(--roman);
+  font-size: 11px;
+  letter-spacing: 0.3em;
+  color: var(--muted);
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.back-link:hover {
+  color: var(--sand);
+}
+
+.mn {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ---------- Estelas ---------- */
+
+.mn-stele {
+  position: absolute;
+  top: 50%;
+  width: 248px;
+  transform: translateY(-50%);
+  padding: 46px 22px 26px;
+  text-transform: uppercase;
+  background:
+    repeating-linear-gradient(176deg, rgba(255, 210, 160, 0.025) 0 2px, transparent 2px 9px),
+    radial-gradient(120% 80% at 30% 10%, rgba(255, 190, 120, 0.08), transparent 60%),
+    linear-gradient(180deg, #4b2f19 0%, #3a2414 45%, #2a190c 100%);
+  clip-path: polygon(0 26px, 50% 0, 100% 26px, 100% 100%, 0 100%);
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.45);
+  filter: drop-shadow(0 22px 30px rgba(0, 0, 0, 0.6));
+}
+
+.mn-stele::before {
+  /* Clavo en el fronton y marco interior tallado. */
+  content: "";
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #f0c890, #8a5a2a);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+.mn-stele::after {
+  content: "";
+  position: absolute;
+  inset: 34px 10px 10px;
+  border: 1px solid rgba(226, 176, 122, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.mn-stele--left {
+  left: 26px;
+}
+
+.mn-stele--right {
+  right: 26px;
+}
+
+.mn-stele__head {
+  text-align: center;
+  font-family: var(--roman);
+  font-size: 15px;
+  letter-spacing: 0.42em;
+  padding-left: 0.42em;
+  color: var(--sand);
+  margin-bottom: 18px;
+}
+
+.mn-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(226, 176, 122, 0.14);
+}
+
+.mn-stat__k {
+  font-family: var(--roman);
+  font-size: 9.5px;
+  letter-spacing: 0.3em;
+  color: var(--muted);
+}
+
+.mn-stat__v {
+  font-family: var(--roman);
+  font-size: 26px;
+  letter-spacing: 0.06em;
+  color: var(--pale);
+  font-variant-numeric: tabular-nums;
+}
+
+.mn-roman {
+  font-family: var(--roman);
+  background: linear-gradient(180deg, #f6d9a8 0%, #e2b07a 40%, #c4773b 75%, #9d5a26 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.7));
+}
+
+.mn-stele .mn-roman {
+  font-size: 40px;
+  line-height: 1;
+}
+
+/* Aceite: una mecha que se consume. */
+.mn-oil {
+  position: relative;
+  display: block;
+  height: 10px;
+  margin-top: 4px;
+  background: linear-gradient(180deg, #1a0e06, #2a170a);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 210, 160, 0.08);
+  overflow: hidden;
+}
+
+.mn-oil__fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  background: linear-gradient(90deg, #9d5a26, #e8b64a 70%, #fff2c4);
+  box-shadow: 0 0 10px rgba(232, 182, 74, 0.6);
+  transition: transform 0.25s linear;
+}
+
+.mn-oil__fill.is-low {
+  background: linear-gradient(90deg, #6b1a10, #c0392b 70%, #ff8a4c);
+  animation: mn-flicker 0.6s steps(2) infinite;
+}
+
+@keyframes mn-flicker {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.mn-state {
+  font-size: 17px;
+  letter-spacing: 0.16em;
+  transition: color 0.3s ease;
+}
+
+.mn-state[data-state="sleep"] {
+  color: var(--muted);
+}
+
+.mn-state[data-state="wander"] {
+  color: var(--pale);
+}
+
+.mn-state[data-state="investigate"],
+.mn-state[data-state="search"] {
+  color: #ffb347;
+}
+
+.mn-state[data-state="chase"] {
+  color: var(--danger);
+  text-shadow: 0 0 12px rgba(255, 58, 31, 0.7);
+  animation: mn-flicker 0.5s steps(2) infinite;
+}
+
+.mn-rivals ol {
+  list-style: none;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-family: var(--roman);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+
+.mn-rivals li {
+  display: flex;
+  justify-content: space-between;
+}
+
+.mn-rivals li b {
+  font-size: 13px;
+}
+
+.mn-rivals li.is-out {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+/* ---------- Franja de arriba (pantallas angostas) ---------- */
+
+.mn-top {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  width: min(560px, calc(100vw - 24px));
+  justify-content: space-between;
+  font-family: var(--roman);
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  background: linear-gradient(180deg, #4b2f19, #2a190c);
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.5), 0 8px 18px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(226, 176, 122, 0.22);
+}
+
+.mn-top .mn-roman {
+  font-size: 22px;
+}
+
+.mn-top .mn-oil--top {
+  flex: 1;
+  max-width: 120px;
+  margin: 0;
+}
+
+.mn-top__state {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  min-width: 82px;
+  text-align: right;
+}
+
+@media (max-width: 1079px) {
+  .mn-stele {
+    display: none;
+  }
+
+  .mn-top {
+    display: flex;
+  }
+
+  .back-link {
+    top: auto;
+    bottom: 12px;
+  }
+}
+
+/* ---------- Avisos ---------- */
+
+.mn-toast {
+  position: absolute;
+  left: 50%;
+  top: 12%;
+  transform: translate(-50%, 6px);
+  padding: 8px 22px;
+  font-family: var(--roman);
+  font-size: 15px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--pale);
+  background: rgba(13, 7, 4, 0.78);
+  border: 1px solid rgba(226, 176, 122, 0.3);
+  opacity: 0;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+  white-space: nowrap;
+}
+
+.mn-toast.is-shown {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.mn-toast--gold {
+  color: #ffd98a;
+  border-color: rgba(232, 182, 74, 0.6);
+  text-shadow: 0 0 12px rgba(232, 182, 74, 0.6);
+}
+
+.mn-toast--danger {
+  color: #ff6a4a;
+  border-color: rgba(255, 58, 31, 0.55);
+  text-shadow: 0 0 12px rgba(255, 58, 31, 0.6);
+}
+
+/* ---------- Cartel del descenso ---------- */
+
+.mn-descent {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 34px 70px 30px;
+  /* Un charco de sombra detras: el cartel tiene que leerse sobre la losa iluminada. */
+  background: radial-gradient(ellipse at center, rgba(13, 7, 4, 0.82) 0%, rgba(13, 7, 4, 0.55) 45%, rgba(13, 7, 4, 0) 72%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mn-descent.is-shown {
+  animation: mn-carve 2.2s ease forwards;
+}
+
+.mn-descent__k {
+  font-family: var(--roman);
+  font-size: 14px;
+  letter-spacing: 0.6em;
+  padding-left: 0.6em;
+  color: var(--sand);
+  text-transform: uppercase;
+}
+
+.mn-descent__n {
+  font-family: var(--roman);
+  font-weight: 900;
+  font-size: clamp(70px, 14vw, 150px);
+  line-height: 1;
+  letter-spacing: 0.08em;
+  background: linear-gradient(180deg, #fff1cf 0%, #e2b07a 40%, #c4773b 72%, #7a3f16 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.75)) drop-shadow(0 0 30px rgba(232, 150, 60, 0.45));
+}
+
+.mn-descent__sub {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 22px;
+  color: var(--pale);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+@keyframes mn-carve {
+  0% {
+    opacity: 0;
+    letter-spacing: 0.4em;
+    filter: blur(6px);
+  }
+  18% {
+    opacity: 1;
+    letter-spacing: 0.08em;
+    filter: blur(0);
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---------- Countdown ---------- */
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  pointer-events: none;
+  opacity: 0;
+  font-family: var(--roman);
+  font-weight: 900;
+  font-size: clamp(90px, 20vw, 200px);
+  background: linear-gradient(180deg, #fff1cf 0%, #e2b07a 40%, #c4773b 75%, #7a3f16 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.8)) drop-shadow(0 0 40px rgba(232, 150, 60, 0.5));
+}
+
+.countdown.is-shown {
+  animation: countdown-pop 0.75s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes countdown-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+/* ---------- Tabla de inicio / final ---------- */
+
+.mn-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: radial-gradient(ellipse at center, rgba(13, 7, 4, 0.55) 0%, rgba(13, 7, 4, 0.9) 75%);
+  backdrop-filter: blur(2px);
+}
+
+.mn-overlay.hidden {
+  display: none;
+}
+
+.mn-tablet {
+  position: relative;
+  width: min(600px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+  padding: 52px 34px 30px;
+  text-align: center;
+  background:
+    repeating-linear-gradient(176deg, rgba(255, 210, 160, 0.025) 0 2px, transparent 2px 9px),
+    radial-gradient(120% 70% at 30% 0%, rgba(255, 190, 120, 0.1), transparent 60%),
+    linear-gradient(180deg, #4b2f19 0%, #3a2414 50%, #24150a 100%);
+  clip-path: polygon(0 30px, 50% 0, 100% 30px, 100% 100%, 0 100%);
+  box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.5);
+  color: var(--pale);
+  scrollbar-width: none;
+}
+
+.mn-tablet::after {
+  content: "";
+  position: absolute;
+  inset: 38px 12px 12px;
+  border: 1px solid rgba(226, 176, 122, 0.22);
+  pointer-events: none;
+}
+
+.mn-eyebrow {
+  font-family: var(--roman);
+  font-size: 10.5px;
+  letter-spacing: 0.42em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.mn-title {
+  margin: 10px 0 4px;
+  font-family: var(--roman);
+  font-weight: 600;
+  font-size: clamp(32px, 7.4vw, 56px);
+  line-height: 1;
+  letter-spacing: 0.2em;
+  padding-left: 0.2em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #f6d9a8 0%, #e2b07a 38%, #c4773b 70%, #9d5a26 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.75)) drop-shadow(0 0 18px rgba(196, 119, 59, 0.3));
+}
+
+.mn-title--small {
+  font-size: clamp(28px, 6vw, 46px);
+  letter-spacing: 0.18em;
+  padding-left: 0.18em;
+}
+
+.mn-keyline {
+  display: block;
+  width: min(420px, 86%);
+  height: 12px;
+  margin: 8px auto 10px;
+  fill: none;
+  stroke: var(--terra);
+  stroke-width: 1.4;
+  opacity: 0.85;
+}
+
+.mn-sub {
+  font-family: var(--roman);
+  font-size: 11.5px;
+  letter-spacing: 0.3em;
+  color: var(--sand);
+  text-transform: uppercase;
+}
+
+.mn-best {
+  margin-top: 12px;
+  font-family: var(--roman);
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+}
+
+.mn-hint {
+  margin-top: 16px;
+  font-family: var(--roman);
+  font-size: 11px;
+  letter-spacing: 0.26em;
+  color: var(--muted);
+  text-transform: uppercase;
+  animation: mn-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes mn-breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.mn-final {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+
+.mn-final > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 6px;
+  background: rgba(0, 0, 0, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(226, 176, 122, 0.18);
+}
+
+.mn-final b {
+  font-family: var(--roman);
+  font-size: 26px;
+  font-weight: 600;
+}
+
+/* Las tarjetas de "como se juega" (HowToPanel) y el ranking toman la piedra. */
+.mn-tablet .mg-ht {
+  --ht-accent: var(--gold);
+  font-family: var(--roman);
+  margin-top: 16px;
+}
+
+.mn-tablet .mg-ht__card {
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(226, 176, 122, 0.22);
+  border-radius: 0;
+  backdrop-filter: none;
+}
+
+.mn-tablet .mg-kc {
+  border-radius: 3px;
+}
+
+.mn-tablet .mg-hb {
+  border-radius: 3px;
+  color: #2a170a;
+}
+
+.mn-tablet .mg-lb {
+  margin-top: 14px;
+}
+
+/* ---------- Celu: correr y joystick ---------- */
+
+.mn-run {
+  position: absolute;
+  right: 22px;
+  bottom: 26px;
+  width: 92px;
+  height: 92px;
+  display: none;
+  pointer-events: auto;
+  touch-action: none;
+  border-radius: 50%;
+  border: 2px solid rgba(226, 176, 122, 0.55);
+  background: radial-gradient(circle at 35% 30%, #5a3a20, #2a190c);
+  color: var(--sand);
+  font-family: var(--roman);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.6), 0 8px 18px rgba(0, 0, 0, 0.6);
+}
+
+.mn-run.is-on {
+  color: #fff2c4;
+  border-color: var(--gold);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.6), 0 0 22px rgba(232, 182, 74, 0.55);
+}
+
+@media (pointer: coarse) {
+  .mn--playing .mn-run {
+    display: block;
+  }
+}
+
+.mn-stick {
+  position: absolute;
+  left: -46px;
+  top: -46px;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  border: 2px solid rgba(226, 176, 122, 0.4);
+  background: rgba(13, 7, 4, 0.25);
+}
+
+.mn-stick__knob {
+  position: absolute;
+  left: 28px;
+  top: 28px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f6d9a8, #9d5a26);
+  box-shadow: 0 0 14px rgba(232, 182, 74, 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mn-hint,
+  .mn-oil__fill.is-low,
+  .mn-state[data-state="chase"] {
+    animation: none;
+  }
+}
