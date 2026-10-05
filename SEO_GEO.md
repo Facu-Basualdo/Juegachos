@@ -1,8 +1,10 @@
 # SEO y GEO de Juegachos: propuesta
 
 Propuesta para que Juegachos aparezca cuando alguien busca un juego para jugar, en Google
-(SEO) y en las respuestas de ChatGPT, Perplexity, Claude o Gemini (GEO). Todavía no está
-implementada: falta que Facu la revise y decida los puntos del final.
+(SEO) y en las respuestas de ChatGPT, Perplexity, Claude o Gemini (GEO).
+
+**Estado (2026-10-05): la fase 1 está implementada** en `scripts/seo/` (ver "Cómo quedó la
+fase 1" al final). Las fases 2 y 3 no son código y siguen pendientes.
 
 Este documento vive en la raíz, junto a `SIMULATION_ARCHITECTURE.md`, porque `docs/` está
 en el `.gitignore` y ahí no le llegaría a nadie.
@@ -170,11 +172,48 @@ bastante difuso. Igual, la fase 1 es barata y sin ella las otras dos no sirven.
 
 ## Decisiones para Facu
 
-1. **¿Dónde se ve el texto de cada juego?** Debajo del juego (lo más honesto, pero hay que
-   probarlo en los juegos de pantalla completa) o en su pantalla de inicio.
-2. **¿Agregamos `seo.title` opcional al `meta.ts`?** Implica tocar el tipo `GameEntry` en
-   `src/games.ts`. No cambia cómo se descubren los juegos, solo suma un campo opcional.
-3. **¿Quién da de alta Search Console y Bing?** Necesita acceso al dominio.
-4. **¿Hacemos la fase 3?** Cuentas en itch.io y Reddit a nombre de quién, y con qué juegos
-   arrancar. Los de salas (Basta, Impostor, Teléfono Cortado, Bomba Palabra) son los que
-   tienen menos competencia.
+1. **¿Dónde se ve el texto de cada juego?** Decidido: **en su pantalla de inicio**, donde el
+   `HowToPanel` ya muestra el mismo "cómo se juega". Ponerlo debajo del juego obligaba a probar
+   uno por uno los juegos de pantalla completa con `overflow: hidden`.
+2. **¿Agregamos `seo.title` opcional al `meta.ts`?** Decidido: **sí**. La regla de que
+   `src/games.ts` está "cerrado" es para no listar juegos a mano; sumar un campo opcional al
+   tipo ya se hizo varias veces (`howTo`, `roomTimeLimitSec`, `roomsOnly`).
+3. **¿Quién da de alta Search Console y Bing?** Pendiente. Necesita acceso al dominio.
+4. **¿Hacemos la fase 3?** Pendiente. Cuentas en itch.io y Reddit a nombre de quién, y con
+   qué juegos arrancar. Los de salas (Basta, Impostor, Teléfono Cortado, Bomba Palabra) son
+   los que tienen menos competencia.
+
+## Cómo quedó la fase 1
+
+Todo vive en un plugin de Vite, `scripts/seo/plugin.ts`, registrado en `vite.config.ts`. Hay
+dos diferencias con lo que se planteaba arriba:
+
+- **El roster no se lee con regex.** El viejo `scripts/update-seo.mjs` sacaba `title` y
+  `description` de cada `meta.ts` con una expresión regular, y eso no alcanza para `howTo`,
+  `category`, `roomsOnly` o `hidden`, que son estructuras anidadas. Ahora el plugin carga
+  `src/games.ts` de verdad con `runnerImport` de Vite (`scripts/seo/roster.ts`), así que usa el
+  mismo roster que la landing, con el mismo filtro y el mismo orden. El script viejo se borró.
+- **Nada se escribe en archivos versionados.** El script viejo reescribía los
+  `games/<id>/index.html` en cada build. Ahora esos HTML no llevan tags de SEO en el fuente: el
+  plugin los inyecta al servirlos (`npm run dev`) y al construirlos (`dist/`).
+
+Lo que genera:
+
+| Qué | Dónde |
+| --- | --- |
+| `<title>`, description, canonical, Open Graph / Twitter, JSON-LD `VideoGame` | Head de cada juego del roster |
+| Canonical y JSON-LD `WebSite` + `ItemList` | Head de la landing (el resto de su head sigue escrito a mano) |
+| Canonical | `/rooms/`, `/fame/`, `/feedback/` (su head sigue escrito a mano) |
+| `noindex`, fuera del sitemap | Juegos `hidden` (`rocket-arena`, `patas-largas`) y `monopoly-mundial`, que no tiene `meta.ts` y por eso no estaba en el roster (no era que le faltara el bloque) |
+| Texto real (`#seo-static`) | Landing: `<h1>`, qué es Juegachos y un link por juego con categoría y descripción. Cada juego: `<h1>`, descripción, el `howTo` en palabras, si es de salas y para cuántos, y 5 links a juegos de la misma categoría |
+| `sitemap.xml`, `robots.txt`, `llms.txt` | Raíz de `dist/` (y servidos en dev) |
+| `seo.title` | Basta, Impostor, Teléfono Cortado, Bomba Palabra y Snake, con los títulos de la tabla de 1.4. Sin el campo: `<title> - juego online gratis \| Juegachos` |
+
+**El texto para bots y lo que ve la persona dicen lo mismo.** `#seo-static` es lo que
+lee un bot que no ejecuta JavaScript. Un script inline lo saca antes del primer pintado,
+así que la persona (y Google, que renderiza) ve la versión de JS: en la landing, las
+tarjetas, y en cada juego, el `HowToPanel` de la pantalla de inicio. Los juegos de salas ya
+mostraban "Solo en salas" con un botón a `/rooms/`, que era el punto de 1.5.
+
+Se verificó con Playwright: la landing sigue pintando sus 78 tarjetas, los juegos arrancan
+con un toque, no hay errores en consola y, con JavaScript apagado, se lee el texto.

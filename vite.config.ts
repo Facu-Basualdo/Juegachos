@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import { resolve } from "node:path";
 import { existsSync, readdirSync } from "node:fs";
+import { seoPlugin } from "./scripts/seo/plugin";
 
 const root = __dirname;
 const gamesDir = resolve(root, "games");
@@ -36,6 +37,9 @@ function collectHtmlEntries(): Record<string, string> {
 }
 
 export default defineConfig({
+  // SEO / GEO: head de cada juego, texto para bots, sitemap, robots y llms.txt
+  // (scripts/seo/plugin.ts, todo generado desde los meta.ts).
+  plugins: [seoPlugin(root)],
   build: {
     rollupOptions: {
       input: collectHtmlEntries(),

@@ -4,6 +4,7 @@ import type { GameScoring } from "../../shared/scoring-core";
 export const meta: GameEntry = {
   id: "basta",
   title: "Basta",
+  seo: { title: "Basta (Tutti Frutti) online con amigos, gratis" },
   description:
     "Basta / Tutti Frutti: sale una letra y llenas 7 categorias (Nombre, Apellido, Pais, Color, Comida, Animal, Cosa) con palabras que empiecen con ella. El primero que completa grita BASTA y corta a todos; despues se votan las respuestas y suman los que quedan de pie. Solo se juega en salas.",
   path: "/games/basta/",

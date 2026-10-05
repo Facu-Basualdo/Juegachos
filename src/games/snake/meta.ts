@@ -3,6 +3,7 @@ import type { GameEntry } from "../../games";
 export const meta: GameEntry = {
   id: "snake",
   title: "Snake",
+  seo: { title: "Snake online gratis, sin descargar" },
   description: "Guia la serpiente para comer, crece con cada bocado y evita chocar con las paredes o con tu propia cola.",
   path: "/games/snake/",
   controls: "Flechas o WASD, o deslizá, para girar la serpiente.",
