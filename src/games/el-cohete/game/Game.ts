@@ -389,7 +389,16 @@ export class Game {
       if (this.placed && !this.cashed) {
         live = { big: fmtMult(mult), sub: `+${n(this.placed * Math.floor(mult * 100) / 100)} si cobrás ahora`, hint, tone: "cash" };
       } else if (this.cashed) {
-        live = { big: fmtMult(this.cashed), sub: `¡Cobraste +${n(this.placed * this.cashed)}!`, hint: "mirá hasta dónde llega", tone: "won" };
+        // Ya cobro, pero el numero sigue subiendo con el cohete: se ve lo que se perdio
+        // (la gracia de la timba). Lo cobrado queda fijo abajo.
+        const could = Math.floor(this.placed * (Math.floor(mult * 100) / 100));
+        const got = Math.floor(this.placed * this.cashed);
+        live = {
+          big: fmtMult(mult),
+          sub: `Cobraste en ${fmtMult(this.cashed)} · +${n(got)}`,
+          hint: could > got ? `si seguías: +${n(could)}` : "mirá hasta dónde llega",
+          tone: "won",
+        };
       } else {
         h.setPhase("esta vez no apostaste");
         h.setSteps("off", "off", "Mirá y apostá en el próximo");

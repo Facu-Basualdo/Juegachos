@@ -44,8 +44,9 @@ La primera versión no se entendía: fichas que "sumaban", botones ½ / x2 / Bor
   apostar"), no un multiplicador.
 - **Con fichas arriba se va todo** (paño, marquesina, historial) y queda un **número
   gigante** (`Hud.setLive`): el multiplicador, "+N si cobrás ahora" y una pastilla que late
-  "tocá la pantalla para cobrar". Al cobrar se pone turquesa ("¡Cobraste +N!") y el paño
-  vuelve recién cuando explota.
+  "tocá la pantalla para cobrar". Al cobrar se pone turquesa pero **sigue subiendo con el
+  cohete** (pedido del programador: ver todo lo que se perdió): abajo queda fijo "Cobraste en
+  x1.40 · +N" y la pastilla dice "si seguías: +M". El paño vuelve recién cuando explota.
 - La tarjeta de inicio lo explica en tres pasos.
 
 ## Simulación (`Flight.ts`)

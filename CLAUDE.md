@@ -1,6 +1,6 @@
 # MiniGames
 
-Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rhythm Tap, Jump Ball, Reaction Time, City Bloxx, Sliding Puzzle, Asteroids, Mini Frogger, Neon Drift, Odd One Out, Dunk Shot, Memoria, Kunai Throw, Keepers!, Western Shoot, Barra Libre, Crono Ciego, El Trile, PONG, Block Paddle, Simon, Topos, Snake, Ta-Te-Ti, Conecta 4, Mecano, Final Sentence, Neon Sawblades, Space Rush, Lights Out, Boilerbound, Timber!, Puerco Araña, Circuit Breaker, Ring Runner, Pulso de Acero, Memoria de Color, Al Centro, Bomba Palabra, Cadena de Palabras, Hole in None, Cannon Dodge, Pizza Express, Danger Wings, Click the Number, Macaco Tilt, Templo Rodante, Basta, Impostor, Manchon, Imitame, Birome, Papa Caliente, Derrumbe, Luz Roja, Luz Verde, Pista Loca, Marea de Lava, Dalgona, La Cuerda, Telefono Cortado, Laser Show, Poolnight, Minotauro and El Cohete), each independently playable — except Bomba Palabra, Cadena de Palabras, Basta, Impostor, Manchon, La Escalera, Imitame, Papa Caliente, Derrumbe, Luz Roja, Luz Verde, Pista Loca, Marea de Lava, La Cuerda, Telefono Cortado, Laser Show and Poolnight), which are **rooms-only** (they need a multiplayer room and the game server; see "Game server" below) — plus a landing page to pick one. (Rocket SpaceX / `rocket-arena` and Patas Largas / `patas-largas` still live in the repo but are hidden from the roster via `hidden: true` in their `meta.ts`: rocket-arena due to errors, Patas Largas because its walk is not playable yet — its simulation work and findings are deliberately kept on main, see its `CLAUDE.md`. Their code stays in place.) Stack: Vite + TypeScript, no framework. Deployed as a static site (Vercel), plus a separate Node game server (`server/`) on Railway for the real-time / server-authoritative games.
+Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rhythm Tap, Jump Ball, Reaction Time, City Bloxx, Sliding Puzzle, Asteroids, Mini Frogger, Neon Drift, Odd One Out, Dunk Shot, Memoria, Kunai Throw, Keepers!, Western Shoot, Barra Libre, Crono Ciego, El Trile, PONG, Block Paddle, Simon, Topos, Snake, Ta-Te-Ti, Conecta 4, Mecano, Final Sentence, Neon Sawblades, Space Rush, Lights Out, Boilerbound, Timber!, Puerco Araña, Circuit Breaker, Ring Runner, Pulso de Acero, Memoria de Color, Al Centro, Bomba Palabra, Cadena de Palabras, Hole in None, Cannon Dodge, Pizza Express, Danger Wings, Click the Number, Macaco Tilt, Templo Rodante, Basta, Impostor, Manchon, Imitame, Birome, Papa Caliente, Derrumbe, Luz Roja, Luz Verde, Pista Loca, Marea de Lava, Dalgona, La Cuerda, Telefono Cortado, Laser Show, Poolnight, Minotauro, El Cohete and Chori y Pan), each independently playable — except Bomba Palabra, Cadena de Palabras, Basta, Impostor, Manchon, La Escalera, Imitame, Papa Caliente, Derrumbe, Luz Roja, Luz Verde, Pista Loca, Marea de Lava, La Cuerda, Telefono Cortado, Laser Show and Poolnight), which are **rooms-only** (they need a multiplayer room and the game server; see "Game server" below) — plus a landing page to pick one. (Rocket SpaceX / `rocket-arena` and Patas Largas / `patas-largas` still live in the repo but are hidden from the roster via `hidden: true` in their `meta.ts`: rocket-arena due to errors, Patas Largas because its walk is not playable yet — its simulation work and findings are deliberately kept on main, see its `CLAUDE.md`. Their code stays in place.) Stack: Vite + TypeScript, no framework. Deployed as a static site (Vercel), plus a separate Node game server (`server/`) on Railway for the real-time / server-authoritative games.
 
 ## Conventions (must follow)
 
@@ -198,7 +198,7 @@ semilla de la torre y lleva el reloj de la lava), **La Cuerda** (`la-cuerda`, pu
 cuerdas gigantes que aceleran: el server lleva el reloj del que sale el angulo de cada cuerda y
 resuelve los empujones; cada cliente juzga su propio golpe), **Laser Show** (`laser-show`, escenario
 redondo de programa de TV barrido por lasers: el server manda la semilla del show y el reloj, y
-resuelve los empujones; cada cliente genera los lasers y juzga su propio toque), **Poolnight** (`poolnight`, pool de bar en equipos: el server es duenio de la mesa, las reglas, los turnos y los bots, y resuelve cada tiro de una vez con una funcion pura; el cliente solo evalua los tramos de movimiento) **y Neon Drift** (`car-race`, **relay** de
+resuelve los empujones; cada cliente genera los lasers y juzga su propio toque), **Poolnight** (`poolnight`, pool de bar en equipos: el server es duenio de la mesa, las reglas, los turnos y los bots, y resuelve cada tiro de una vez con una funcion pura; el cliente solo evalua los tramos de movimiento), **Chori y Pan** (`chori-y-pan`, plataformero cooperativo por parejas: hibrido como Derrumbe — cada cliente simula su heroe y el server arbitra los mecanismos, las muertes y las llegadas de cada pareja; su modo local no usa el server) **y Neon Drift** (`car-race`, **relay** de
 posiciones — el unico juego que no usa el server para arbitrar nada, ver abajo). Ademas,
 **La Feria** (la sala 3D, `src/lobby3d/`) usa el namespace `/lobby` como relay de los
 muñecos entre ronda y ronda, reloj compartido y guardian del record de su parkour
@@ -237,7 +237,7 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   usa declara `join(nickname, roster)` y listo.
 - `src/protocol.ts` — tipos de mensajes (por juego: `wb:*` de Bomba Palabra,
   `wc:*` de Cadena de Palabras, `pg:*` de PONG, `bt:*` de Basta, `im:*` de Impostor,
-  `tc:*` de Telefono Cortado, `pt:*` de Manchon, `mt:*` de Imitame, `hp:*` de Papa Caliente, `dr:*` de Derrumbe, `lr:*` de Luz Roja, Luz Verde, `pl:*` de Pista Loca, `ml:*` de Marea de Lava, `lc:*` de La Cuerda, `ls:*` de Laser Show, `bi:*` de Poolnight, `lb:*` de La Feria). **Se duplican en el cliente**
+  `tc:*` de Telefono Cortado, `pt:*` de Manchon, `mt:*` de Imitame, `hp:*` de Papa Caliente, `dr:*` de Derrumbe, `lr:*` de Luz Roja, Luz Verde, `pl:*` de Pista Loca, `ml:*` de Marea de Lava, `lc:*` de La Cuerda, `ls:*` de Laser Show, `bi:*` de Poolnight, `cp:*` de Chori y Pan, `lb:*` de La Feria). **Se duplican en el cliente**
   (p.ej. `src/games/word-bomb/game/WordBombTransport.ts`,
   `src/games/word-chain/game/WordChainTransport.ts` y
   `src/games/pong/game/PongProtocol.ts`) por la regla de decoupling (no se
@@ -419,6 +419,17 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   ultimo siempre suma mas segundos que el segundo. Tope de 150 s. Ver el `CLAUDE.md` de
   `laser-show`.
 - `src/games/pool.ts`, `pool-match.ts`, `pool-physics.ts`, `pool-bot.ts`, `pool-rack.ts` — Poolnight (namespace `/poolnight`, prefijo `bi:`). Cinco archivos con una responsabilidad cada uno: **`pool-physics.ts`** es `simulateShot`, una funcion **pura** (mismo estado + mismo tiro = mismo resultado) que resuelve un tiro entero de una vez, no en tiempo real: paso fijo con tiempo de impacto analitico y rozamiento en dos fases (desliza, despues rueda); **`pool-match.ts`** (`PoolMatch`) es el motor de reglas, tambien puro (la hora entra como parametro); **`pool-bot.ts`** elige tiros con bola fantasma y simulacion de variantes con error; **`pool-rack.ts`** arma el triangulo; **`pool.ts`** (`PoolSim`) es solo la capa de red: sockets, un tick de 100 ms para los relojes y los bots, y el armado de los mensajes. Un tiro viaja en UN mensaje (`bi:play`) con los **tramos** de movimiento de cada bola, que el cliente evalua analiticamente sin repetir la logica de colision. El formato se elige por la cantidad de humanos (1v1 / 2v2 / 4v4) y los lugares vacios los ocupan bots. Estado scopeado por **ronda**. Ver el `CLAUDE.md` de `poolnight`.
+- `src/games/choripan.ts` — `ChoriPanSim`: Chori y Pan (namespace `/choripan`, prefijo `cp:`).
+  **Hibrido como Derrumbe**: no conoce la geometria de los niveles (solo la lista de ids,
+  `LEVEL_IDS`, duplicada del cliente). Arma las parejas con una mezcla sembrada por
+  `code:round` (con un solo jugador, ese maneja los dos heroes; con cantidad impar, el que
+  sobra **apuesta** a una pareja durante 12 s, la mira en vivo y se lleva su puntaje), sortea
+  3 niveles que **rotan por codigo de sala** (`usedByCode`, afuera del sim como el record de
+  La Feria) y por pareja lleva la union de los canales pisados y las palancas (`cp:mech`),
+  reinicia la sala cuando muere cualquiera (`cp:die` -> `cp:reset`, con antirrebote) y la
+  pasa cuando los dos estan en su puerta (`cp:door` -> `cp:level`). Las posiciones solo se
+  reenvian (`cp:pos` -> `cp:peer`) al companero y a los que apostaron por esa pareja. Estado
+  scopeado por **ronda**. Tope de 300 s. Ver el `CLAUDE.md` de `chori-y-pan`.
 - `src/games/carrace.ts` — `CarRaceSim`: **relay puro**, el sim mas corto del server y el
   unico que no simula nada. Reenvia el snapshot de posicion de cada auto (`cr:pos`) al
   resto de la sala y estampa el nickname del socket emisor (asi nadie mueve el auto ajeno,
@@ -521,7 +532,9 @@ tienen que ser las mismas para todos; en La Cuerda porque el reloj de las cuerda
 mismo para todos; en Laser Show porque la semilla y el reloj del show tienen que ser los mismos
 para todos; en Poolnight porque la mesa y las reglas tienen que ser las mismas para todos y los bots viven ahi), asi
 que sin `VITE_GAME_SERVER_URL` muestran "no disponible" (excepcion deliberada y documentada a la
-regla de degradacion del repo).
+regla de degradacion del repo). Chori y Pan queda en el medio: su modo local (dos en la misma compu)
+no toca el server y anda siempre; su sala si lo necesita, porque los mecanismos de cada pareja los
+arbitra el server, y sin el muestra "no disponible".
 
 **Elegir transporte se hace por CONFIGURACION, nunca en runtime.** Neon Drift es el unico
 que tiene dos enlaces posibles, y decide mirando `isGameServerConfigured()`. La tentacion
@@ -543,9 +556,9 @@ contra el `/health` y gana la primera que contesta.
   el cartel de "no disponible" (antes cada uno leia la env en su `constants.ts`), y lo que
   usa Neon Drift para elegir enlace de sala (server vs Supabase).
 - `resolveGameServerUrl()` — la URL a la que conectarse, con caida al respaldo. **La
-  llaman los diecisiete juegos server-side** en su `connect()` (`word-bomb`, `word-chain`,
+  llaman los dieciocho juegos server-side** en su `connect()` (`word-bomb`, `word-chain`,
   `basta`, `impostor`, `telefono-cortado`, `pong`, `car-race`, `paint-turf`, `imitame`,
-  `hot-potato`, `derrumbe`, `luz-roja`, `pista-loca`, `marea-lava`, `la-cuerda`, `laser-show`, `poolnight`), que por eso es `async` y
+  `hot-potato`, `derrumbe`, `luz-roja`, `pista-loca`, `marea-lava`, `la-cuerda`, `laser-show`, `poolnight`, `chori-y-pan`), que por eso es `async` y
   tiene un flag `connecting`
   contra la doble conexion en la ventana del `await`. Si el resolver viviera solo en la
   landing el respaldo seria decorativo: el chip diria "en linea" y los juegos seguirian
