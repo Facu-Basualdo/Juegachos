@@ -18,9 +18,11 @@ Estética: ver [DESIGN.md](DESIGN.md) ("Neón Atómico").
   en segundo plano no se atrasa respecto del resto de la mesa. (La primera versión contaba
   la cuenta regresiva con `dt` topeado y, con el render lento del navegador de pruebas,
   nunca llegaba a la apuesta.)
-- `bet`: en sala la ventana dura `BET_TIME` (7 s) fija. Solo dura `SOLO_BET_TIME` (14 s) y
-  **apostar despega** a los `SOLO_LAUNCH_DELAY` (0.8 s). **Apostado queda apostado**: el
-  paño se va y no hay cómo retirarla.
+- `bet`: en sala la ventana dura `BET_TIME` (10 s) fija, porque todos vuelan a la vez.
+  **Solo no hay reloj** (pedido del programador): el cohete espera en la plataforma
+  (`phaseEnd = Infinity`, el cartel dice "APOSTÁ") hasta que se aprieta APOSTAR, y apostar
+  lo despega a los `SOLO_LAUNCH_DELAY` (0.8 s). **Apostado queda apostado**: el paño se va
+  y no hay cómo retirarla.
 - `flight`: se cobra **tocando cualquier parte de la pantalla** (o ESPACIO), con
   `pointerdown` sobre el container y el **instante del evento** (`e.timeStamp`), no el del
   cuadro siguiente. Se cobra el multiplicador redondeado hacia abajo a centésimos, que es
@@ -36,12 +38,17 @@ La primera versión no se entendía: fichas que "sumaban", botones ½ / x2 / Bor
 "x1.00" en el cartel mientras se apostaba. Lo que quedó:
 
 - **Paño con dos pasos numerados**: "1 Elegí cuánto apostar" (cada ficha **fija** la
-  apuesta: 50, 100, 250, 500 o TODO; la elegida sube con aro dorado) y "2 Tocá para
+  apuesta: 50, 100, 250, 500 o TODO; la elegida sube con aro dorado; o se escribe
+  **cualquier monto** en el campo "u otro monto", acotado entre `MIN_BET` y las fichas) y "2 Tocá para
   apostar" (el botón dice "APOSTAR 250"). Debajo de las fichas, un ejemplo: "Si cobrás en
   x2 te llevás 500". El paso que toca late. En el celu se apilan en ese orden (con el 2
   arriba del 1 no se entendía).
-- **Antes del despegue el cartel grande es la cuenta regresiva** ("12 segundos para
-  apostar"), no un multiplicador.
+- **Antes del despegue el cartel grande es la cuenta regresiva** en sala ("7 segundos para
+  apostar") y "APOSTÁ" solo, nunca un multiplicador.
+- **El monto a mano** (`Hud.onAmount`): mientras se escribe, cada valor se toma acotado
+  (los intermedios "2" y "25" camino a "250" también) y el campo no se pisa; al salir se
+  reescribe acotado. Con el foco en el campo, las teclas 1-5 son del campo y no atajos de
+  fichas; Enter apuesta, y apostar le saca el foco (en el celu cierra el teclado).
 - **Con fichas arriba se va todo** (paño, marquesina, historial) y queda un **número
   gigante** (`Hud.setLive`): el multiplicador, "+N si cobrás ahora" y una pastilla que late
   "tocá la pantalla para cobrar". Al cobrar se pone turquesa pero **sigue subiendo con el

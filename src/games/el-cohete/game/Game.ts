@@ -11,7 +11,6 @@ import {
   LIVE_KEEPALIVE,
   MAX_DT,
   MIN_BET,
-  SOLO_BET_TIME,
   SOLO_LAUNCH_DELAY,
   START_CHIPS,
 } from "./constants";
@@ -77,6 +76,7 @@ export class Game {
     this.hud.setBest(this.best);
     this.hud.showStart(this.best);
     this.hud.onChip((v) => this.pickBet(v));
+    this.hud.onAmount((v) => this.typeBet(v));
     this.hud.onMain((at) => this.main(at));
 
     this.room =
@@ -121,6 +121,8 @@ export class Game {
       return;
     }
     if (e.repeat) return;
+    // Escribiendo el monto, los numeros son del campo, no atajos de fichas.
+    if (e.target instanceof HTMLInputElement) return;
     // Teclas 1-4: las fichas del paño; 5: todo.
     if (/^Digit[1-5]$/.test(e.code)) {
       const k = Number(e.code.slice(5));
@@ -155,6 +157,13 @@ export class Game {
     this.paintTable();
   }
 
+  /** Monto escrito a mano: cualquier cifra, acotada a la minima y a las fichas. */
+  private typeBet(v: number): void {
+    if (!this.canEditBet() || this.chips < MIN_BET) return;
+    if (v > 0) this.bet = Math.min(this.chips, Math.max(MIN_BET, v));
+    this.paintTable();
+  }
+
   /** El boton grande: apostar / cancelar en la plataforma, bajarse en vuelo. */
   private main(at: number): void {
     if (this.state === "bet") {
@@ -167,11 +176,9 @@ export class Game {
         this.placed = amount;
         this.chips -= amount;
         SoundEffects.betPlaced();
-        // Solo: apostar despega (con un instante de encendido).
-        if (!this.room) {
-          const now = performance.now();
-          this.phaseEnd = Math.min(this.phaseEnd, now + SOLO_LAUNCH_DELAY * 1000);
-        }
+        this.hud.blurAmount();
+        // Solo: el cohete espera hasta que se apuesta, y apostar lo despega.
+        if (!this.room) this.phaseEnd = performance.now() + SOLO_LAUNCH_DELAY * 1000;
       }
       this.sendLive(true);
       this.paintTable();
@@ -234,7 +241,8 @@ export class Game {
     this.placed = 0;
     this.cashed = 0;
     this.lastTick = -1;
-    this.phaseEnd = now + (this.room ? BET_TIME : SOLO_BET_TIME) * 1000;
+    // Solo no hay reloj: el cohete no sale hasta que se apuesta (pedido del programador).
+    this.phaseEnd = this.room ? now + BET_TIME * 1000 : Infinity;
     if (this.flightNo > 1) {
       // Fundido a negro y cohete nuevo en la plataforma a mitad del fundido.
       this.hud.fade();
@@ -371,8 +379,9 @@ export class Game {
     if (this.state === "bet") {
       // Antes del despegue el cartel grande es la cuenta regresiva, no un "x1.00" que
       // no se entiende: lo primero que hay que saber es cuanto falta para apostar.
-      const left = Math.max(0, Math.ceil((this.phaseEnd - now) / 1000));
-      h.setMult(String(left), "pad");
+      const waiting = this.phaseEnd === Infinity;
+      const left = waiting ? 0 : Math.max(0, Math.ceil((this.phaseEnd - now) / 1000));
+      h.setMult(waiting ? "APOSTÁ" : String(left), "pad");
       if (this.placed) {
         live = { big: this.room ? String(left) : "¡YA!", sub: `apostaste ${n(this.placed)}`, hint: this.room ? "segundos para despegar" : "despegando", tone: "wait" };
       } else if (this.chips < MIN_BET) {
@@ -380,7 +389,7 @@ export class Game {
         h.setSteps("off", "off", "Te quedaste sin fichas");
         h.setMain("off", "Sin fichas", "mirá el vuelo");
       } else {
-        h.setPhase("segundos para apostar");
+        h.setPhase(waiting ? "el cohete sale cuando apostás" : "segundos para apostar");
         h.setSteps("active", "active", "Tocá para apostar");
         h.setMain("bet", "Apostar", n(Math.min(this.chips, this.bet)));
       }
