@@ -29,6 +29,14 @@ antorcha); el juego es propio.
   achica el radio de la luz entre `LIGHT_MAX` y `LIGHT_MIN`. Nunca llega a oscuridad
   total (`LIGHT_MIN` > 1 celda) a proposito: quedarse ciego es frustrante, no tenso.
   Las anforas en los callejones sin salida devuelven `OIL_AMPHORA`.
+- **Sin aceite se pierde la estela** (pedido del programador: antes quedarse sin aceite no
+  tenia ninguna consecuencia y parecia un bug, con un cartel que decia que la antorcha se
+  apagaba y nada pasaba). Con el aceite en 0 (`forgetTrail`), la memoria de lo recorrido se
+  desvanece en `MEMORY_FORGET` (6 s) salvo lo que la brasa sigue alumbrando, y el hilo de
+  Ariadna se enrolla desde la punta vieja, una celda cada `THREAD_FORGET_STEP` (0.25 s).
+  Un anfora frena el borrado pero **no devuelve** lo borrado: hay que volver a
+  recorrerlo. La memoria es de 8 bits, asi que `Renderer.forget` acumula la fraccion por
+  cuadro (restar 1 por cuadro la borraba en 4 s a 60 fps y dependia de los fps).
 
 ## Simulacion — metodo aprobado por el programador
 
