@@ -3,8 +3,10 @@
 Propuesta para que Juegachos aparezca cuando alguien busca un juego para jugar, en Google
 (SEO) y en las respuestas de ChatGPT, Perplexity, Claude o Gemini (GEO).
 
-**Estado (2026-10-05): la fase 1 está implementada** en `scripts/seo/` (ver "Cómo quedó la
-fase 1" al final). Las fases 2 y 3 no son código y siguen pendientes.
+**Estado (2026-10-05): las fases 1 y 2 están hechas.** La fase 1 vive en `scripts/seo/` (ver
+"Cómo quedó la fase 1" al final) y está en producción. La fase 2 la hizo Facu: `juegachos.com`
+verificado en Search Console como propiedad de dominio (registro TXT en el DNS), sitemap subido
+e importado en Bing Webmaster Tools. Falta medir (ver "Cómo medirlo") y decidir la fase 3.
 
 Este documento vive en la raíz, junto a `SIMULATION_ARCHITECTURE.md`, porque `docs/` está
 en el `.gitignore` y ahí no le llegaría a nadie.
@@ -146,6 +148,20 @@ desde el código:
 3. Revisar en las dos, a las pocas semanas, qué búsquedas traen gente y qué páginas no se
    indexaron.
 
+### Cloudflare: la capa que el código no ve
+
+`www.juegachos.com` pasa por **Cloudflare** antes de llegar a Vercel (las respuestas traen
+`Server: cloudflare`). Su **AI Crawl Control** bloqueaba con un 403 a los bots de IA que
+entrenan modelos (GPTBot, ClaudeBot, CCBot, Applebot-Extended, Bytespider), aunque el
+`robots.txt` los invitaba. El 2026-10-05 Facu los pasó a **Permitir**, y quedaron todos
+respondiendo 200. "Bot Preference Sync" está prendido: si se vuelve a bloquear un bot ahí,
+Cloudflare agrega su `Disallow` al principio del `robots.txt`.
+
+Si un buscador o una IA deja de ver el sitio, revisar esto **antes** que el código.
+Una prueba rápida es `curl -A "... GPTBot/1.1 ..." https://www.juegachos.com/`. Ojo: un 403
+a esa prueba puede ser también Cloudflare frenando a un impostor (el pedido no sale de las IP
+de OpenAI). El panel de **Seguridad > Eventos** dice qué regla bloqueó cada pedido.
+
 ## Fase 3: afuera del sitio (lo que más mueve el GEO)
 
 Las IA recomiendan lo que ven nombrado en otros lados, y Google premia los links de sitios
@@ -163,7 +179,8 @@ reales. Ninguna etiqueta reemplaza esto:
 
 - Search Console y Bing Webmaster: impresiones y clics por búsqueda y por página.
 - Visitas que vienen de las IA: ChatGPT agrega `utm_source=chatgpt.com` a sus links, y
-  Perplexity aparece como sitio de origen. Se ven en Vercel Analytics, si se activa.
+  Perplexity aparece como sitio de origen. Se ven en **Vercel Analytics**, que está activado
+  desde el 2026-10-05: `vite.config.ts` inyecta su script en todas las páginas al construir.
 - La tabla `game_plays` (las partidas por juego que ya se cuentan) para ver si los juegos
   que se trabajen suben.
 
@@ -178,7 +195,7 @@ bastante difuso. Igual, la fase 1 es barata y sin ella las otras dos no sirven.
 2. **¿Agregamos `seo.title` opcional al `meta.ts`?** Decidido: **sí**. La regla de que
    `src/games.ts` está "cerrado" es para no listar juegos a mano; sumar un campo opcional al
    tipo ya se hizo varias veces (`howTo`, `roomTimeLimitSec`, `roomsOnly`).
-3. **¿Quién da de alta Search Console y Bing?** Pendiente. Necesita acceso al dominio.
+3. **¿Quién da de alta Search Console y Bing?** Hecho por Facu el 2026-10-05.
 4. **¿Hacemos la fase 3?** Pendiente. Cuentas en itch.io y Reddit a nombre de quién, y con
    qué juegos arrancar. Los de salas (Basta, Impostor, Teléfono Cortado, Bomba Palabra) son
    los que tienen menos competencia.
