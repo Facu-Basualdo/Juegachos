@@ -1,0 +1,711 @@
+/*
+ * Chori y Pan. Ver DESIGN.md ("Parrilla Sagrada"): templo de piedra con musgo,
+ * jeroglificos dorados y dos personajes de juguete. Tablillas de piedra, letra de
+ * dibujo animado para los titulos y redonda para el resto.
+ */
+
+:root {
+  color-scheme: dark;
+  --night: #14120c;
+  --stone: #6f6a4c;
+  --stone-hi: #a59d72;
+  --stone-lo: #3e3a28;
+  --moss: #7aa848;
+  --glyph: #d9b45a;
+  --chori: #ff6a3a;
+  --pan: #3aa8ff;
+  --goo: #9cd84a;
+  --text: #f3ead2;
+  --muted: #b3a885;
+  --title: "Luckiest Guy", "Arial Black", Impact, sans-serif;
+  --body: "Baloo 2", "Trebuchet MS", "Segoe UI", sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--night);
+  color: var(--text);
+  font-family: var(--body);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.game-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.back-link {
+  position: fixed;
+  top: 14px;
+  left: 16px;
+  z-index: 40;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: var(--glyph);
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---------- Tablilla de arriba ---------- */
+
+.cp {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.cp-bar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  padding: 6px 22px;
+  border-radius: 12px;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.06) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, #7a7454, #5a5440);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 240, 200, 0.25),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.3),
+    0 6px 16px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.cp--playing .cp-bar {
+  opacity: 1;
+}
+
+.cp-bar__level {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.cp-bar__level span {
+  font-family: var(--title);
+  font-size: 18px;
+  color: var(--glyph);
+  text-shadow: 0 2px 0 #3e3a28;
+}
+
+.cp-bar__level b {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.cp-bar__time {
+  font-family: var(--title);
+  font-size: 26px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: #fff6dc;
+  text-shadow: 0 2px 0 #3e3a28;
+  min-width: 96px;
+  text-align: center;
+}
+
+.cp-bar__gems {
+  display: flex;
+  gap: 14px;
+}
+
+.cp-gem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.cp-gem i {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+}
+
+.cp-gem--aji i {
+  border-radius: 50% 50% 50% 0;
+  background: #e0281a;
+  rotate: -45deg;
+}
+
+.cp-gem--cub i {
+  border-radius: 3px;
+  background: #aee1ff;
+  box-shadow: inset 0 0 0 1.5px #fff;
+}
+
+/* ---------- Cartel grande ---------- */
+
+.cp-banner {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  z-index: 20;
+  translate: -50% -50%;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  pointer-events: none;
+  opacity: 0;
+  white-space: nowrap;
+}
+
+.cp-banner b {
+  font-family: var(--title);
+  font-weight: 400;
+  font-size: clamp(30px, 5vw, 60px);
+  color: #fff6dc;
+  text-shadow:
+    0 4px 0 #3e3a28,
+    0 0 24px rgba(0, 0, 0, 0.6);
+}
+
+.cp-banner span {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cp-banner--good b {
+  color: #ffe08a;
+}
+
+.cp-banner--bad b {
+  color: #ffb4a0;
+}
+
+.cp-banner.is-shown {
+  animation: banner 1.5s cubic-bezier(0.2, 1.3, 0.4, 1) forwards;
+}
+
+@keyframes banner {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) rotate(-4deg);
+  }
+  15% {
+    opacity: 1;
+    transform: scale(1.06) rotate(1deg);
+  }
+  25% {
+    transform: scale(1) rotate(0);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+/* ---------- Cuenta regresiva (patron de la casa) ---------- */
+
+.countdown {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  z-index: 30;
+  translate: -50% -50%;
+  font-family: var(--title);
+  font-size: clamp(90px, 15vw, 190px);
+  color: #fff6dc;
+  text-shadow:
+    0 8px 0 #3e3a28,
+    0 0 40px rgba(255, 120, 40, 0.6);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.countdown.is-shown {
+  animation: countdown-pop 0.75s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes countdown-pop {
+  0% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+/* ---------- Tabla de inicio y final ---------- */
+
+.cp-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  display: grid;
+  place-items: center;
+  padding: 20px 16px;
+  overflow-y: auto;
+  background: radial-gradient(80% 70% at 50% 50%, rgba(20, 18, 12, 0.35), rgba(10, 9, 6, 0.85));
+}
+
+.cp-card {
+  width: min(600px, 100%);
+  padding: 28px 30px 22px;
+  border-radius: 22px;
+  text-align: center;
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(255, 240, 200, 0.1), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.05) 0 2px, transparent 2px 6px),
+    linear-gradient(180deg, #5e5840, #3e3a28);
+  box-shadow:
+    inset 0 3px 0 rgba(255, 240, 200, 0.2),
+    inset 0 -5px 0 rgba(0, 0, 0, 0.3),
+    0 0 0 3px #2a2618,
+    0 30px 80px rgba(0, 0, 0, 0.7);
+  animation: card-in 0.6s cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.95);
+  }
+}
+
+.cp-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--glyph);
+}
+
+.cp-title {
+  font-family: var(--title);
+  font-weight: 400;
+  font-size: clamp(48px, 9vw, 84px);
+  line-height: 1;
+  margin: 8px 0 6px;
+  text-shadow: 0 6px 0 #2a2618;
+}
+
+.cp-title i {
+  font-style: normal;
+  font-size: 0.55em;
+  color: var(--muted);
+}
+
+.cp-title__chori {
+  color: var(--chori);
+}
+
+.cp-title__pan {
+  color: #f0c27a;
+}
+
+.cp-title--small {
+  font-size: clamp(32px, 6vw, 52px);
+  color: #ffe08a;
+}
+
+.cp-sub {
+  font-size: 16px;
+  color: var(--text);
+}
+
+.cp-who {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 16px 0 8px;
+}
+
+.cp-who__card {
+  display: grid;
+  gap: 2px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.22);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.06);
+}
+
+.cp-who__card b {
+  font-family: var(--title);
+  font-weight: 400;
+  font-size: 26px;
+}
+
+.cp-who__card span {
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 13px;
+}
+
+.cp-who__card small {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.cp-who__card--chori b,
+.cp-who__card--chori span {
+  color: var(--chori);
+}
+
+.cp-who__card--pan b,
+.cp-who__card--pan span {
+  color: #f0c27a;
+}
+
+.cp-warn {
+  font-weight: 700;
+  color: var(--goo);
+}
+
+.cp-best {
+  margin-top: 8px;
+  font-family: var(--title);
+  color: var(--glyph);
+}
+
+.cp-hint {
+  margin-top: 14px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  animation: hint 1.8s ease-in-out infinite;
+}
+
+@keyframes hint {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.cp-final {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 16px 0 4px;
+}
+
+.cp-final > div {
+  padding: 10px 6px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.cp-final span {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cp-final b {
+  font-family: var(--title);
+  font-weight: 400;
+  font-size: 24px;
+  color: #ffe08a;
+}
+
+.cp-card .mg-ht {
+  margin-top: 14px;
+  color: var(--text);
+}
+
+.cp-card .mg-lb {
+  margin-top: 12px;
+}
+
+@media (max-width: 640px) {
+  .cp-bar {
+    gap: 12px;
+    padding: 5px 12px;
+  }
+
+  .cp-bar__level b {
+    display: none;
+  }
+
+  .cp-who {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Sala: parejas, apuesta, resultado ---------- */
+
+.cp-pairs {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  min-width: 190px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(20, 18, 12, 0.78);
+  box-shadow:
+    0 0 0 1px rgba(217, 180, 90, 0.3),
+    0 8px 20px rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+}
+
+.cp-pairs__k {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--glyph);
+}
+
+.cp-pairs ol {
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.cp-pairs li {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.cp-pairs li b {
+  font-weight: 800;
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cp-pairs li b:first-child {
+  color: var(--chori);
+}
+
+.cp-pairs li b:nth-of-type(2) {
+  color: #f0c27a;
+}
+
+.cp-pairs li i {
+  font-style: normal;
+  color: var(--muted);
+}
+
+.cp-pairs li span {
+  justify-self: end;
+  font-family: var(--title);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.cp-pairs li.is-me {
+  text-shadow: 0 0 10px rgba(255, 220, 140, 0.5);
+}
+
+.cp-pairs li.is-done span {
+  color: #9ff0a0;
+}
+
+.cp-bets {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 4px;
+}
+
+.cp-bet {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 14px;
+  cursor: pointer;
+  font-family: var(--title);
+  font-size: 22px;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+  transition:
+    transform 0.12s,
+    box-shadow 0.12s;
+}
+
+.cp-bet i {
+  font-style: normal;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.cp-bet b:first-of-type {
+  color: var(--chori);
+  font-weight: 400;
+}
+
+.cp-bet b:last-of-type {
+  color: #f0c27a;
+  font-weight: 400;
+}
+
+.cp-bet:hover {
+  transform: translateY(-2px);
+}
+
+.cp-bet.is-on {
+  box-shadow:
+    inset 0 0 0 3px var(--glyph),
+    0 0 24px rgba(217, 180, 90, 0.45);
+}
+
+.cp-podium {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 4px;
+  text-align: left;
+}
+
+.cp-podium li {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.cp-podium li span {
+  font-family: var(--title);
+  font-size: 20px;
+  color: var(--glyph);
+}
+
+.cp-podium li i {
+  font-style: normal;
+  font-family: var(--title);
+  color: #ffe08a;
+}
+
+.cp-podium li.is-me {
+  box-shadow: inset 0 0 0 2px var(--glyph);
+}
+
+.cp-overlay--final .mg-ht {
+  display: none;
+}
+
+/* ---------- Botones en pantalla (celu, en sala) ---------- */
+
+.cp-touch {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.cp-touch button {
+  position: absolute;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  width: 78px;
+  height: 78px;
+  border: 0;
+  border-radius: 50%;
+  pointer-events: auto;
+  background: rgba(60, 56, 40, 0.75);
+  box-shadow:
+    inset 0 3px 0 rgba(255, 240, 200, 0.2),
+    0 0 0 2px rgba(217, 180, 90, 0.4);
+  color: var(--text);
+  font-family: var(--title);
+  font-size: 15px;
+  touch-action: none;
+}
+
+.cp-touch button.is-on {
+  background: rgba(217, 180, 90, 0.6);
+}
+
+.cp-touch [data-t="left"] {
+  left: 18px;
+}
+
+.cp-touch [data-t="right"] {
+  left: 108px;
+}
+
+.cp-touch [data-t="left"]::after,
+.cp-touch [data-t="right"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 0;
+  height: 0;
+  border-top: 14px solid transparent;
+  border-bottom: 14px solid transparent;
+}
+
+.cp-touch [data-t="left"]::after {
+  border-right: 20px solid var(--text);
+  translate: -3px 0;
+}
+
+.cp-touch [data-t="right"]::after {
+  border-left: 20px solid var(--text);
+  translate: 3px 0;
+}
+
+.cp-touch [data-t="jump"] {
+  right: 22px;
+  width: 92px;
+  height: 92px;
+}
