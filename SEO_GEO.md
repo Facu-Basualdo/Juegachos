@@ -179,7 +179,8 @@ reales. Ninguna etiqueta reemplaza esto:
 
 - Search Console y Bing Webmaster: impresiones y clics por búsqueda y por página.
 - Visitas que vienen de las IA: ChatGPT agrega `utm_source=chatgpt.com` a sus links, y
-  Perplexity aparece como sitio de origen. Se ven en Vercel Analytics, si se activa.
+  Perplexity aparece como sitio de origen. Se ven en **Vercel Analytics**, que está activado
+  desde el 2026-10-05: `vite.config.ts` inyecta su script en todas las páginas al construir.
 - La tabla `game_plays` (las partidas por juego que ya se cuentan) para ver si los juegos
   que se trabajen suben.
 

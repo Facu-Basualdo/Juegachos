@@ -1,10 +1,25 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { resolve } from "node:path";
 import { existsSync, readdirSync } from "node:fs";
 import { seoPlugin } from "./scripts/seo/plugin";
 
 const root = __dirname;
 const gamesDir = resolve(root, "games");
+
+// Vercel Web Analytics (sin cookies) en todas las paginas: el snippet que Vercel
+// documenta para sitios sin framework. Solo en el build: `/_vercel/insights/` lo sirve
+// Vercel en el deploy, y en `npm run dev` daria 404 en cada pagina.
+const VERCEL_ANALYTICS = `<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+    <script defer src="/_vercel/insights/script.js"></script>`;
+
+function vercelAnalytics(): Plugin {
+  return {
+    name: "vercel-analytics",
+    apply: "build",
+    transformIndexHtml: (html) => html.replace("</head>", `    ${VERCEL_ANALYTICS}
+  </head>`),
+  };
+}
 
 function collectHtmlEntries(): Record<string, string> {
   const entries: Record<string, string> = {
@@ -39,7 +54,7 @@ function collectHtmlEntries(): Record<string, string> {
 export default defineConfig({
   // SEO / GEO: head de cada juego, texto para bots, sitemap, robots y llms.txt
   // (scripts/seo/plugin.ts, todo generado desde los meta.ts).
-  plugins: [seoPlugin(root)],
+  plugins: [seoPlugin(root), vercelAnalytics()],
   build: {
     rollupOptions: {
       input: collectHtmlEntries(),
