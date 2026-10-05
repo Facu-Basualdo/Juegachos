@@ -12,19 +12,20 @@ import {
   leaveRoom,
   openVote,
   reportScore,
+  rerollVote,
   resetRoom,
   sanitizeCode,
   startBriefing,
   startRound,
+  startRoundNow,
   takeOverHost,
   touchRoom,
   updateDeadline,
-  updateSettings,
 } from "./api";
 import { RoomChannel, type LiveData } from "./channel";
 import { RoomOverlay, type RoomPresenter, type StripLight, type WaitingEntry } from "./RoomOverlay";
-import { HUB_ID, isLobby3d, roomHubUrl, votePool } from "./hub";
-import { computeTotals, rankRound } from "./points";
+import { HUB_ID, isLobby3d, LOBBY3D_POSTERS, REROLL_VOTE, roomHubUrl, sampleGames } from "./hub";
+import { computeTotals, rankRound, type TotalRow } from "./points";
 import { clearRoomRuns } from "./roomRun";
 import {
   formatRoundTimeLimit,
@@ -201,6 +202,19 @@ const POLL_MS = 5000;
 /** Duracion de la votacion del proximo juego. */
 export const VOTE_SECONDS = 20;
 /**
+ * La Feria: votacion mas larga (hay que caminar hasta la chapa del afiche, y se puede
+ * cambiar de chapa) y, cuando ya votaron todos, se comprime a `VOTE_GRACE_3D_MS` y no
+ * a 3 s: tienen que llegar a ver como quedo y cambiar si quieren.
+ */
+const VOTE_SECONDS_3D = 30;
+const VOTE_GRACE_3D_MS = 10_000;
+/**
+ * La Feria: con 2+ jugadores conectados en el lobby, la votacion del primer juego se
+ * abre sola a los tantos segundos (pedido del programador: sin botones del host). El
+ * margen es para que el host elija cuantos juegos tiene la partida.
+ */
+const LOBBY3D_AUTOSTART_SEC = 15;
+/**
  * Tope de lectura del briefing previo a cada ronda (de que va el juego + los
  * controles). Ya no se cierra solo cuando todos marcan "Listo" (cortaba la lectura
  * del que leia mas lento): con todos los presentes listos, el host (el capitan) ve
@@ -270,6 +284,16 @@ export function initRoomMode(gameId: string, hooks: RoomModeHooks): RoomMode | n
 
 // ---------- La isla (sala 3D) ----------
 
+/** Lo que pinta la pizarra de la noche de La Feria (`RoomHub.standings`). */
+export interface HubStandings {
+  /** Puntos acumulados de todos los juegos terminados, ordenados (con puesto). */
+  totals: TotalRow[];
+  /** Cuantos juegos se terminaron. */
+  played: number;
+  /** El ultimo juego terminado: quien gano y cuanto sumo cada uno. */
+  last: { round: number; title: string; winners: string[]; gained: Record<string, number> } | null;
+}
+
 /** Lobby de la sala dibujado por la isla (la partida todavia no arranco). */
 export interface HubLobbyView {
   code: string;
@@ -279,13 +303,11 @@ export interface HubLobbyView {
   players: string[];
   /** Registrados conectados ahora. */
   present: string[];
-  totalRounds: number;
-  /** Hay gente suficiente (2+ conectados) para arrancar. */
-  canStart: boolean;
-  /** Solo el host: abre la votacion del primer juego. */
-  onStart: (() => void) | null;
-  /** Solo el host: cambia la cantidad de juegos de la partida. */
-  onSetRounds: ((n: number) => void) | null;
+  /**
+   * Cuando se abre sola la votacion del primer juego (epoch ms), o null si todavia no
+   * hay 2 jugadores conectados. La cuenta la muestra la barra (`setTimeText`).
+   */
+  startsAt: number | null;
   /** Solo el host: expulsa a un jugador. */
   onKick: ((player: string) => void) | null;
   onLeave: () => void;
@@ -307,6 +329,8 @@ export interface RoomHub {
   /** Ronda vigente (0 en el lobby) y total de la partida: la hora del dia sale de aca. */
   currentRound(): number;
   totalRoundsOrZero(): number;
+  /** Pizarra de la noche: acumulado y ganador del ultimo juego (null sin estado todavia). */
+  standings(): HubStandings | null;
   /** Se dispara con cada snapshot nuevo de la sala (o cambio de presencia). */
   onChange(cb: () => void): void;
 }
@@ -543,7 +567,36 @@ class RoomModeController implements RoomMode, RoomHub {
   }
 
   totalRoundsOrZero(): number {
-    return this.state ? this.totalRounds() : 0;
+    return this.state ? this.shownTotalRounds() : 0;
+  }
+
+  /**
+   * Pizarra de la noche de La Feria: puntos acumulados de todos los juegos ya
+   * terminados y quien gano el ultimo. Una ronda en curso (o en su briefing) todavia
+   * no cuenta: la pizarra se actualiza cuando vuelven a la feria.
+   */
+  standings(): HubStandings | null {
+    const state = this.state;
+    if (!state) return null;
+    const room = state.room;
+    const inProgress = room.status === "playing" || room.status === "briefing";
+    const done = state.rounds
+      .filter((r) => r.round_no < room.current_round || (r.round_no === room.current_round && !inProgress))
+      .sort((a, b) => a.round_no - b.round_no);
+    const totals = computeTotals({ ...state, rounds: done });
+    const last = done[done.length - 1];
+    if (!last) return { totals, played: 0, last: null };
+    const ranked = rankRound(last.game_id, state.players, state.scores.filter((s) => s.round_no === last.round_no));
+    return {
+      totals,
+      played: done.length,
+      last: {
+        round: last.round_no,
+        title: this.gameTitle(last.game_id),
+        winners: ranked.filter((r) => r.rank === 1 && r.score !== null).map((r) => r.player),
+        gained: Object.fromEntries(ranked.map((r) => [r.player, r.points])),
+      },
+    };
   }
 
   onChange(cb: () => void): void {
@@ -837,36 +890,47 @@ class RoomModeController implements RoomMode, RoomHub {
     const room = state.room;
     const host = this.isHost();
     const present = this.presentPlayers();
+    this.armHubLobby();
     this.hubView!.showLobby({
       code: this.code,
       me: this.me,
       host: room.host,
       players: state.players,
       present,
-      totalRounds: room.settings.totalRounds,
-      canStart: present.length >= 2 && !this.actionInFlight,
-      onStart: host ? () => void this.hubStart() : null,
-      onSetRounds: host ? (n) => void this.hubSetRounds(n) : null,
+      startsAt: this.deadlineMs(),
       onKick: host ? (p) => void this.hubKick(p) : null,
       onLeave: () => void this.hubLeave(),
     });
   }
 
-  /** El host arranca la partida: se vota el primer juego, en la isla misma. */
+  /**
+   * Lobby de la feria (solo el host): con 2+ conectados fija cuando se abre sola la
+   * votacion del primer juego (el `deadline` de la sala, asi todos ven la misma
+   * cuenta); si quedan menos de 2, la suspende. En el lobby el deadline no lo usa
+   * nadie mas (`resetRoom` lo deja en null).
+   */
+  private armHubLobby(): void {
+    const state = this.state;
+    if (!state || !this.hub || !this.isHost() || state.room.status !== "lobby" || this.actionInFlight) return;
+    // Sin presencia propia la lista no dice nada (canal uniendose): no tocar.
+    const present = this.presentPlayers();
+    if (!present.includes(this.me)) return;
+    const armed = state.room.deadline !== null;
+    if (present.length >= 2 && !armed) {
+      void this.hostAction(() => updateDeadline(this.code, new Date(Date.now() + LOBBY3D_AUTOSTART_SEC * 1000)));
+    } else if (present.length < 2 && armed) {
+      void this.hostAction(() => updateDeadline(this.code, null));
+    }
+  }
+
+  /** Se abre la votacion del primer juego, en la isla misma (al vencer la cuenta del lobby). */
   private async hubStart(): Promise<void> {
     const state = this.state;
     if (!state || !this.isHost() || state.room.status !== "lobby") return;
     if (this.presentPlayers().length < 2) return;
     const options = pickVoteOptions(state.room.settings);
-    const deadline = new Date(Date.now() + VOTE_SECONDS * 1000);
+    const deadline = new Date(Date.now() + voteSecondsFor(state.room.settings) * 1000);
     await this.hostAction(() => openVote(this.code, options, deadline));
-  }
-
-  private async hubSetRounds(totalRounds: number): Promise<void> {
-    const state = this.state;
-    if (!state || !this.isHost() || state.room.status !== "lobby") return;
-    const settings: RoomSettings = { ...state.room.settings, totalRounds, playlist: null };
-    await this.hostAction(() => updateSettings(this.code, settings));
   }
 
   private async hubKick(player: string): Promise<void> {
@@ -1006,9 +1070,21 @@ class RoomModeController implements RoomMode, RoomHub {
     return iso ? new Date(iso).getTime() : null;
   }
 
+  /**
+   * Juegos de la partida. En La Feria no hay partida de N juegos (pedido del
+   * programador): se vota uno, se juega y se vuelve a la feria, sin final; los puntos
+   * se acumulan en la pizarra de la noche. Ahi es `Infinity`, asi nunca hay "ultima".
+   */
   private totalRounds(): number {
     const settings = this.state!.room.settings;
+    if (isLobby3d(settings)) return Infinity;
     return settings.playlist ? settings.playlist.length : settings.totalRounds;
+  }
+
+  /** Total para mostrar: 0 = sin tope (La Feria), y se muestra "Ronda N" a secas. */
+  private shownTotalRounds(): number {
+    const total = this.totalRounds();
+    return Number.isFinite(total) ? total : 0;
   }
 
   private roundScores() {
@@ -1056,6 +1132,11 @@ class RoomModeController implements RoomMode, RoomHub {
       }
       // El host cierra el briefing al vencer el tope o cuando todos estan listos.
       if (this.isHost()) void this.maybeFinishBriefing(deadline !== null && now >= deadline);
+    } else if (room.status === "lobby" && this.hub && !this.finalShown) {
+      // Feria: cuenta hasta que se abre sola la votacion del primer juego.
+      this.overlay.setTimeText(deadline !== null ? `Votacion en ${formatClock(deadline - now)}` : null);
+      this.armHubLobby();
+      if (this.isHost() && deadline !== null && now >= deadline) void this.hubStart();
     } else if (room.status === "voting") {
       if (this.isHost()) this.maybeCompressVote();
       if (deadline !== null) {
@@ -1074,7 +1155,7 @@ class RoomModeController implements RoomMode, RoomHub {
     const deadline = this.deadlineMs();
     const time = deadline !== null ? ` - ${formatClock(deadline - Date.now())}` : "";
     this.overlay.setStrip(
-      `SALA ${this.code} - Ronda ${room.current_round}/${this.totalRounds()}${time}`,
+      `SALA ${this.code} - Ronda ${room.current_round}${this.shownTotalRounds() ? `/${this.shownTotalRounds()}` : ""}${time}`,
       this.stripLights(),
     );
   }
@@ -1160,7 +1241,6 @@ class RoomModeController implements RoomMode, RoomHub {
 
     const isLast = room.current_round >= this.totalRounds();
     const playlist = room.settings.playlist;
-
     let hostAction: { label: string; onClick: () => void } | null = null;
     let waitingText: string | null = "Esperando al anfitrion...";
 
@@ -1183,7 +1263,7 @@ class RoomModeController implements RoomMode, RoomHub {
 
     this.overlay.showResults({
       roundNo: room.current_round,
-      totalRounds: this.totalRounds(),
+      totalRounds: this.shownTotalRounds(),
       gameTitle: this.gameTitle(this.roundGame()),
       rows,
       totals: computeTotals(state),
@@ -1232,9 +1312,50 @@ class RoomModeController implements RoomMode, RoomHub {
           void this.refresh();
         });
       },
+      ...(isLobby3d(room.settings) ? { reroll: this.rerollTally() } : {}),
     });
 
-    if (this.isHost()) this.maybeCompressVote();
+    if (this.isHost()) {
+      this.maybeReroll();
+      this.maybeCompressVote();
+    }
+  }
+
+  /**
+   * Reroll de La Feria: cuantos de los conectados votaron "otros juegos" y cuantos
+   * hacen falta (mas de la mitad de los conectados; sin presencia, de los registrados).
+   */
+  private rerollTally(): { count: number; needed: number; mine: boolean } {
+    const state = this.state!;
+    const voteRound = state.room.current_round + 1;
+    const present = this.presentPlayers();
+    const base = present.length > 0 ? present : state.players;
+    const rerollers = new Set(
+      state.votes.filter((v) => v.round_no === voteRound && v.game_id === REROLL_VOTE).map((v) => v.player),
+    );
+    return {
+      count: base.filter((p) => rerollers.has(p)).length,
+      needed: Math.floor(base.length / 2) + 1,
+      mine: rerollers.has(this.me),
+    };
+  }
+
+  /**
+   * Solo el host, en La Feria: con mas de la mitad de los conectados en REROLL, afiches
+   * nuevos (distintos de los de ahora si el pool alcanza), votos en cero y la cuenta
+   * completa otra vez. Sin presencia propia no se decide (la lista no dice nada).
+   */
+  private maybeReroll(): void {
+    const state = this.state;
+    if (!state || !this.isHost() || this.actionInFlight) return;
+    const room = state.room;
+    if (room.status !== "voting" || !isLobby3d(room.settings)) return;
+    if (!this.presentPlayers().includes(this.me)) return;
+    const { count, needed } = this.rerollTally();
+    if (count < needed) return;
+    const options = pickVoteOptions(room.settings, room.vote_options ?? []);
+    const deadline = new Date(Date.now() + voteSecondsFor(room.settings) * 1000);
+    void this.hostAction(() => rerollVote(this.code, room.current_round + 1, options, deadline));
   }
 
   /** Briefing previo a la ronda: de que va el juego + controles + boton "Listo". */
@@ -1257,7 +1378,7 @@ class RoomModeController implements RoomMode, RoomHub {
     this.overlay.showBriefing({
       round,
       roundNo: room.current_round,
-      totalRounds: this.totalRounds(),
+      totalRounds: this.shownTotalRounds(),
       gameTitle: this.gameTitle(this.roundGame()),
       gameId: this.roundGame(),
       description: game?.description ?? "",
@@ -1363,7 +1484,7 @@ class RoomModeController implements RoomMode, RoomHub {
         if (fresh.room.current_round !== round) return;
         this.state = fresh;
         const options = pickVoteOptions(fresh.room.settings);
-        const deadline = new Date(Date.now() + VOTE_SECONDS * 1000);
+        const deadline = new Date(Date.now() + voteSecondsFor(fresh.room.settings) * 1000);
         await this.hostAction(() => openVote(this.code, options, deadline));
       })();
     }, RESULTS_TO_VOTE_MS);
@@ -1398,11 +1519,12 @@ class RoomModeController implements RoomMode, RoomHub {
       registeredPresent.length > 0 && registeredPresent.every((p) => voters.has(p));
     if (!allPresentVoted) return;
 
-    const key = `${room.status}:${room.current_round}`;
+    // Con las opciones en la clave: tras un reroll de La Feria se puede volver a comprimir.
+    const key = `${room.status}:${room.current_round}:${options.join(",")}`;
     if (this.compressedVoteKey === key) return;
     this.compressedVoteKey = key;
 
-    const target = Date.now() + VOTE_GRACE_MS;
+    const target = Date.now() + (isLobby3d(room.settings) ? VOTE_GRACE_3D_MS : VOTE_GRACE_MS);
     const current = this.deadlineMs();
     // Solo escribir si realmente acorta (con un pequeno margen para no rebotar).
     if (current !== null && current <= target + 250) return;
@@ -1432,11 +1554,19 @@ class RoomModeController implements RoomMode, RoomHub {
    * Arranca la siguiente ronda por su briefing: se fija el juego y se pasa a
    * 'briefing' para que todos lean de que va antes de jugar. Al cerrarlo (todos
    * listos o vencido el tope) recien arranca la partida (finishBriefing).
+   *
+   * En La Feria no hay briefing (pedido del programador): al vencer la votacion se va
+   * derecho al juego, que igual tiene su cuenta 3/2/1.
    */
   private async startNextRound(gameId: string): Promise<void> {
     const state = this.state;
     if (!state) return;
     const roundNo = state.room.current_round + 1;
+    if (isLobby3d(state.room.settings)) {
+      const playDeadline = computeRoundDeadline(roomTimeLimitFor(gameId));
+      await this.hostAction(() => startRoundNow(this.code, roundNo, gameId, playDeadline));
+      return;
+    }
     const deadline = new Date(Date.now() + BRIEFING_SECONDS * 1000);
     await this.hostAction(() => startBriefing(this.code, roundNo, gameId, deadline));
   }
@@ -1550,20 +1680,17 @@ export const VOTE_OPTION_COUNT = 5;
  * la ronda recien terminada) si lo votan. Los candidatos de una misma votacion
  * si son distintos entre si.
  */
-export function pickVoteOptions(settings?: RoomSettings | null): string[] {
-  const pool = votePool(settings).map((g) => g.id);
-  // Sala 3D: se vota entre TODOS los juegos de la feria, no entre 5 sorteados (pedido
-  // del programador: "que cada uno vote el juego que quiera"). Son pocos (los
-  // rooms-only) y todos tienen su afiche en las carteleras.
-  if (isLobby3d(settings)) return pool;
+export function pickVoteOptions(settings?: RoomSettings | null, exclude: string[] = []): string[] {
+  // Sala 3D: uno por cartelera, sorteados de todos los juegos de sala en cada votacion
+  // (pedido del programador: que los afiches roten y sean al azar). Como viajan en
+  // `vote_options`, todos los clientes ven los mismos afiches en el mismo lugar.
+  const count = isLobby3d(settings) ? LOBBY3D_POSTERS : VOTE_OPTION_COUNT;
+  return sampleGames(count, undefined, exclude).map((g) => g.id);
+}
 
-  const picked: string[] = [];
-  while (picked.length < VOTE_OPTION_COUNT && pool.length > 0) {
-    const i = Math.floor(Math.random() * pool.length);
-    picked.push(pool[i]);
-    pool.splice(i, 1);
-  }
-  return picked;
+/** Segundos de una votacion de juego: mas en La Feria, donde hay que caminar a la chapa. */
+function voteSecondsFor(settings?: RoomSettings | null): number {
+  return isLobby3d(settings) ? VOTE_SECONDS_3D : VOTE_SECONDS;
 }
 
 /** "1:43" a partir de milisegundos restantes (piso 0:00). */

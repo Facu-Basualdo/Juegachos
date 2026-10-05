@@ -10,6 +10,9 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 
 function start(): void {
   const hub = new Hub(app);
+  // Solo en dev (en el build queda afuera): el Hub a mano para las pruebas con
+  // Playwright tambien en una sala real (pararse en una chapa, ver CLAUDE.md).
+  if (import.meta.env.DEV) (window as unknown as { __isla: Hub }).__isla = hub;
   // `?dev=` va primero: tambien trae `code`, y no tiene que abrir una sala real.
   if (!startDevHub(hub) && !hub.startRoom()) hub.showNoRoom();
 }

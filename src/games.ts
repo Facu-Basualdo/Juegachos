@@ -50,10 +50,9 @@ export interface GameEntry {
   roomsHidden?: boolean;
   /**
    * El juego existe solo en salas (necesita la sala y el game server; fuera de una
-   * sala muestra "Solo en salas"). Es lo que arma la galeria de la Isla (la sala
-   * 3D, `src/lobby3d/`): sus portadas son los portales, y las votaciones de una
-   * sala 3D sortean solo entre estos juegos. Un juego rooms-only nuevo tiene que
-   * declararlo para aparecer ahi.
+   * sala muestra "Solo en salas"). Un juego rooms-only nuevo tiene que declararlo.
+   * (Antes armaba tambien la galeria de La Feria; ahora sus afiches salen de todos
+   * los juegos de sala, ver `src/shared/room/hub.ts`.)
    */
   roomsOnly?: boolean;
   /**

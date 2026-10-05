@@ -593,6 +593,176 @@ export function recordBoardTexture(rows: RecordRow[], state: "ok" | "loading" | 
   return crispTexture(c);
 }
 
+/** Proporcion (ancho / alto) de la pizarra de la noche: apaisada, el cartel de records es vertical. */
+export const NIGHT_BOARD_ASPECT = 1.4;
+
+/** Una fila de la pizarra de la noche. */
+export interface NightRow {
+  rank: number;
+  name: string;
+  points: number;
+  /** Lo que sumo en el ultimo juego (null si no jugo ninguno todavia). */
+  gained: number | null;
+  /** Color de su remera (asiento), para reconocerlo en la feria. */
+  color: string;
+  mine: boolean;
+}
+
+export interface NightBoardView {
+  rows: NightRow[];
+  /** Titulo del ultimo juego terminado, o null si todavia no se jugo ninguno. */
+  lastTitle: string | null;
+  winners: string[];
+  played: number;
+}
+
+/**
+ * Tiza: el texto en dos pasadas corridas un pixel, la de abajo transparente, mas un
+ * polvillo de puntitos. Se lee claro (es lo que importa) pero no es pintura lisa.
+ */
+function chalkText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, color: string, rand: () => number): void {
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = color;
+  ctx.fillText(text, x + 1.5, y + 1);
+  ctx.globalAlpha = 0.95;
+  ctx.fillText(text, x, y);
+  ctx.globalAlpha = 1;
+  const w = ctx.measureText(text).width;
+  const left = ctx.textAlign === "center" ? x - w / 2 : ctx.textAlign === "right" ? x - w : x;
+  ctx.fillStyle = "rgba(20, 24, 21, 0.55)";
+  for (let i = 0; i < w / 5; i++) ctx.fillRect(left + rand() * w, y - 14 + rand() * 28, 2, 2);
+}
+
+/**
+ * La pizarra de la noche de La Feria: un pizarron de tiza en un marco de chapa, con la
+ * franja roja y blanca de los puestos de feria arriba. Distinta a proposito del cartel
+ * de records de la torre (tablas pintadas, vertical, "RECORDS" a pincel): esta es la
+ * tabla de la sala, se borra y se vuelve a escribir. Arriba, el ultimo juego y quien lo
+ * gano; abajo, los puntos acumulados de todos los juegos de la noche, cada nombre en
+ * la tiza del color de su remera y con lo que sumo en el ultimo juego.
+ */
+export function nightBoardTexture(view: NightBoardView): THREE.CanvasTexture {
+  const w = 800;
+  const h = Math.round(w / NIGHT_BOARD_ASPECT);
+  const [c, ctx] = canvas(w, h);
+  const rand = rng(4242);
+
+  // Franja de feria (roja y blanca, gastada).
+  const band = 64;
+  for (let x = 0, i = 0; x < w; x += 40, i++) {
+    ctx.fillStyle = i % 2 === 0 ? "#8e1f18" : "#cfc5ae";
+    ctx.fillRect(x, 0, 40, band);
+  }
+  ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+  for (let i = 0; i < 160; i++) ctx.fillRect(rand() * w, rand() * band, 3 + rand() * 8, 2 + rand() * 4);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+  ctx.fillRect(0, band - 6, w, 6);
+
+  // Pizarron: verde casi negro, con borrones de tiza vieja.
+  ctx.fillStyle = "#1b221e";
+  ctx.fillRect(0, band, w, h - band);
+  for (let i = 0; i < 26; i++) {
+    ctx.fillStyle = `rgba(200, 205, 195, ${0.025 + rand() * 0.04})`;
+    ctx.beginPath();
+    ctx.ellipse(rand() * w, band + rand() * (h - band), 40 + rand() * 120, 10 + rand() * 26, (rand() - 0.5) * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "center";
+  ctx.font = `46px ${FONT}`;
+  // Chapa oscura atornillada sobre la franja: sobre las rayas el titulo no se leia.
+  const titleW = ctx.measureText("GANADORES DE LA NOCHE").width + 48;
+  ctx.fillStyle = "#16100c";
+  ctx.fillRect(w / 2 - titleW / 2, 8, titleW, band - 18);
+  ctx.strokeStyle = "#5a2a1c";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(w / 2 - titleW / 2, 8, titleW, band - 18);
+  ctx.fillStyle = "#f4ecd8";
+  ctx.fillText("GANADORES DE LA NOCHE", w / 2, band / 2 - 2);
+
+  // El ultimo juego y quien lo gano.
+  const chalk = "#e8e4d8";
+  const gold = "#ffd65c";
+  if (view.lastTitle) {
+    ctx.font = `40px ${FONT}`;
+    chalkText(ctx, `ULTIMO JUEGO: ${view.lastTitle.toUpperCase()}`, w / 2, band + 38, chalk, rand);
+    ctx.font = `52px ${FONT}`;
+    const who = view.winners.length === 0 ? "NADIE" : view.winners.join(", ").toUpperCase();
+    const verb = view.winners.length > 1 ? "GANARON" : "GANO";
+    chalkText(ctx, `${verb} ${who}`, w / 2, band + 86, gold, rand);
+  } else {
+    ctx.font = `40px ${FONT}`;
+    chalkText(ctx, "TODAVIA NO SE JUGO NADA", w / 2, band + 50, chalk, rand);
+    ctx.font = `30px ${FONT}`;
+    chalkText(ctx, "VOTEN UN AFICHE Y A JUGAR", w / 2, band + 88, "rgba(232, 228, 216, 0.7)", rand);
+  }
+  // Raya de tiza, torcida.
+  ctx.strokeStyle = "rgba(232, 228, 216, 0.4)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(60, band + 120);
+  for (let x = 60; x <= w - 60; x += 40) ctx.lineTo(x, band + 120 + (rand() - 0.5) * 4);
+  ctx.stroke();
+
+  // Tabla acumulada.
+  const top = band + 136;
+  const bottom = h - 46;
+  const rows = view.rows.slice(0, 8);
+  const rowH = Math.min(52, (bottom - top) / Math.max(rows.length, 1));
+  rows.forEach((row, i) => {
+    const y = top + rowH * (i + 0.5);
+    const lead = row.rank === 1 && row.points > 0;
+    ctx.font = `${lead ? 46 : 42}px ${FONT}`;
+    ctx.textAlign = "center";
+    chalkText(ctx, String(row.rank), 82, y, lead ? gold : chalk, rand);
+    let nameX = 120;
+    if (lead) {
+      drawCrownGlyph(ctx, 132, y, 18);
+      nameX = 160;
+    }
+    ctx.textAlign = "left";
+    const name = row.name.toUpperCase() + (row.mine ? " (VOS)" : "");
+    chalkText(ctx, name, nameX, y, row.color, rand);
+    ctx.textAlign = "right";
+    const pts = `${row.points} PTS`;
+    chalkText(ctx, pts, w - 150, y, lead ? gold : chalk, rand);
+    if (row.gained !== null && row.gained > 0) {
+      ctx.font = `34px ${FONT}`;
+      chalkText(ctx, `+${row.gained}`, w - 62, y, gold, rand);
+    }
+    // Puntos guia entre el nombre y los puntos.
+    ctx.font = `${lead ? 46 : 42}px ${FONT}`;
+    const from = nameX + ctx.measureText(name).width + 14;
+    const to = w - 150 - ctx.measureText(pts).width - 14;
+    ctx.fillStyle = "rgba(232, 228, 216, 0.22)";
+    for (let x = from; x < to; x += 14) ctx.fillRect(x, y + 6, 4, 4);
+  });
+  if (rows.length === 0) {
+    ctx.font = `34px ${FONT}`;
+    ctx.textAlign = "center";
+    chalkText(ctx, "SIN JUGADORES", w / 2, (top + bottom) / 2, "rgba(232, 228, 216, 0.6)", rand);
+  }
+
+  ctx.font = `28px ${FONT}`;
+  ctx.textAlign = "right";
+  const played = view.played === 1 ? "1 JUEGO JUGADO" : `${view.played} JUEGOS JUGADOS`;
+  chalkText(ctx, played, w - 40, h - 24, "rgba(232, 228, 216, 0.55)", rand);
+
+  // Tiza gastada encima: nunca tapa una letra.
+  for (let i = 0; i < 60; i++) {
+    ctx.strokeStyle = `rgba(232, 228, 216, ${0.02 + rand() * 0.04})`;
+    ctx.lineWidth = 1 + rand() * 2;
+    const x = rand() * w;
+    const y = band + rand() * (h - band);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (rand() - 0.5) * 80, y + (rand() - 0.5) * 10);
+    ctx.stroke();
+  }
+  return crispTexture(c);
+}
+
 /** Corona dorada chiquita (la del primero del cartel). */
 function drawCrownGlyph(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
   ctx.fillStyle = "#ffcf4a";

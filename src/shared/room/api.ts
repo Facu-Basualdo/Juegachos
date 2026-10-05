@@ -484,8 +484,8 @@ export async function startBriefing(
 
 /**
  * Arranca la ronda roundNo con el juego dado y su deadline (null = sin tope). La fila
- * de room_rounds ya la escribio el briefing de esa ronda, que es el unico camino que
- * llega aca: no se reescribe (era una ida y vuelta mas en la transicion que mas se
+ * de room_rounds ya la escribio el briefing de esa ronda (o `startRoundNow`, en La
+ * Feria): no se reescribe (era una ida y vuelta mas en la transicion que mas se
  * siente, la que larga la partida).
  */
 export async function startRound(
@@ -512,8 +512,29 @@ export async function startRound(
  * comprimir la votacion del proximo juego a pocos segundos cuando ya votaron
  * todos los presentes: no tiene sentido esperar el tope completo.
  */
-export async function updateDeadline(code: string, deadline: Date): Promise<RoomRow | null> {
-  return updateRoom(code, { deadline: deadline.toISOString() }, "updateDeadline");
+export async function updateDeadline(code: string, deadline: Date | null): Promise<RoomRow | null> {
+  return updateRoom(code, { deadline: deadline ? deadline.toISOString() : null }, "updateDeadline");
+}
+
+/**
+ * Arranca la ronda roundNo directo, sin briefing (La Feria: al vencer la votacion se
+ * va derecho al juego). Registra el juego de la ronda, que en el camino comun lo
+ * escribe el briefing.
+ */
+export async function startRoundNow(
+  code: string,
+  roundNo: number,
+  gameId: string,
+  deadline: Date | null,
+): Promise<RoomRow | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  const { error } = await supabase.from("room_rounds").upsert({ code, round_no: roundNo, game_id: gameId });
+  if (error) {
+    warn("startRoundNow", error.message);
+    return null;
+  }
+  return startRound(code, roundNo, gameId, deadline);
 }
 
 /**
@@ -536,6 +557,27 @@ export async function openVote(
     { status: "voting", vote_options: options, deadline: deadline.toISOString() },
     "openVote",
   );
+}
+
+/**
+ * Reroll de La Feria: afiches nuevos para la misma votacion, sin votos y con la cuenta
+ * de nuevo. Primero se borran los votos: si fuera al reves, un voto a un afiche nuevo
+ * emitido en el medio se borraria.
+ */
+export async function rerollVote(
+  code: string,
+  voteRound: number,
+  options: string[],
+  deadline: Date,
+): Promise<RoomRow | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  const { error } = await supabase.from("room_votes").delete().eq("code", code).eq("round_no", voteRound);
+  if (error) {
+    warn("rerollVote", error.message);
+    return null;
+  }
+  return updateRoom(code, { vote_options: options, deadline: deadline.toISOString() }, "rerollVote");
 }
 
 /** Termina la sala: tablero final. */

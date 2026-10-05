@@ -633,6 +633,12 @@ export class RoomOverlay {
     /** Textos de la vista (por defecto, la votacion del proximo juego). */
     kicker?: string;
     title?: string;
+    /**
+     * Reroll de La Feria (afiches nuevos si lo pide mas de la mitad de los conectados):
+     * cuantos lo votaron, cuantos hacen falta y si el propio voto es ese. El overlay
+     * comun no lo usa.
+     */
+    reroll?: { count: number; needed: number; mine: boolean };
   }): void {
     const sig = JSON.stringify({
       r: opts.round ?? 0,

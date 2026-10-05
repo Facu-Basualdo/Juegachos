@@ -1,5 +1,5 @@
 import { coverUrl } from "../../games";
-import { lobbyGames } from "../../shared/room/hub";
+import { LOBBY3D_POSTERS, sampleGames } from "../../shared/room/hub";
 import type { Hub } from "./Hub";
 import type { Weather } from "./Night";
 
@@ -30,7 +30,9 @@ export function startDevHub(hub: Hub): boolean {
 
   const log = (what: string) => (...args: unknown[]) => console.log(`[isla dev] ${what}`, ...args);
   const totals = roster.map((player, i) => ({ rank: i + 1, player, points: (roster.length - i) * 3 }));
-  // Como en una sala 3D real: se votan todos los juegos. Algunos votos de mentira para ver los focos.
+  // Como en una sala 3D real: una votacion sorteada, un juego por cartelera. Algunos votos
+  // de mentira para ver los focos.
+  const lobbyGames = sampleGames(LOBBY3D_POSTERS);
   const options = lobbyGames.map((g) => ({ id: g.id, title: g.title, accent: g.accent, cover: coverUrl(g.id) }));
   const counts: Record<string, number> = { [options[3].id]: 2, [options[8].id]: 1 };
   const voters: Record<string, string[]> = { [options[3].id]: ["Caro", "Dani"], [options[8].id]: ["Eze"] };
@@ -108,10 +110,7 @@ export function startDevHub(hub: Hub): boolean {
           host: roster[0],
           players: roster,
           present: roster,
-          totalRounds: 5,
-          canStart: roster.length >= 2,
-          onStart: roster[0] === me ? log("start") : null,
-          onSetRounds: roster[0] === me ? log("rounds") : null,
+          startsAt: roster.length >= 2 ? Date.now() + 15_000 : null,
           onKick: roster[0] === me ? log("kick") : null,
           onLeave: log("leave"),
         });

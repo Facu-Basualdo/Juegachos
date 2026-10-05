@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { games } from "../../games";
-import { lobbyGames } from "../../shared/room/hub";
+import { LOBBY3D_POSTERS, REROLL_VOTE, sampleGames } from "../../shared/room/hub";
 import {
   initRoomHub,
   type HubLobbyView,
@@ -25,6 +25,7 @@ import {
   CAM_FOV_PORTRAIT,
   CLOCK_PING_MS,
   DREAD_FINAL,
+  DREAD_HALF_GAMES,
   DREAD_LAST_ROUND,
   DREAD_LOBBY,
   EMOTE_COOLDOWN_MS,
@@ -171,7 +172,13 @@ export class Hub implements HubPresenter {
 
   private phase: Phase = "none";
   private voting: VotingView | null = null;
-  private voteLocal: { round: number; id: string } | null = null;
+  /** Voto optimista (hasta que la DB lo confirma), atado a la ronda y a los afiches. */
+  private voteLocal: { round: number; opts: string; id: string } | null = null;
+  /** Afiches de la votacion en pantalla (para avisar un reroll y descartar votos viejos). */
+  private voteOpts = "";
+  private voteRound = -1;
+  /** Chapa o escenario donde esta parado (`slot:N` / `stage`): se vota al ENTRAR. */
+  private standingSpot: string | null = null;
   private briefing: BriefingView | null = null;
   private readyLocalRound = 0;
   private weatherKey = "";
@@ -196,7 +203,8 @@ export class Hub implements HubPresenter {
     // Primera persona: yaw alrededor de Y, despues pitch (si no, mirar arriba inclina el horizonte).
     this.camera.rotation.order = "YXZ";
     this.night = new Night(this.scene);
-    this.world = new World(lobbyGames);
+    // Afiches al azar hasta que se sepa la sala (despues los fija `startRoom` y cada votacion).
+    this.world = new World(LOBBY3D_POSTERS, sampleGames(LOBBY3D_POSTERS));
     this.scene.add(this.world.group);
     // El marcador vive en la plaza y choca como el resto.
     this.world.group.add(this.scoreboard.group);
@@ -234,6 +242,8 @@ export class Hub implements HubPresenter {
     this.room = room;
     this.me = room.me;
     this.code = room.code;
+    // Antes de la primera votacion: los mismos afiches para toda la sala (semilla = codigo).
+    this.world.setPosters(sampleGames(LOBBY3D_POSTERS, hashString(this.code)));
     this.hud.setTop(this.code, "");
     room.onChange(() => this.onRoomChange());
     this.connect();
@@ -341,6 +351,28 @@ export class Hub implements HubPresenter {
     this.syncAvatars();
     const present = new Set(this.room.presentPlayers());
     for (const [name, r] of this.remotes) r.avatar.setOffline(!present.has(name));
+    this.updateNightBoard();
+  }
+
+  /** Pizarra de la noche: ganador del ultimo juego y acumulado (cada nombre con su remera). */
+  private updateNightBoard(): void {
+    const s = this.room?.standings();
+    if (!s) return;
+    const gained = s.last?.gained ?? null;
+    this.world.nightBoard.set({
+      rows: s.totals.map((t) => ({
+        rank: t.rank,
+        name: t.player,
+        points: t.points,
+        gained: gained ? (gained[t.player] ?? 0) : null,
+        // La tiza del color de la remera, aclarada: sobre el pizarron casi negro se apagaba.
+        color: `#${new THREE.Color(seatColor(this.seatOf(t.player))).lerp(new THREE.Color("#ffffff"), 0.35).getHexString()}`,
+        mine: t.player === this.me,
+      })),
+      lastTitle: s.last?.title ?? null,
+      winners: s.last?.winners ?? [],
+      played: s.played,
+    });
   }
 
   private seatOf(name: string): number {
@@ -588,6 +620,7 @@ export class Hub implements HubPresenter {
       if (phase !== "voting") {
         this.voting = null;
         this.world.setVoting(null, {}, null);
+        this.hud.setMyVote(null);
       }
       if (phase !== "briefing") {
         this.briefing = null;
@@ -623,7 +656,19 @@ export class Hub implements HubPresenter {
   showVoting(view: VotingView): void {
     this.enter("voting");
     this.voting = view;
-    if (this.voteLocal && this.voteLocal.round !== (view.round ?? 0)) this.voteLocal = null;
+    const round = view.round ?? 0;
+    const opts = view.options.map((o) => o.id).join(",");
+    if (round === this.voteRound && opts !== this.voteOpts && this.voteOpts) {
+      this.hud.announce("REROLL: otros juegos en los afiches");
+    }
+    if (round !== this.voteRound) this.standingSpot = null;
+    this.voteRound = round;
+    this.voteOpts = opts;
+    if (this.voteLocal && (this.voteLocal.round !== round || this.voteLocal.opts !== opts)) this.voteLocal = null;
+    // Los afiches de esta votacion (sorteados por el host, iguales para toda la sala).
+    this.world.setPosters(
+      view.options.map((o) => games.find((g) => g.id === o.id)).filter((g): g is (typeof games)[number] => !!g),
+    );
     this.world.setFeatured(null, "VOTEN");
     this.renderVoting();
   }
@@ -632,17 +677,27 @@ export class Hub implements HubPresenter {
   private renderVoting(): void {
     const view = this.voting;
     if (!view) return;
-    const server = view.myVote;
+    // El voto propio puede ser un juego o REROLL (que no esta entre las opciones).
+    const server = view.reroll?.mine ? REROLL_VOTE : view.myVote;
     const mine = this.voteLocal?.id ?? server;
     const counts = { ...view.counts };
     const voters: Record<string, string[]> = {};
     for (const [id, list] of Object.entries(view.voters ?? {})) voters[id] = [...list];
+    const reroll = view.reroll ? { ...view.reroll, mine: mine === REROLL_VOTE } : undefined;
     if (mine && mine !== server) {
-      counts[mine] = (counts[mine] ?? 0) + 1;
-      if (server) counts[server] = Math.max(0, (counts[server] ?? 0) - 1);
-      // Optimista tambien en los nombres: me muevo de un afiche al otro al toque.
-      if (server) voters[server] = (voters[server] ?? []).filter((p) => p !== this.me);
-      (voters[mine] ??= []).push(this.me);
+      if (mine === REROLL_VOTE) {
+        if (reroll) reroll.count++;
+      } else {
+        counts[mine] = (counts[mine] ?? 0) + 1;
+        (voters[mine] ??= []).push(this.me);
+      }
+      if (server === REROLL_VOTE) {
+        if (reroll) reroll.count = Math.max(0, reroll.count - 1);
+      } else if (server) {
+        counts[server] = Math.max(0, (counts[server] ?? 0) - 1);
+        // Optimista tambien en los nombres: me muevo de un afiche al otro al toque.
+        voters[server] = (voters[server] ?? []).filter((p) => p !== this.me);
+      }
     }
     // El propio va primero: si no, con varios votos quedaba escondido en el "+N".
     for (const list of Object.values(voters)) {
@@ -653,18 +708,29 @@ export class Hub implements HubPresenter {
     this.world.setVoting(
       view.options.map((o) => ({ id: o.id, accent: o.accent ?? "#ff3b30" })),
       counts,
-      mine,
+      mine === REROLL_VOTE ? null : mine,
       voters,
     );
-    this.hud.showVoting({ ...view, counts, voters, onVote: (id) => this.vote(id) }, mine);
+    // El escenario del medio es el REROLL: encendido mientras se vota.
+    this.world.setReady(!!reroll, mine === REROLL_VOTE);
+    this.hud.showVoting({ ...view, counts, voters, reroll, onVote: (id) => this.vote(id) }, mine);
+    // Cada uno ve su propio voto en pantalla, siempre (pedido del programador).
+    this.hud.setMyVote({
+      title:
+        mine === REROLL_VOTE
+          ? "REROLL (otros juegos)"
+          : mine
+            ? (view.options.find((o) => o.id === mine)?.title ?? mine)
+            : null,
+    });
   }
 
   private vote(id: string): void {
     const view = this.voting;
     if (!view) return;
-    const mine = this.voteLocal?.id ?? view.myVote;
+    const mine = this.voteLocal?.id ?? (view.reroll?.mine ? REROLL_VOTE : view.myVote);
     if (mine === id) return;
-    this.voteLocal = { round: view.round ?? 0, id };
+    this.voteLocal = { round: view.round ?? 0, opts: this.voteOpts, id };
     view.onVote(id);
     this.renderVoting();
   }
@@ -768,6 +834,9 @@ export class Hub implements HubPresenter {
     let dread = DREAD_LOBBY;
     if (status === "finished") dread = DREAD_FINAL;
     else if (status !== "lobby" && total > 0) dread = DREAD_LOBBY + ((DREAD_LAST_ROUND - DREAD_LOBBY) * done) / total;
+    // Sin tope de juegos (La Feria se juega de a uno, sin final): la noche empeora con
+    // cada juego pero cada vez menos, sin llegar nunca a la luna roja de la final.
+    else if (status !== "lobby" && total === 0) dread = DREAD_LOBBY + ((DREAD_LAST_ROUND - DREAD_LOBBY) * done) / (done + DREAD_HALF_GAMES);
     this.night.setDread(dread);
 
     const key = `${this.code}:${status === "finished" ? "fin" : status === "lobby" ? "lobby" : done}`;
@@ -810,10 +879,21 @@ export class Hub implements HubPresenter {
     if (p.knocked) this.hud.flash("Pum");
     this.updateRun();
 
-    // Pisar una chapa es votar; subirse al escenario, marcar listo.
-    if (p.onGround && this.voting) {
-      const id = this.world.portalAt(p.x, p.z);
-      if (id) this.vote(id);
+    // Pisar una chapa es votar ese afiche; subirse al escenario, votar REROLL. Solo al
+    // ENTRAR a la chapa o al escenario: el que se queda parado no vuelve a votar cuando
+    // cambian los afiches (si no, el que pidio el reroll arriba del escenario lo
+    // repetiria en bucle, y el parado en una chapa votaria sin querer el juego nuevo).
+    if (this.voting) {
+      const slot = p.onGround ? this.world.portalSlotAt(p.x, p.z) : -1;
+      const onStage = this.world.onReadyPad(p.standingOn);
+      const spot = slot >= 0 ? `slot:${slot}` : onStage ? "stage" : null;
+      if (spot !== this.standingSpot) {
+        this.standingSpot = spot;
+        const id = slot >= 0 ? this.world.portalGame(slot) : onStage ? REROLL_VOTE : null;
+        if (id) this.vote(id);
+      }
+    } else {
+      this.standingSpot = null;
     }
     if (this.briefing && this.world.onReadyPad(p.standingOn)) this.ready();
 
@@ -895,6 +975,7 @@ export class Hub implements HubPresenter {
     const hit = this.aimed();
     if (!hit) return;
     if ("portal" in hit) this.vote(hit.portal);
+    else if (this.voting) this.vote(REROLL_VOTE);
     else this.ready();
   }
 

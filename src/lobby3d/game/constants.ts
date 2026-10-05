@@ -106,6 +106,11 @@ export const FLAG_MOVING = 2;
 /** "Cuanto empeoro" la noche: el lobby arranca abierto, la ultima ronda casi negra, la final roja. */
 export const DREAD_LOBBY = 0;
 export const DREAD_LAST_ROUND = 0.85;
+/**
+ * La Feria sin tope de juegos: a cuantos juegos jugados la noche llega a la mitad del
+ * camino hacia `DREAD_LAST_ROUND` (la curva es `done / (done + N)`, nunca llega).
+ */
+export const DREAD_HALF_GAMES = 3;
 export const DREAD_FINAL = 1;
 /** Velocidad a la que la noche llega a su nuevo estado. */
 export const DREAD_EASE = 0.35;
