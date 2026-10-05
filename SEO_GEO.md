@@ -148,6 +148,20 @@ desde el código:
 3. Revisar en las dos, a las pocas semanas, qué búsquedas traen gente y qué páginas no se
    indexaron.
 
+### Cloudflare: la capa que el código no ve
+
+`www.juegachos.com` pasa por **Cloudflare** antes de llegar a Vercel (las respuestas traen
+`Server: cloudflare`). Su **AI Crawl Control** bloqueaba con un 403 a los bots de IA que
+entrenan modelos (GPTBot, ClaudeBot, CCBot, Applebot-Extended, Bytespider), aunque el
+`robots.txt` los invitaba. El 2026-10-05 Facu los pasó a **Permitir**, y quedaron todos
+respondiendo 200. "Bot Preference Sync" está prendido: si se vuelve a bloquear un bot ahí,
+Cloudflare agrega su `Disallow` al principio del `robots.txt`.
+
+Si un buscador o una IA deja de ver el sitio, revisar esto **antes** que el código.
+Una prueba rápida es `curl -A "... GPTBot/1.1 ..." https://www.juegachos.com/`. Ojo: un 403
+a esa prueba puede ser también Cloudflare frenando a un impostor (el pedido no sale de las IP
+de OpenAI). El panel de **Seguridad > Eventos** dice qué regla bloqueó cada pedido.
+
 ## Fase 3: afuera del sitio (lo que más mueve el GEO)
 
 Las IA recomiendan lo que ven nombrado en otros lados, y Google premia los links de sitios
