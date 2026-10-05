@@ -1124,6 +1124,9 @@ class RoomModeController implements RoomMode, RoomHub {
       me: this.me,
       hostAction,
       waitingText,
+      // El espectador no jugo la ronda: no se le pregunta si le gusto.
+      gameId: this.spectator ? null : this.roundGame(),
+      roomCode: this.code,
     });
   }
 

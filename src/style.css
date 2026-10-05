@@ -1727,3 +1727,97 @@ a {
   border-color: var(--ink);
   color: #efeee6;
 }
+/* ---------- Feedback (modal de la landing, src/feedbackModal.ts) ---------- */
+.fb-modal__box {
+  max-width: 480px;
+  max-height: 90vh;
+  display: grid;
+  gap: 14px;
+}
+
+.fb-modal__box .rank-modal__head {
+  margin-bottom: 0;
+}
+
+.fb-modal__lead {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.fb-modal__kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fb-modal__field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.fb-modal__field small {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.fb-modal__game,
+.fb-modal__text,
+.fb-modal__contact {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.6px solid var(--ink);
+  border-radius: 10px;
+  background: #fbfaf4;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.fb-modal__text {
+  resize: vertical;
+  min-height: 110px;
+  line-height: 1.4;
+}
+
+.fb-modal__game:focus,
+.fb-modal__text:focus,
+.fb-modal__contact:focus {
+  outline: 2px solid #0091a6;
+  outline-offset: 1px;
+}
+
+.fb-modal__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fb-modal__note {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.fb-modal__send {
+  padding: 11px 26px;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  color: #efeee6;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 rgba(17, 17, 17, 0.25);
+}
+
+.fb-modal__send:disabled {
+  opacity: 0.35;
+  cursor: default;
+  box-shadow: none;
+}

@@ -11,6 +11,7 @@
 
 import type { HowTo } from "../howto";
 import { renderHowTo } from "../howtoView";
+import { FeedbackPanel } from "../FeedbackPanel";
 
 const STYLE_ID = "mg-room-styles";
 
@@ -213,6 +214,9 @@ export class RoomOverlay {
   // in-place (misma razon que la votacion: no reconstruir el DOM en cada sync).
   private briefSig: string | null = null;
   private briefEls: { btn: HTMLButtonElement; count: HTMLDivElement; start: HTMLButtonElement | null } | null = null;
+
+  /** "¿Te gustó?" en los resultados de cada ronda (el mismo de los game over solo). */
+  private readonly feedback = new FeedbackPanel();
 
   constructor() {
     ensureStyles();
@@ -458,6 +462,9 @@ export class RoomOverlay {
     hostAction: { label: string; onClick: () => void } | null;
     /** Texto de espera para los no-host (o mientras arranca la votacion). */
     waitingText: string | null;
+    /** Para el "¿Te gustó?" de la ronda (sin id no se muestra). */
+    gameId?: string | null;
+    roomCode?: string;
   }): void {
     this.show();
     this.addKicker(`Ronda ${opts.roundNo}/${opts.totalRounds} - ${opts.gameTitle}`);
@@ -482,6 +489,14 @@ export class RoomOverlay {
       this.addButton(opts.hostAction.label, opts.hostAction.onClick);
     } else if (opts.waitingText) {
       this.addHint(opts.waitingText);
+    }
+
+    // El overlay se redibuja en cada sync: el mismo nodo vuelve a entrar y la clave por
+    // ronda conserva lo que se estaba escribiendo.
+    if (opts.gameId) {
+      this.feedback.show({ gameId: opts.gameId, source: "room", room: opts.roomCode ?? null, key: `${opts.roomCode}:${opts.roundNo}` });
+      this.feedback.root.style.marginTop = "18px";
+      this.boxEl.append(this.feedback.root);
     }
   }
 
