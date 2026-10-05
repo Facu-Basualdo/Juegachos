@@ -1,4 +1,5 @@
 import { getSupabase } from "./supabase";
+import { FeedbackPanel } from "./FeedbackPanel";
 import {
   fetchTop,
   formatWins,
@@ -74,6 +75,11 @@ export class LeaderboardPanel {
   private readonly listEl: HTMLUListElement;
   private readonly formEl: HTMLFormElement;
   private readonly inputEl: HTMLInputElement;
+  /**
+   * "¿Te gustó?" arriba del ranking, solo en el game over (cuando `render` trae un
+   * puntaje). Vive aca para que todos los juegos lo tengan sin tocar ninguno.
+   */
+  private readonly feedback = new FeedbackPanel();
 
   /** Tablero que se esta mostrando (para cambiar de pestana sin re-render). */
   private board: { gameId: string; variant?: string } | null = null;
@@ -147,7 +153,7 @@ export class LeaderboardPanel {
     this.listEl = document.createElement("ul");
     this.listEl.className = "mg-lb__list";
 
-    this.root.append(this.titleEl, tabs, this.formEl, this.statusEl, this.listEl);
+    this.root.append(this.feedback.root, this.titleEl, tabs, this.formEl, this.statusEl, this.listEl);
   }
 
   mount(container: HTMLElement): void {
@@ -178,6 +184,7 @@ export class LeaderboardPanel {
     this.listEl.innerHTML = "";
     this.statusEl.textContent = "";
     this.root.style.display = "none";
+    this.feedback.hide();
     for (const cb of this.showCbs) cb(false);
   }
 
@@ -193,6 +200,9 @@ export class LeaderboardPanel {
     this.pending = null;
     this.formEl.style.display = "none";
     this.board = { gameId, variant: opts.variant };
+    const hasScore = opts.score !== undefined && Number.isFinite(opts.score);
+    if (hasScore) this.feedback.show({ gameId, source: "gameover" });
+    else this.feedback.hide();
     this.titleEl.textContent =
       getRankingMetric(gameId) === "wins" ? "Victorias en salas" : "Ranking global";
     this.tabButtons.month.title = monthLabel();
@@ -203,7 +213,6 @@ export class LeaderboardPanel {
       return;
     }
 
-    const hasScore = opts.score !== undefined && Number.isFinite(opts.score);
     if (!hasScore) {
       await this.renderList();
       return;

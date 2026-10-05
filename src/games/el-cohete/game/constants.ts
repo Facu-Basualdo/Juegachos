@@ -29,10 +29,11 @@ export const MAX_CRASH = 50;
 
 // ---------- Ritmo ----------
 
-/** Ventana de apuestas en sala (fija: todos vuelan a la vez). */
-export const BET_TIME = 7;
-/** Ventana de apuestas jugando solo (apostar despega en el acto). */
-export const SOLO_BET_TIME = 14;
+/**
+ * Ventana de apuestas en sala (fija: todos vuelan a la vez). Da para escribir un monto
+ * a mano. Solo no hay ventana: el cohete espera a que se apueste.
+ */
+export const BET_TIME = 10;
 /** Despues de la explosion, antes de abrir la siguiente apuesta. */
 export const AFTER_TIME = 2.8;
 /** Desde que se aprieta APOSTAR (solo) hasta que despega. */

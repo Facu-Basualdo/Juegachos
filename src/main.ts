@@ -8,6 +8,7 @@ import { recordPlay, fetchPlayCounts, cachedPlayCounts } from "./shared/plays";
 import { fetchGameLeaders } from "./shared/leaders";
 import { getNickname, setNickname, NICKNAME_MAX } from "./shared/nickname";
 import { checkGameServer, isGameServerConfigured } from "./shared/server-status";
+import { isFeedbackEnabled } from "./shared/feedback";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const roomsOn = isLeaderboardEnabled();
@@ -30,6 +31,7 @@ nav.innerHTML = `
     <div class="topbar__links">
       <a href="/" class="is-active">Juegos</a>
       ${roomsOn ? `<a href="/rooms/">Salas</a>` : ""}
+      ${isFeedbackEnabled() ? `<a href="/feedback/">Feedback</a>` : ""}
     </div>
   </div>
 `;
@@ -552,6 +554,7 @@ footer.innerHTML = `
       <a href="/">Juegos<span class="site-footer__arrow">&rarr;</span></a>
       ${roomsOn ? `<a href="/rooms/">Salas<span class="site-footer__arrow">&rarr;</span></a>` : ""}
       <a href="https://discord.gg/pdFQVrKXN" target="_blank" rel="noopener noreferrer">Discord<span class="site-footer__arrow">&rarr;</span></a>
+      ${isFeedbackEnabled() ? `<a href="/feedback/">Feedback<span class="site-footer__arrow">&rarr;</span></a>` : ""}
     </nav>
   </div>
   <div class="site-footer__bottom">
@@ -601,6 +604,7 @@ main.append(hero, filtersBar);
 main.append(grid, empty);
 
 app.append(nav, main, footer);
+
 
 // ---------- Estado del game server ----------
 

@@ -84,6 +84,7 @@ export class Renderer {
   private readonly memory = document.createElement("canvas");
   private readonly reach = document.createElement("canvas");
   private memData: Uint8ClampedArray | null = null;
+  private forgetAcc = 0;
   private readonly particles: Particle[] = [];
   private maze: Maze | null = null;
   private dpr = 1;
@@ -150,6 +151,18 @@ export class Renderer {
       this.reach.height = maze.h;
       this.memData = new Uint8ClampedArray(maze.w * maze.h * 4);
     }
+  }
+
+  /** Borra de a poco la memoria de lo recorrido (`amount` = fraccion de 0 a 1 por llamada). */
+  forget(amount: number): void {
+    const mem = this.memData;
+    if (!mem) return;
+    // La memoria es de 8 bits: se acumula la fraccion para que el ritmo no dependa de los fps.
+    this.forgetAcc += amount * 255;
+    const d = Math.floor(this.forgetAcc);
+    if (d < 1) return;
+    this.forgetAcc -= d;
+    for (let i = 3; i < mem.length; i += 4) if (mem[i] > 0) mem[i] = Math.max(0, mem[i] - d);
   }
 
   /** Celda (x, y) a px CSS del centro. */

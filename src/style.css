@@ -1727,3 +1727,427 @@ a {
   border-color: var(--ink);
   color: #efeee6;
 }
+
+/* ---------- Pagina de feedback (/feedback/, src/feedback/main.ts) ---------- */
+.fbp {
+  max-width: 880px;
+}
+
+.fbp [hidden] {
+  display: none !important;
+}
+
+.fbp-head {
+  margin-bottom: 26px;
+}
+
+.fbp-head__title {
+  font-size: clamp(38px, 6vw, 58px);
+  font-weight: 900;
+  letter-spacing: -1.5px;
+  line-height: 1;
+}
+
+.fbp-head__lead {
+  margin-top: 10px;
+  font-size: 17px;
+  color: var(--muted);
+}
+
+.fbp-form,
+.fbp-done,
+.fbp-off {
+  display: grid;
+  gap: 28px;
+  padding: clamp(20px, 4vw, 34px);
+  border: 2.5px solid var(--ink);
+  border-radius: var(--card-radius);
+  background: #efeee6;
+  box-shadow: 10px 10px 0 rgba(17, 17, 17, 0.9);
+}
+
+.fbp-step {
+  display: grid;
+  gap: 12px;
+  /* Al bajar solo hasta un paso, que el titulo no quede pegado al borde. */
+  scroll-margin-top: 24px;
+  transition: opacity 0.25s;
+}
+
+/* Autoguiado: el paso actual resalta su numero, los que faltan se atenuan (siguen
+   tocables) y los hechos llevan tilde. */
+.fbp-step.is-pending {
+  opacity: 0.42;
+}
+
+.fbp-step.is-current .fbp-step__n {
+  background: #0091a6;
+  box-shadow: 0 0 0 4px rgba(0, 145, 166, 0.22);
+}
+
+.fbp-step.is-done .fbp-step__n {
+  font-size: 0;
+  background: var(--ink) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23efeee6' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 15px no-repeat;
+}
+
+.fbp-step__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.fbp-step__title small {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.fbp-step__n {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #efeee6;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+/* Tipo de mensaje: cuatro tarjetas grandes, la elegida en tinta. */
+.fbp-kinds {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.fbp-kind {
+  display: grid;
+  gap: 4px;
+  padding: 14px 14px 13px;
+  text-align: left;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: #fbfaf4;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+
+.fbp-kind b {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.fbp-kind span {
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--muted);
+}
+
+.fbp-kind:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.fbp-kind[aria-checked="true"] {
+  background: var(--ink);
+  color: #efeee6;
+  box-shadow: 4px 4px 0 #0091a6;
+  transform: translate(-2px, -2px);
+}
+
+.fbp-kind[aria-checked="true"] span {
+  color: rgba(239, 238, 230, 0.7);
+}
+
+/* Elegir el juego: grilla de portadas con buscador, en una caja con scroll propio. */
+.fbp-pick {
+  display: grid;
+  gap: 12px;
+}
+
+.fbp-picked {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 8px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: #fbfaf4;
+}
+
+.fbp-picked img {
+  width: 54px;
+  height: 54px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 2px solid var(--ink);
+}
+
+.fbp-picked span {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.fbp-picked small {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #0091a6;
+}
+
+.fbp-picked b {
+  font-size: 17px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fbp-picked__clear {
+  padding: 7px 14px;
+  border: 1.6px solid var(--ink);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fbp-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #efeee6;
+}
+
+.fbp-search__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+}
+
+.fbp-search__input::placeholder {
+  color: rgba(239, 238, 230, 0.55);
+}
+
+.fbp-games {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 12px;
+  max-height: 430px;
+  overflow-y: auto;
+  padding: 4px 6px 8px 2px;
+}
+
+.fbp-game {
+  display: grid;
+  gap: 7px;
+  align-content: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.fbp-game__cover {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: #cfcbb3;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+
+.fbp-game__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.fbp-game__cover--none {
+  display: grid;
+  place-items: center;
+  background: #fbfaf4;
+  border-style: dashed;
+}
+
+.fbp-game__cover--none b {
+  font-size: 34px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.fbp-game__title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.fbp-game:hover .fbp-game__cover {
+  transform: translate(-2px, -2px);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+/* El elegido: aro turquesa y tilde, se ve aunque la portada sea oscura. */
+.fbp-game[aria-pressed="true"] .fbp-game__cover {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px #efeee6, 0 0 0 6px #0091a6;
+}
+
+.fbp-game[aria-pressed="true"] .fbp-game__cover::after {
+  content: "";
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: #0091a6 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 15px no-repeat;
+}
+
+.fbp-game[aria-pressed="true"] .fbp-game__title {
+  font-weight: 900;
+}
+
+.fbp-empty {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.fbp-text,
+.fbp-contact {
+  width: 100%;
+  padding: 12px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: #fbfaf4;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.fbp-text {
+  min-height: 130px;
+  resize: vertical;
+}
+
+.fbp-text:focus,
+.fbp-contact:focus {
+  outline: 3px solid #0091a6;
+  outline-offset: 1px;
+}
+
+.fbp-count {
+  margin-top: -6px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.fbp-count:empty {
+  display: none;
+}
+
+.fbp-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.fbp-note {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.fbp-send {
+  padding: 14px 34px;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  color: #efeee6;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 #0091a6;
+}
+
+.fbp-send:disabled {
+  opacity: 0.3;
+  cursor: default;
+  box-shadow: none;
+}
+
+.fbp-done__title {
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -0.8px;
+}
+
+.fbp-done__text {
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.fbp-done__actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.fbp-back {
+  font-weight: 700;
+  color: var(--ink);
+  text-underline-offset: 4px;
+}
+
+@media (max-width: 720px) {
+  .fbp-kinds {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .fbp-games {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    max-height: 380px;
+  }
+
+  .fbp-foot {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .fbp-send {
+    width: 100%;
+  }
+}

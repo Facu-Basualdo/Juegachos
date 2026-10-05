@@ -1217,3 +1217,44 @@ body {
     padding: 24px 18px 18px;
   }
 }
+
+/* Monto a mano: un campo de paño debajo de las fichas, con el borde dorado del resto. */
+.ck-amount {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--round);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ck-amount input {
+  width: 96px;
+  padding: 5px 10px;
+  border: 2px solid var(--gold-lo);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--gold);
+  font-family: var(--block);
+  font-size: 15px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.ck-amount input::-webkit-outer-spin-button,
+.ck-amount input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.ck-amount input:focus {
+  outline: none;
+  border-color: var(--bulb-core);
+  box-shadow: 0 0 0 3px rgba(255, 211, 106, 0.3);
+}
+
+.ck-amount input:disabled {
+  opacity: 0.4;
+}
