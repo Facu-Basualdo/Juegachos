@@ -117,6 +117,9 @@ export async function sendFeedback(input: FeedbackInput): Promise<FeedbackResult
   if (error.code === "42P01" || error.code === "PGRST205") {
     missing = true;
     console.warn("[feedback] Falta la tabla `feedback`: correr supabase/feedback.sql en el SQL Editor de Supabase.");
+  } else {
+    // Sin esto el panel solo dice "No se pudo enviar" y no hay como saber por que.
+    console.warn("[feedback] No se pudo enviar:", error.code, error.message);
   }
   return "error";
 }

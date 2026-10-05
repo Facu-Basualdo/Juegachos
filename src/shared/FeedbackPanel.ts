@@ -59,8 +59,13 @@ const CSS = `
 .mg-fb__note:empty { display: none; }
 `;
 
-const THUMB = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10v11H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3z"/><path d="M7 10l4-7a2.4 2.4 0 0 1 2.6 2.8L13 9h5.6a2 2 0 0 1 2 2.4l-1.4 7.2A2 2 0 0 1 17.2 21H7"/></svg>`;
-const THUMB_DOWN = THUMB.replace("<svg ", `<svg style="transform: rotate(180deg)" `);
+const THUMB_PATHS = `<path d="M7 10v11H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3z"/><path d="M7 10l4-7a2.4 2.4 0 0 1 2.6 2.8L13 9h5.6a2 2 0 0 1 2 2.4l-1.4 7.2A2 2 0 0 1 17.2 21H7"/>`;
+const thumbSvg = (inner: string): string =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+const THUMB = thumbSvg(THUMB_PATHS);
+// Girado adentro del dibujo y no con un `transform` de CSS sobre el <svg>: ese lo
+// rasteriza como capa aparte en medio pixel y el pulgar se veia borroso hasta el hover.
+const THUMB_DOWN = thumbSvg(`<g transform="rotate(180 12 12)">${THUMB_PATHS}</g>`);
 
 function ensureStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
