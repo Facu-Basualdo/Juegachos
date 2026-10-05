@@ -31,9 +31,11 @@ import {
 import {
   DEFAULT_TOTAL_ROUNDS,
   HEARTBEAT_MS,
+  isStaleRoom,
   MAX_ROOM_PLAYERS,
   TOTAL_ROUNDS_OPTIONS,
   type PublicRoom,
+  type RoomRow,
   type RoomSettings,
   type RoomState,
   type RoomVisibility,
@@ -948,18 +950,19 @@ function renderLobby(code: string, player: string): void {
     const max = Math.max(0, ...counts.values());
     const top = max > 0 ? options.filter((id) => counts.get(id) === max) : options;
     const winner = top[Math.floor(Math.random() * top.length)];
-    const ok = await startBriefing(
+    const row = await startBriefing(
       code,
       voteRound,
       winner,
       new Date(Date.now() + BRIEFING_SECONDS * 1000),
     );
-    if (!ok) {
+    if (!row) {
       closingVote = false;
       return;
     }
-    channel.ping();
-    location.href = roomGameUrl(winner, code);
+    // La fila va en el ping: los demas navegan al juego sin releer la DB primero.
+    channel.ping(row);
+    go(roomGameUrl(winner, code));
   };
 
   // Tick del countdown de la votacion; ademas el host la cierra al vencer el tope
@@ -988,7 +991,7 @@ function renderLobby(code: string, player: string): void {
       const allPresentVoted =
         registeredPresent.length > 0 && registeredPresent.every((p) => voters.has(p));
       if (allPresentVoted || (deadline !== null && now >= deadline)) void closeFirstVote();
-    }, 500);
+    }, 250);
   };
 
   // Muestra la votacion del primer juego en el lobby (todos), con las portadas.
@@ -1025,8 +1028,41 @@ function renderLobby(code: string, player: string): void {
     startVoteTick();
   };
 
+  // Filas de la sala aplicadas por fuera de la relectura (ping con la fila, o la
+  // propia escritura): una relectura que salio antes puede traer la fase vieja.
+  let roomPushes = 0;
+  // Ya se navego a otra pagina (juego o La Feria): lo que llegue despues se ignora.
+  // Sin esto, la relectura que el navegador corta al salir volvia vacia y pintaba
+  // "La sala ya no existe" (y reescribia la URL) justo antes de irse.
+  let leaving = false;
+  const go = (url: string): void => {
+    leaving = true;
+    location.href = url;
+  };
+
   const refresh = async (): Promise<void> => {
+    if (leaving) return;
+    const pushesAtStart = roomPushes;
     const fresh = await fetchRoomState(code);
+    if (leaving) return;
+    if (fresh && (roomPushes !== pushesAtStart || isStaleRoom(fresh.room, state?.room))) {
+      // Salio antes de una transicion que ya se aplico: se descarta y se relee.
+      void refresh();
+      return;
+    }
+    apply(fresh);
+  };
+
+  /** Aplica una fila de la sala que llego sin relectura (ver RoomMode.applyRoom). */
+  const applyRoom = (room: RoomRow): void => {
+    if (leaving || !state || isStaleRoom(room, state.room)) return;
+    // Resultados / final no pasan por el lobby, y necesitarian los puntajes.
+    if (room.status === "results" || room.status === "finished") return;
+    roomPushes++;
+    apply({ ...state, room });
+  };
+
+  const apply = (fresh: RoomState | null): void => {
     // La sala ya no existe (se vacio y se borro, o la purgo alguien).
     if (!fresh) {
       teardown();
@@ -1048,12 +1084,12 @@ function renderLobby(code: string, player: string): void {
     // Sala 3D (p.ej. un link viejo al lobby comun): su lobby es La Feria.
     if (isLobby3d(fresh.room.settings)) {
       teardown();
-      location.href = roomHubUrl(code);
+      go(roomHubUrl(code));
       return;
     }
     // La sala arranco (quiza desde otra pestana del host): todos adentro.
     if (fresh.room.status !== "lobby" && fresh.room.current_game) {
-      location.href = roomGameUrl(fresh.room.current_game, code);
+      go(roomGameUrl(fresh.room.current_game, code));
       return;
     }
     // Votacion del primer juego (sin playlist): se resuelve en el lobby, sin
@@ -1067,7 +1103,13 @@ function renderLobby(code: string, player: string): void {
     render();
   };
 
-  channel.onSync(() => void refresh());
+  channel.onSync((room) => {
+    if (room) applyRoom(room);
+    void refresh();
+  });
+  // El canal quedo unido (al cargar, o tras una caida) o volvio la red: lo que se
+  // mando mientras tanto no llego por ping.
+  channel.onReconnect(() => void refresh());
   channel.onPresence(render);
   const pollId = window.setInterval(() => void refresh(), 5000);
   // Heartbeat: mientras alguien tenga el lobby abierto la sala esta viva. Al
@@ -1102,31 +1144,32 @@ function renderLobby(code: string, player: string): void {
         // (de que va el juego + controles). El resto del flujo (votacion de tiempo
         // si esta activa, o el arranque de la partida) corre en la pagina del juego.
         const firstGame = settings.playlist[0];
-        const ok = await startBriefing(
+        const row = await startBriefing(
           code,
           1,
           firstGame,
           new Date(Date.now() + BRIEFING_SECONDS * 1000),
         );
-        if (!ok) {
+        if (!row) {
           starting = false;
           render();
           return;
         }
-        channel.ping();
-        location.href = roomGameUrl(firstGame, code);
+        channel.ping(row);
+        go(roomGameUrl(firstGame, code));
         return;
       }
 
       // Sin playlist: se vota el primer juego aca en el lobby (mismo mecanismo que
       // las rondas siguientes). Al cerrar la votacion, el ganador va a su briefing.
-      const ok = await openVote(code, pickVoteOptions(), new Date(Date.now() + VOTE_SECONDS * 1000));
-      if (!ok) {
+      const row = await openVote(code, pickVoteOptions(), new Date(Date.now() + VOTE_SECONDS * 1000));
+      if (!row) {
         starting = false;
         render();
         return;
       }
-      channel.ping();
+      channel.ping(row);
+      applyRoom(row);
       void refresh();
     })();
   });
