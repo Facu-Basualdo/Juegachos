@@ -10,6 +10,8 @@ import {
   LIGHT_MIN,
   MAX_DT,
   OIL_AMPHORA,
+  MEMORY_FORGET,
+  THREAD_FORGET_STEP,
   PAR_PER_CELL,
   SLEEP,
   SLEEP_FIRST,
@@ -77,6 +79,9 @@ export class Game {
   private shake = 0;
   private beat = 0;
   private lowOilWarned = false;
+  /** Ya se aviso que, sin aceite, se esta borrando el camino. */
+  private forgetWarned = false;
+  private forgetT = 0;
   private crackleT = 0;
   private liveT = 0;
   private liveIdle = 0;
@@ -158,6 +163,7 @@ export class Game {
     this.runTime = 0;
     this.oil = 1;
     this.lowOilWarned = false;
+    this.forgetWarned = false;
     this.seed = this.room ? hashSeed(`${this.room.code}:${this.room.round()}`) : (Math.random() * 2 ** 31) >>> 0;
     if (this.room && !this.rivals) this.rivals = new Rivals(this.room.players().filter((p) => p !== this.room?.me));
     this.buildLevel(1);
@@ -177,6 +183,7 @@ export class Game {
     this.amphorae = this.maze.amphorae.map((a) => ({ ...a }));
     this.levelTime = 0;
     this.revealT = 0;
+    this.forgetT = 0;
     this.renderer.setMaze(this.maze);
     this.hud.setLevel(level);
   }
@@ -318,12 +325,15 @@ export class Game {
       SoundEffects.gutter();
       this.hud.toast("La antorcha se apaga", "info");
     }
+    if (this.oil <= 0) this.forgetTrail(dt);
+    else this.forgetT = 0;
     if (pe.arrived) {
       const i = this.amphorae.findIndex((a) => a.x === p.x && a.y === p.y);
       if (i >= 0) {
         this.amphorae.splice(i, 1);
         this.oil = Math.min(1, this.oil + OIL_AMPHORA);
         if (this.oil >= 0.18) this.lowOilWarned = false;
+        this.forgetWarned = false;
         this.renderer.burst("gold", p.fx, p.fy, 18, 1.6);
         SoundEffects.amphora();
         this.hud.toast("Aceite", "gold");
@@ -336,6 +346,26 @@ export class Game {
       this.crackleT = 0.2 + Math.random() * 0.6;
       SoundEffects.crackle();
     }
+  }
+
+  /**
+   * Sin aceite se pierde la estela: la memoria del mapa se desvanece y el hilo se
+   * enrolla desde la punta vieja (la que queda pegada a la largada).
+   */
+  private forgetTrail(dt: number): void {
+    if (!this.forgetWarned) {
+      this.forgetWarned = true;
+      SoundEffects.gutter();
+      this.hud.toast("Sin aceite: se te borra el camino", "danger");
+    }
+    this.renderer.forget(dt / MEMORY_FORGET);
+    const t = this.player.thread;
+    this.forgetT += dt;
+    while (this.forgetT >= THREAD_FORGET_STEP && t.length > 1) {
+      this.forgetT -= THREAD_FORGET_STEP;
+      t.shift();
+    }
+    if (t.length <= 1) this.forgetT = 0;
   }
 
   private lightRadius(time: number): number {

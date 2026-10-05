@@ -22,6 +22,10 @@ function collectHtmlEntries(): Record<string, string> {
   const fameHtml = resolve(root, "fame/index.html");
   if (existsSync(fameHtml)) entries.fame = fameHtml;
 
+  // Pagina de feedback de los jugadores (src/feedback/). Tampoco es juego.
+  const feedbackHtml = resolve(root, "feedback/index.html");
+  if (existsSync(feedbackHtml)) entries.feedback = feedbackHtml;
+
   for (const dirent of readdirSync(gamesDir, { withFileTypes: true })) {
     if (!dirent.isDirectory()) continue;
     const htmlPath = resolve(gamesDir, dirent.name, "index.html");

@@ -55,6 +55,14 @@ export const LIGHT_MIN = 1.05;
 export const LIGHT_MAX = 3.6;
 /** Lo que recarga un anfora. */
 export const OIL_AMPHORA = 0.45;
+/**
+ * Sin aceite se pierde la estela (pedido del programador): la memoria de lo recorrido se
+ * borra en `MEMORY_FORGET` segundos (menos lo que la brasa sigue alumbrando) y el hilo de
+ * Ariadna se enrolla desde la punta vieja, una celda cada `THREAD_FORGET_STEP` segundos.
+ * Lo borrado no vuelve con un anfora: hay que volver a recorrerlo.
+ */
+export const MEMORY_FORGET = 6;
+export const THREAD_FORGET_STEP = 0.25;
 
 // ---- Puntaje ----
 export const LEVEL_POINTS = 1000;

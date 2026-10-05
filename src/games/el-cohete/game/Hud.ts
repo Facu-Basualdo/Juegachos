@@ -1,6 +1,6 @@
 import { HowToPanel } from "../../../shared/HowToPanel";
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
-import { CHIP_VALUES } from "./constants";
+import { CHIP_VALUES, MIN_BET } from "./constants";
 import { seatColor } from "./Parachute";
 
 export type MainMode = "bet" | "cancel" | "cash" | "wait" | "off";
@@ -40,6 +40,7 @@ export class Hud {
   private readonly bankEl: HTMLElement;
   private readonly betBox: HTMLElement;
   private readonly winEl: HTMLElement;
+  private readonly amountEl: HTMLInputElement;
   private readonly goBox: HTMLElement;
   private readonly goTitle: HTMLElement;
   private readonly betTitle: HTMLElement;
@@ -80,6 +81,7 @@ export class Hud {
         <div class="ck-step ck-step--bet" data-k="betbox" data-state="active">
           <div class="ck-step__head"><span class="ck-step__n">1</span><span class="ck-step__t" data-k="bettitle">Elegí cuánto apostar</span></div>
           <div class="ck-chips">${chips}</div>
+          <label class="ck-amount"><span>u otro monto</span><input type="number" inputmode="numeric" min="${MIN_BET}" step="1" placeholder="${MIN_BET}" aria-label="Monto a apostar" data-k="amount" /></label>
           <div class="ck-win" data-k="win"></div>
         </div>
         <div class="ck-step ck-step--go" data-k="gobox" data-state="active">
@@ -96,6 +98,7 @@ export class Hud {
     this.bankEl = one("bank");
     this.betBox = one("betbox");
     this.winEl = one("win");
+    this.amountEl = one("amount") as HTMLInputElement;
     this.goBox = one("gobox");
     this.goTitle = one("gotitle");
     this.betTitle = one("bettitle");
@@ -145,6 +148,30 @@ export class Hud {
     for (const b of this.root.querySelectorAll<HTMLButtonElement>("[data-chip]")) {
       b.addEventListener("click", () => cb(b.dataset.chip === "all" ? Infinity : Number(b.dataset.chip)));
     }
+  }
+
+  /**
+   * Monto escrito a mano: cualquier numero entre la minima y las fichas. Mientras se
+   * escribe se avisa cada valor (los intermedios, "2" y "25" camino a "250", tambien
+   * valen: el juego los acota). Al salir del campo se reescribe acotado.
+   */
+  onAmount(cb: (value: number) => void): void {
+    const read = () => Math.floor(Number(this.amountEl.value));
+    this.amountEl.addEventListener("input", () => {
+      const v = read();
+      if (Number.isFinite(v) && v > 0) cb(v);
+    });
+    // Al salir se repinta acotado (o con la apuesta de antes si quedo vacio): -1 = sin cambio.
+    this.amountEl.addEventListener("blur", () => {
+      this.sig.bet = "";
+      const v = read();
+      cb(Number.isFinite(v) && v > 0 ? v : -1);
+    });
+  }
+
+  /** Saca el foco del campo (en el celu cierra el teclado al apostar). */
+  blurAmount(): void {
+    if (document.activeElement === this.amountEl) this.amountEl.blur();
   }
 
   /** El boton principal va por pointerdown: bajarse tiene que ser instantaneo. */
@@ -214,6 +241,10 @@ export class Hud {
       b.classList.toggle("is-picked", picked && amount > 0);
       b.disabled = !editable || v > chips || chips <= 0;
     }
+    // El campo muestra la apuesta, salvo mientras se esta escribiendo en el.
+    this.amountEl.disabled = !editable || chips <= 0;
+    this.amountEl.max = String(Math.max(MIN_BET, chips));
+    if (document.activeElement !== this.amountEl) this.amountEl.value = amount > 0 ? String(amount) : "";
     // El ejemplo explica el juego mientras se elige; despues de apostar ya no hace falta.
     this.winEl.innerHTML = amount > 0 && editable ? `Si cobrás en <b>x2</b> te llevás <b>${fmt(amount * 2)}</b>` : "";
   }
@@ -329,7 +360,7 @@ export class Hud {
       <h1 class="ck-logo">El Cohete</h1>
       <p class="ck-tagline">Apostá, mirá cómo sube y cobrá antes de que explote.</p>
       <ol class="ck-rules">
-        <li><b>1</b><span>Elegí cuánto apostar y tocá <i>APOSTAR</i>.</span></li>
+        <li><b>1</b><span>Elegí cuánto apostar (una ficha o el monto que quieras) y tocá <i>APOSTAR</i>. El cohete no sale hasta que apostás.</span></li>
         <li><b>2</b><span>El cohete despega y tu premio se multiplica: x1.5, x2, x5…</span></li>
         <li><b>3</b><span>Tocá la pantalla para <i>COBRAR</i> cuando quieras. Si explota antes, perdés lo apostado.</span></li>
       </ol>
