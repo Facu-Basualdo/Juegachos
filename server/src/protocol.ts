@@ -1483,3 +1483,71 @@ export interface BiServerToClient {
   "bi:reject": (msg: { why: BiRejectReason }) => void;
   "bi:pong": (msg: { c: number; t: number }) => void;
 }
+
+/* ========================== CHORI Y PAN (namespace /choripan, prefijo cp:) ========================== */
+// Implementado en `games/choripan.ts`; duplicado en `src/games/chori-y-pan/game/ChoriSocket.ts`.
+// Hibrido como Derrumbe: cada cliente simula su heroe y el server arbitra los mecanismos,
+// las muertes y las llegadas de cada pareja. `lv` es la sala de la carrera (0..2): un
+// mensaje de una sala que la pareja ya dejo atras se descarta.
+
+export type CpRole = "chori" | "pan" | "both" | "bettor" | "none";
+
+export interface CpPairView {
+  id: number;
+  chori: string;
+  pan: string;
+  /** Sala en la que va (3 = termino). */
+  level: number;
+  /** Ms de la carrera menos las gemas (-1 si no termino). */
+  time: number;
+  deaths: number;
+  gems: number;
+  on: boolean;
+}
+
+export interface CpState {
+  phase: "waiting" | "bet" | "race" | "done";
+  round: number;
+  /** Hora del server (offset de reloj del cliente). */
+  t: number;
+  /** Los 3 ids de nivel de la carrera. */
+  levels: string[];
+  betEnd: number;
+  raceStart: number;
+  raceEnd: number;
+  bettors: string[];
+  /** Apostador -> id de pareja. */
+  bets: Record<string, number>;
+  pairs: CpPairView[];
+}
+
+/** Cliente -> Server. */
+export interface CpClientToServer {
+  "cp:join": (msg: { code: string; nickname: string; roster: string[]; round: number }) => void;
+  "cp:bet": (msg: { pair: number }) => void;
+  /** Posicion del heroe propio, ~20/s. `r` hace falta con role "both". */
+  "cp:pos": (msg: { r: "chori" | "pan"; lv: number; x: number; y: number; vx: number; vy: number; f: number; g: number; a: number }) => void;
+  /** Canales que pisa el heroe (y las cajas que el ve), solo cuando cambia. */
+  "cp:press": (msg: { r: "chori" | "pan"; lv: number; ch: string }) => void;
+  "cp:lever": (msg: { lv: number; i: number; ch: string; on: 0 | 1 }) => void;
+  "cp:box": (msg: { lv: number; i: number; x: number; y: number }) => void;
+  "cp:gem": (msg: { lv: number; i: number }) => void;
+  "cp:die": (msg: { r: "chori" | "pan"; lv: number; cause: string }) => void;
+  "cp:door": (msg: { r: "chori" | "pan"; lv: number; in: 0 | 1 }) => void;
+}
+
+/** Server -> Cliente. Todo menos `cp:you` / `cp:state` va solo a la pareja y a sus apostadores. */
+export interface CpServerToClient {
+  /** Dirigido: mi rol y mi pareja (-1 si apuesto). */
+  "cp:you": (msg: { role: CpRole; pair: number; round: number }) => void;
+  "cp:state": (msg: CpState) => void;
+  "cp:peer": (msg: { pair: number; n: string; r: "chori" | "pan"; lv: number; x: number; y: number; vx: number; vy: number; f: number; g: number; a: number }) => void;
+  /** Canales activos (union) y estado de cada palanca. */
+  "cp:mech": (msg: { pair: number; lv: number; ch: string; levers: [number, number][] }) => void;
+  "cp:box": (msg: { pair: number; lv: number; i: number; x: number; y: number }) => void;
+  "cp:gem": (msg: { pair: number; lv: number; i: number }) => void;
+  /** Murio alguien: la pareja reinicia la sala. */
+  "cp:reset": (msg: { pair: number; lv: number; who: string; cause: string }) => void;
+  /** Los dos llegaron: pasan a la sala `lv`. */
+  "cp:level": (msg: { pair: number; lv: number }) => void;
+}
