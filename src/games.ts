@@ -64,6 +64,15 @@ export interface GameEntry {
    * No afecta al juego fuera de las salas.
    */
   roomTimeLimitSec?: number;
+  /**
+   * Textos para buscadores, cuando el nombre del juego no es lo que la gente busca
+   * ("Basta" -> "Basta (Tutti Frutti) online con amigos"). Solo los lee el build
+   * (`scripts/seo/plugin.ts`): no cambian nada de lo que se ve en el sitio.
+   * - `title`: el `<title>` de la pagina, SIN el " | Juegachos" (lo agrega el build).
+   *   Sin este campo sale "<title> - juego online gratis | Juegachos".
+   * - `description`: la meta description. Sin este campo se usa `description`.
+   */
+  seo?: { title?: string; description?: string };
 }
 
 /** Portada del juego generada por IA; si falta, la card muestra un fallback. */

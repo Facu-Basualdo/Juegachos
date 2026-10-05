@@ -4,6 +4,7 @@ import type { GameScoring } from "../../shared/scoring-core";
 export const meta: GameEntry = {
   id: "impostor",
   title: "Impostor",
+  seo: { title: "Juego del impostor online con amigos" },
   description:
     "Deduccion social: a todos menos al impostor se les muestra la misma palabra secreta. Por turnos cada uno da una pista de una palabra sin cantarla; el impostor solo sabe la categoria e improvisa. Despues votan quien es el impostor: si lo descubren tiene una chance de adivinar la palabra para robar la ronda. Solo se juega en salas.",
   path: "/games/impostor/",

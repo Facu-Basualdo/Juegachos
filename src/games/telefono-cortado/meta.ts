@@ -4,6 +4,7 @@ import type { GameScoring } from "../../shared/scoring-core";
 export const meta: GameEntry = {
   id: "telefono-cortado",
   title: "Telefono Cortado",
+  seo: { title: "Teléfono descompuesto online con dibujos" },
   description: "Escribi una frase, dibuja la de otro y adivina que quiso decir un tercero.",
   category: "Party",
   path: "/games/telefono-cortado/",
