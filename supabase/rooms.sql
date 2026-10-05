@@ -20,6 +20,7 @@ create table if not exists public.rooms (
   vote_options  text[],                           -- candidatos durante 'voting' (ids de juego)
   deadline      timestamptz,                      -- fin aproximado de la ronda o votacion en curso
   created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),   -- version de la fila: la pone un trigger en cada update
   constraint code_format check (code ~ '^[A-Z2-9]{6}$'),
   constraint host_len    check (char_length(host) between 1 and 12),
   constraint status_ok   check (status in ('lobby','briefing','playing','results','voting','time_voting','finished')),
@@ -228,6 +229,100 @@ create policy "room_votes_delete_public" on public.room_votes
 drop policy if exists "room_match_state_delete_public" on public.room_match_state;
 create policy "room_match_state_delete_public" on public.room_match_state
   for delete using (true);
+
+-- ---------- Latencia de las transiciones (ver "Salas" en CLAUDE.md) ----------
+--
+-- updated_at: version de la fila de la sala, la pone la DB en cada update (nunca el
+-- cliente). El cliente recibe el estado por dos caminos (la fila que viaja en el ping
+-- del host y la relectura) y con esto se queda siempre con el mas nuevo: sin ella, una
+-- relectura que salio antes de una transicion y llega despues la deshacia en pantalla.
+-- clock_timestamp() y no now(): now() es la hora de inicio de la transaccion.
+alter table public.rooms add column if not exists updated_at timestamptz not null default now();
+
+create or replace function public.rooms_touch_updated_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.updated_at := clock_timestamp();
+  return new;
+end
+$$;
+
+drop trigger if exists rooms_touch_updated_at on public.rooms;
+create trigger rooms_touch_updated_at
+  before update on public.rooms
+  for each row execute function public.rooms_touch_updated_at();
+
+-- Estado completo de una sala en UNA llamada (antes eran 5 selects en paralelo:
+-- 5 requests por relectura, por jugador, en cada ping). Ademas es un snapshot
+-- consistente: los 5 selects podian ver momentos distintos. null si la sala no
+-- existe. security invoker: rige el RLS de cada tabla, como en los selects sueltos.
+create or replace function public.room_state(p_code text)
+returns jsonb
+language sql
+stable
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'room', to_jsonb(r),
+    'players', coalesce((
+      select jsonb_agg(p.player order by p.joined_at, p.player)
+      from public.room_players p where p.code = r.code), '[]'::jsonb),
+    'rounds', coalesce((
+      select jsonb_agg(jsonb_build_object('round_no', x.round_no, 'game_id', x.game_id) order by x.round_no)
+      from public.room_rounds x where x.code = r.code), '[]'::jsonb),
+    'scores', coalesce((
+      select jsonb_agg(jsonb_build_object('round_no', s.round_no, 'player', s.player,
+                                          'score', s.score, 'finished', s.finished))
+      from public.room_round_scores s where s.code = r.code), '[]'::jsonb),
+    'votes', coalesce((
+      select jsonb_agg(jsonb_build_object('round_no', v.round_no, 'player', v.player, 'game_id', v.game_id))
+      from public.room_votes v where v.code = r.code), '[]'::jsonb)
+  )
+  from public.rooms r
+  where r.code = p_code
+$$;
+
+grant execute on function public.room_state(text) to anon, authenticated;
+
+-- Cierre de ronda en la DB: cuando el ULTIMO jugador registrado reporta su puntaje
+-- de la ronda en curso, la sala pasa a 'results' en la misma escritura. Antes lo
+-- hacia solo el host: el reporte -> ping -> el host relee -> escribe el cierre ->
+-- ping -> todos releen, dos idas y vueltas extra (y nada si el host se habia ido).
+-- Es solo un atajo: el host sigue cerrando por su cuenta (deadline vencido, o solo
+-- faltan desconectados, que la DB no puede saber porque la presencia vive en
+-- Realtime), y si dos ultimos reportes concurrentes no se ven entre si, lo cierra
+-- el host como siempre. Un error aca nunca tumba el reporte del puntaje.
+create or replace function public.room_close_when_all_reported()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  update public.rooms r
+     set status = 'results', deadline = null
+   where r.code = new.code
+     and r.status = 'playing'
+     and r.current_round = new.round_no
+     and not exists (
+       select 1 from public.room_players p
+        where p.code = new.code
+          and not exists (
+            select 1 from public.room_round_scores s
+             where s.code = new.code and s.round_no = new.round_no and s.player = p.player));
+  return null;
+exception when others then
+  raise warning 'room_close_when_all_reported: %', sqlerrm;
+  return null;
+end
+$$;
+
+drop trigger if exists room_close_when_all_reported on public.room_round_scores;
+create trigger room_close_when_all_reported
+  after insert or update on public.room_round_scores
+  for each row execute function public.room_close_when_all_reported();
 
 -- Limpieza de salas muertas. Cada cliente adentro de una sala le hace touch a
 -- last_active cada ~15s (touchRoom), y al entrar a /rooms/ se corre purgeStaleRooms(),

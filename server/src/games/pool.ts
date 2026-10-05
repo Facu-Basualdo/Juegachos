@@ -2,7 +2,8 @@ import type { Server } from "socket.io";
 import { GameRoom, registerGame, type RoomSim } from "../rooms.js";
 import type { BiEvent, BiPhase, BiPlay, BiRejectReason, BiSegment, BiState } from "../protocol.js";
 import { PoolError, PoolMatch, formatFor, type ShotOutcome } from "./pool-match.js";
-import { chooseBotAction, type BotAction, type BotLevel } from "./pool-bot.js";
+import type { BotAction, BotLevel } from "./pool-bot.js";
+import { thinkBot } from "./pool-bot-thinker.js";
 import { mulberry32 } from "./pool-rack.js";
 import type { Shot, ShotEventKind } from "./pool-physics.js";
 
@@ -53,6 +54,12 @@ export class PoolSim implements RoomSim {
   private loop: ReturnType<typeof setInterval> | null = null;
   private startTimer: ReturnType<typeof setTimeout> | null = null;
   private botPlan: BotPlan | null = null;
+  /**
+   * El bot esta pensando en el worker (pool-bot-thinker.ts): mientras tanto el tick no
+   * arma otro plan. Es un objeto y no un flag para reconocer la respuesta de un pedido
+   * viejo (se reseteo la ronda, o se armo otro) y descartarla.
+   */
+  private botThinking: { seat: number; turnNo: number } | null = null;
   private botFails = 0;
   private readonly lastAimAt = new Map<string, number>();
   private readonly rnd = mulberry32((Date.now() ^ 0x5bd1e995) >>> 0);
@@ -111,6 +118,7 @@ export class PoolSim implements RoomSim {
     this.loop = null;
     this.startTimer = null;
     this.botPlan = null;
+    this.botThinking = null;
   }
 
   // ------------------------------------------------------------ ciclo
@@ -148,6 +156,7 @@ export class PoolSim implements RoomSim {
   private finish(): void {
     this.phase = "over";
     this.botPlan = null;
+    this.botThinking = null;
     if (this.loop) clearInterval(this.loop);
     this.loop = null;
   }
@@ -169,6 +178,7 @@ export class PoolSim implements RoomSim {
       this.runPlan(this.botPlan, now);
       return;
     }
+    if (this.botThinking) return;
 
     if (now < match.turnStartAt) return;
     const seat = match.shooter;
@@ -186,11 +196,26 @@ export class PoolSim implements RoomSim {
 
   // ------------------------------------------------------------ bots
 
+  /**
+   * Pide la jugada al worker y arma el plan cuando vuelve. El "pensar" visible
+   * (`thinkMs`, 1-2.5 s para el parejo) se cuenta desde `now`, asi el calculo (decenas
+   * de ms) queda adentro y no estira el turno.
+   */
   private planBot(seat: number, level: BotLevel, now: number): void {
     const match = this.match;
     if (!match) return;
-    const action = chooseBotAction(match.botView(seat), level, this.rnd);
-    this.botPlan = { seat, turnNo: match.turnNo, action, startedAt: now, fireAt: now + action.thinkMs, placed: false };
+    const token = { seat, turnNo: match.turnNo };
+    this.botThinking = token;
+    const seed = Math.floor(this.rnd() * 0x100000000) >>> 0;
+    void thinkBot(match.botView(seat), level, seed).then((action: BotAction) => {
+      // Respuesta de un pedido viejo: se reseteo la ronda, termino, o se armo otro.
+      if (this.botThinking !== token) return;
+      this.botThinking = null;
+      if (this.match !== match || this.phase !== "playing") return;
+      // Mientras pensaba, el turno cambio (un humano volvio y tiro): el tick vuelve a mirar.
+      if (match.shooter !== seat || match.turnNo !== token.turnNo) return;
+      this.botPlan = { seat, turnNo: token.turnNo, action, startedAt: now, fireAt: now + action.thinkMs, placed: false };
+    });
   }
 
   private runPlan(plan: BotPlan, now: number): void {

@@ -44,6 +44,23 @@ export interface RoomRow {
   /** timestamptz ISO del fin aproximado de la ronda o votacion en curso. */
   deadline: string | null;
   created_at: string;
+  /**
+   * timestamptz ISO de la ultima escritura de la fila, puesto por un trigger de la DB
+   * (nunca por el cliente). Es la version que permite quedarse con el estado mas nuevo
+   * cuando llega por dos caminos (ping con la fila + relectura): ver `isStaleRoom`.
+   * Opcional: una DB sin migrar no la tiene, y entonces no se compara nada.
+   */
+  updated_at?: string;
+}
+
+/**
+ * True si `incoming` es una version mas vieja de la sala que `current`. Sin
+ * `updated_at` en alguna de las dos (DB sin migrar) no hay con que comparar y se
+ * acepta, que es el comportamiento de siempre.
+ */
+export function isStaleRoom(incoming: RoomRow, current: RoomRow | null | undefined): boolean {
+  if (!current?.updated_at || !incoming.updated_at) return false;
+  return Date.parse(incoming.updated_at) < Date.parse(current.updated_at);
 }
 
 /** Fila del listado de salas publicas abiertas que muestra /rooms/. */

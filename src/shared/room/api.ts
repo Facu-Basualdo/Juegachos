@@ -301,14 +301,57 @@ export async function joinRoom(code: string, player: string): Promise<JoinResult
   return "ok";
 }
 
-/** Snapshot completo del estado durable de la sala (4 selects en paralelo). */
+/**
+ * True cuando la DB no tiene la RPC `room_state` (falta correr supabase/rooms.sql).
+ * Se detecta en la primera llamada y desde ahi se lee con los 5 selects de siempre.
+ */
+let roomStateRpcMissing = false;
+
+/** PGRST202 = la funcion RPC no existe. */
+const MISSING_FUNCTION = "PGRST202";
+
+/**
+ * Snapshot completo del estado durable de la sala. Va por la RPC `room_state`: una
+ * sola llamada (y un snapshot consistente) en vez de 5 selects. Sin la migracion
+ * cae a los selects en paralelo, con el mismo resultado.
+ */
 export async function fetchRoomState(code: string): Promise<RoomState | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
 
+  if (!roomStateRpcMissing) {
+    const { data, error } = await supabase.rpc("room_state", { p_code: code });
+    if (!error) {
+      if (!data) return null;
+      const s = data as RoomState;
+      return {
+        room: s.room,
+        players: s.players ?? [],
+        rounds: s.rounds ?? [],
+        scores: s.scores ?? [],
+        votes: s.votes ?? [],
+      };
+    }
+    if (error.code !== MISSING_FUNCTION) {
+      warn("fetchRoomState", error.message);
+      return null;
+    }
+    roomStateRpcMissing = true;
+    warn(
+      "schema",
+      "falta la funcion public.room_state: corre supabase/rooms.sql en el SQL Editor. " +
+        "Las salas andan igual, con 5 consultas por relectura en vez de una.",
+    );
+  }
+
   const [roomRes, playersRes, roundsRes, scoresRes, votesRes] = await Promise.all([
     supabase.from("rooms").select("*").eq("code", code).maybeSingle(),
-    supabase.from("room_players").select("player, joined_at").eq("code", code).order("joined_at"),
+    supabase
+      .from("room_players")
+      .select("player, joined_at")
+      .eq("code", code)
+      .order("joined_at")
+      .order("player"),
     supabase.from("room_rounds").select("round_no, game_id").eq("code", code).order("round_no"),
     supabase.from("room_round_scores").select("round_no, player, score, finished").eq("code", code),
     supabase.from("room_votes").select("round_no, player, game_id").eq("code", code),
@@ -377,6 +420,30 @@ export async function castVote(
 }
 
 // ---------- Mutaciones de host ----------
+//
+// Las que cambian la fila de la sala devuelven esa fila tal como quedo (o null si
+// fallo): pedirla con `.select()` no cuesta otra ida y vuelta, y el que escribio la
+// manda en el ping, asi los demas aplican la transicion sin tener que releer la DB
+// primero (ver RoomChannel.ping). Un `if (ok)` sobre el resultado sigue valiendo.
+
+type RoomPatch = Partial<
+  Pick<RoomRow, "status" | "host" | "current_round" | "current_game" | "vote_options" | "deadline">
+>;
+
+async function updateRoom(code: string, patch: RoomPatch, action: string): Promise<RoomRow | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  const { data, error } = await supabase.from("rooms").update(patch).eq("code", code).select().maybeSingle();
+  if (error) {
+    warn(action, error.message);
+    return null;
+  }
+  if (!data) {
+    warn(action, "la sala no existe");
+    return null;
+  }
+  return data as RoomRow;
+}
 
 /**
  * Abre el briefing previo a una ronda: fija el juego y pasa a 'briefing' con un
@@ -390,68 +457,54 @@ export async function startBriefing(
   roundNo: number,
   gameId: string,
   deadline: Date,
-): Promise<boolean> {
+): Promise<RoomRow | null> {
   const supabase = getSupabase();
-  if (!supabase) return false;
+  if (!supabase) return null;
 
   const { error: roundError } = await supabase
     .from("room_rounds")
     .upsert({ code, round_no: roundNo, game_id: gameId });
   if (roundError) {
     warn("startBriefing", roundError.message);
-    return false;
+    return null;
   }
 
-  const { error } = await supabase
-    .from("rooms")
-    .update({
+  return updateRoom(
+    code,
+    {
       status: "briefing",
       current_round: roundNo,
       current_game: gameId,
       vote_options: null,
       deadline: deadline.toISOString(),
-    })
-    .eq("code", code);
-  if (error) {
-    warn("startBriefing", error.message);
-    return false;
-  }
-  return true;
+    },
+    "startBriefing",
+  );
 }
 
-/** Arranca la ronda roundNo con el juego dado y su deadline (null = sin tope). */
+/**
+ * Arranca la ronda roundNo con el juego dado y su deadline (null = sin tope). La fila
+ * de room_rounds ya la escribio el briefing de esa ronda, que es el unico camino que
+ * llega aca: no se reescribe (era una ida y vuelta mas en la transicion que mas se
+ * siente, la que larga la partida).
+ */
 export async function startRound(
   code: string,
   roundNo: number,
   gameId: string,
   deadline: Date | null,
-): Promise<boolean> {
-  const supabase = getSupabase();
-  if (!supabase) return false;
-
-  const { error: roundError } = await supabase
-    .from("room_rounds")
-    .upsert({ code, round_no: roundNo, game_id: gameId });
-  if (roundError) {
-    warn("startRound", roundError.message);
-    return false;
-  }
-
-  const { error } = await supabase
-    .from("rooms")
-    .update({
+): Promise<RoomRow | null> {
+  return updateRoom(
+    code,
+    {
       status: "playing",
       current_round: roundNo,
       current_game: gameId,
       vote_options: null,
       deadline: deadline ? deadline.toISOString() : null,
-    })
-    .eq("code", code);
-  if (error) {
-    warn("startRound", error.message);
-    return false;
-  }
-  return true;
+    },
+    "startRound",
+  );
 }
 
 /**
@@ -459,33 +512,17 @@ export async function startRound(
  * comprimir la votacion del proximo juego a pocos segundos cuando ya votaron
  * todos los presentes: no tiene sentido esperar el tope completo.
  */
-export async function updateDeadline(code: string, deadline: Date): Promise<boolean> {
-  const supabase = getSupabase();
-  if (!supabase) return false;
-  const { error } = await supabase
-    .from("rooms")
-    .update({ deadline: deadline.toISOString() })
-    .eq("code", code);
-  if (error) {
-    warn("updateDeadline", error.message);
-    return false;
-  }
-  return true;
+export async function updateDeadline(code: string, deadline: Date): Promise<RoomRow | null> {
+  return updateRoom(code, { deadline: deadline.toISOString() }, "updateDeadline");
 }
 
-/** Cierra la ronda en curso: pasa a la fase de resultados. */
-export async function closeRound(code: string): Promise<boolean> {
-  const supabase = getSupabase();
-  if (!supabase) return false;
-  const { error } = await supabase
-    .from("rooms")
-    .update({ status: "results", deadline: null })
-    .eq("code", code);
-  if (error) {
-    warn("closeRound", error.message);
-    return false;
-  }
-  return true;
+/**
+ * Cierra la ronda en curso: pasa a la fase de resultados. Cuando reportaron todos,
+ * normalmente ya la cerro la DB (trigger `room_close_when_all_reported`); el host
+ * llega aca por el tope de tiempo o porque solo faltan desconectados.
+ */
+export async function closeRound(code: string): Promise<RoomRow | null> {
+  return updateRoom(code, { status: "results", deadline: null }, "closeRound");
 }
 
 /** Abre la votacion del proximo juego con los candidatos dados. */
@@ -493,33 +530,17 @@ export async function openVote(
   code: string,
   options: string[],
   deadline: Date,
-): Promise<boolean> {
-  const supabase = getSupabase();
-  if (!supabase) return false;
-  const { error } = await supabase
-    .from("rooms")
-    .update({ status: "voting", vote_options: options, deadline: deadline.toISOString() })
-    .eq("code", code);
-  if (error) {
-    warn("openVote", error.message);
-    return false;
-  }
-  return true;
+): Promise<RoomRow | null> {
+  return updateRoom(
+    code,
+    { status: "voting", vote_options: options, deadline: deadline.toISOString() },
+    "openVote",
+  );
 }
 
 /** Termina la sala: tablero final. */
-export async function finishRoom(code: string): Promise<boolean> {
-  const supabase = getSupabase();
-  if (!supabase) return false;
-  const { error } = await supabase
-    .from("rooms")
-    .update({ status: "finished", deadline: null, vote_options: null })
-    .eq("code", code);
-  if (error) {
-    warn("finishRoom", error.message);
-    return false;
-  }
-  return true;
+export async function finishRoom(code: string): Promise<RoomRow | null> {
+  return updateRoom(code, { status: "finished", deadline: null, vote_options: null }, "finishRoom");
 }
 
 /**
@@ -543,9 +564,9 @@ export async function updateSettings(code: string, settings: RoomSettings): Prom
  * borrando el historial de rondas/puntajes/votos para que los totales arranquen
  * de cero. Todos los clientes vuelven a /rooms/ al ver status='lobby'.
  */
-export async function resetRoom(code: string): Promise<boolean> {
+export async function resetRoom(code: string): Promise<RoomRow | null> {
   const supabase = getSupabase();
-  if (!supabase) return false;
+  if (!supabase) return null;
 
   const deletes = await Promise.all([
     supabase.from("room_rounds").delete().eq("code", code),
@@ -556,24 +577,20 @@ export async function resetRoom(code: string): Promise<boolean> {
   const failed = deletes.find((r) => r.error);
   if (failed?.error) {
     warn("resetRoom", failed.error.message);
-    return false;
+    return null;
   }
 
-  const { error } = await supabase
-    .from("rooms")
-    .update({
+  return updateRoom(
+    code,
+    {
       status: "lobby",
       current_round: 0,
       current_game: null,
       vote_options: null,
       deadline: null,
-    })
-    .eq("code", code);
-  if (error) {
-    warn("resetRoom", error.message);
-    return false;
-  }
-  return true;
+    },
+    "resetRoom",
+  );
 }
 
 /**
@@ -616,13 +633,6 @@ export async function kickPlayer(code: string, player: string): Promise<boolean>
 }
 
 /** Migracion de host: cualquier jugador toma el control si el host se fue. */
-export async function takeOverHost(code: string, player: string): Promise<boolean> {
-  const supabase = getSupabase();
-  if (!supabase) return false;
-  const { error } = await supabase.from("rooms").update({ host: player }).eq("code", code);
-  if (error) {
-    warn("takeOverHost", error.message);
-    return false;
-  }
-  return true;
+export async function takeOverHost(code: string, player: string): Promise<RoomRow | null> {
+  return updateRoom(code, { host: player }, "takeOverHost");
 }

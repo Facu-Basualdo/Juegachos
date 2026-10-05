@@ -70,6 +70,8 @@ No se probo por red (se cubre en el motor de reglas, con la hora inyectada): el 
 - **La rotura**: no mueve la blanca (sale de su posicion inicial), apunta a la punta del triangulo y tira a ~0.92 de potencia, sin simular.
 - **`thinkMs`** (1.2 a 2.5 s en "parejo", 0 a 0.25 s en "flojo") y **`startAngle`** son para que la capa de red lo muestre apuntando (`bi:aim`): barre desde `startAngle` hasta `shot.angle` durante `thinkMs`.
 
+**Donde piensa:** `PoolSim.planBot` no llama a `chooseBotAction` directo sino a `thinkBot` (`server/src/games/pool-bot-thinker.ts`), que lo corre en un **worker thread** compartido por todas las salas, con una semilla sacada del generador del sim. Mientras piensa, `botThinking` frena al tick para que no arme otro plan; la respuesta de un pedido viejo (se reseteo la ronda, cambio el turno) se descarta. El "pensar" visible (`thinkMs`) se cuenta desde que se pidio, asi el calculo no alarga el turno. Si el worker falla o tarda mas de 2 s, se piensa en el hilo principal. Motivo: el server corre todas las salas en un hilo y un bot "parejo" pensando trababa los juegos de tiempo real de las otras salas. `check:pool` (17/17) y `check:pool-net` (26/26) pasan con el worker.
+
 **Calibracion (medida con `check:pool`):** el error de "parejo" se eligio barriendo valores contra mesas al azar. Con 0.008 rad el bot embocaba el 58% de los tiros y el 99% del tiro facil (un jugador de torneo: demasiado para un relleno); con 0.018 queda en **37% en mesas al azar y 77% en el tiro facil**, y "flojo" en 20% y 42%. Decide en ~27 ms de media (51 ms el peor). Son valores de partida: la vara real es jugarlo.
 
 **Partidas bot contra bot** (14 por formato, todos los asientos "parejo"; los bots piensan 1.2-2.5 s), con los topes actuales:

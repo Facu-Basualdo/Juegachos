@@ -29,7 +29,9 @@ import { clearRoomRuns } from "./roomRun";
 import {
   formatRoundTimeLimit,
   HEARTBEAT_MS,
+  isStaleRoom,
   NO_TIME_LIMIT,
+  type RoomRow,
   type RoomSettings,
   type RoomState,
   type RoomStatus,
@@ -189,7 +191,12 @@ export function computeRoundDeadline(roundTimeLimitSec: number): Date | null {
   return new Date(Date.now() + (roundTimeLimitSec + NAV_GRACE_SEC) * 1000);
 }
 
-const TICK_MS = 500;
+/**
+ * Cada cuanto se miran los vencimientos (votacion, briefing, tope de la ronda). Era
+ * 500 ms, que sumaba hasta medio segundo a cada transicion por deadline; el tick es
+ * barato (un par de textos del overlay).
+ */
+const TICK_MS = 250;
 const POLL_MS = 5000;
 /** Duracion de la votacion del proximo juego. */
 export const VOTE_SECONDS = 20;
@@ -224,6 +231,8 @@ const HOST_ABSENT_MS = 20000;
 const TAKEOVER_STAGGER_MS = 5000;
 /** Espera antes de reintentar un takeover que no se reflejo en la DB. */
 const TAKEOVER_RETRY_MS = 10000;
+/** Espera entre reintentos de un reporte final que fallo (ver `pendingReport`). */
+const REPORT_RETRY_MS = 2000;
 /** Pausa en resultados antes de que el host abra la votacion. */
 const RESULTS_TO_VOTE_MS = 5000;
 
@@ -344,6 +353,13 @@ class RoomModeController implements RoomMode, RoomHub {
   /** Reporte en vuelo: evita escrituras duplicadas concurrentes del mismo parcial. */
   private reporting = false;
   /**
+   * Reporte final que fallo (red caida justo al terminar): se reintenta desde el tick.
+   * Sin esto, en un juego sin tope de tiempo nadie lo volvia a mandar — el tick solo
+   * reintentaba al vencer el deadline — y la ronda quedaba esperando para siempre a
+   * un jugador conectado que ya habia terminado.
+   */
+  private pendingReport: { score: number; opts?: RoomReportOpts; at: number } | null = null;
+  /**
    * Espectador: entro con la partida ya empezada, no esta registrado en la sala.
    * No juega ni puntua, solo mira hasta que termine (o vuelva al lobby, donde
    * recien podra sumarse). Se detecta al bootear (no esta en room_players y la
@@ -359,6 +375,12 @@ class RoomModeController implements RoomMode, RoomHub {
   private navigating = false;
   private refreshing = false;
   private refreshQueued = false;
+  /**
+   * Sube cada vez que se aplica una fila de la sala que llego por fuera de la
+   * relectura (ping con la fila, o la propia escritura del host). Una relectura que
+   * salio antes de eso puede haber leido la DB antes de la transicion: se descarta.
+   */
+  private roomPushes = 0;
   /** Evita disparar dos veces una mutacion de host. */
   private actionInFlight = false;
   private voteScheduledForRound = 0;
@@ -434,7 +456,18 @@ class RoomModeController implements RoomMode, RoomHub {
       this.hub || state.scores.some((s) => s.round_no === this.myRound && s.player === this.me);
 
     this.channel = new RoomChannel(this.code, this.me);
-    this.channel.onSync(() => {
+    this.channel.onSync((room) => {
+      // La fila que trae el ping se aplica en el acto (la transicion de fase no
+      // espera la relectura); la relectura igual trae jugadores, puntajes y votos.
+      if (room) this.applyRoom(room);
+      void this.refresh();
+      for (const cb of this.gameSyncCbs) cb();
+    });
+    // El canal quedo unido (al cargar, o tras una caida) o volvio la red: lo que se mando
+    // mientras tanto no llego por ping. Un reporte final que fallo sin red se reintenta
+    // ya, sin esperar el tick.
+    this.channel.onReconnect(() => {
+      if (this.pendingReport) this.pendingReport.at = 0;
       void this.refresh();
       for (const cb of this.gameSyncCbs) cb();
     });
@@ -526,9 +559,15 @@ class RoomModeController implements RoomMode, RoomHub {
       return;
     }
     this.refreshing = true;
+    const pushesAtStart = this.roomPushes;
     const state = await fetchRoomState(this.code);
     this.refreshing = false;
-    if (state) {
+    if (state && (this.roomPushes !== pushesAtStart || isStaleRoom(state.room, this.state?.room))) {
+      // Esta lectura salio antes de una transicion que ya se aplico (o trae una fila
+      // mas vieja): aplicarla deshacia la fase en pantalla. Se vuelve a leer.
+      this.missingReads = 0;
+      this.refreshQueued = true;
+    } else if (state) {
       this.missingReads = 0;
       this.applyState(state);
     } else if (this.hub && ++this.missingReads >= 3) {
@@ -541,6 +580,25 @@ class RoomModeController implements RoomMode, RoomHub {
       this.refreshQueued = false;
       void this.refresh();
     }
+  }
+
+  /**
+   * Aplica una fila de la sala que llego sin relectura: la del ping de otro cliente o
+   * la que devolvio la propia escritura del host. Solo pisa la fila (fase, ronda,
+   * juego, deadline); jugadores, puntajes y votos llegan con la relectura de atras.
+   * Una fila mas vieja que la que ya se tiene se ignora.
+   *
+   * Resultados y tablero final quedan afuera: se dibujan con los puntajes, que con
+   * esta fila sola pueden estar incompletos (el final ademas se calcula UNA vez y se
+   * cachea, porque el reset de la sala borra los puntajes). Esas dos fases esperan la
+   * relectura completa; no son las que se sienten lentas. El atajo es para las que
+   * mueven a la gente: briefing, arranque de la partida, votacion y lobby.
+   */
+  private applyRoom(room: RoomRow): void {
+    if (!this.state || this.navigating || isStaleRoom(room, this.state.room)) return;
+    if (room.status === "results" || room.status === "finished") return;
+    this.roomPushes++;
+    this.applyState({ ...this.state, room });
   }
 
   /** Re-renderiza segun el ultimo snapshot (o uno nuevo si se pasa). */
@@ -893,10 +951,13 @@ class RoomModeController implements RoomMode, RoomHub {
     const ok = await reportScore(this.code, this.myRound, this.me, score, finished);
     this.reporting = false;
     // Solo latchear "reportado" si la escritura funciono: ante un fallo transitorio
-    // (red / RLS / score no finito) queda para reintentar en el proximo tick o al
-    // pasar a resultados, en vez de perder el puntaje y contar como ausente.
+    // (red / RLS / score no finito) queda para reintentar desde el tick
+    // (`pendingReport`) o al pasar a resultados, en vez de perder el puntaje y
+    // contar como ausente.
+    if (!ok && finished) this.pendingReport = { score, opts: rankOpts, at: Date.now() };
     if (ok) {
       this.reported = true;
+      this.pendingReport = null;
       this.channel?.ping();
       // Solo la primera escritura confirmada llega aca (`reported` se restaura de
       // la DB al recargar), asi que un F5 no duplica la partida en el historial.
@@ -975,6 +1036,11 @@ class RoomModeController implements RoomMode, RoomHub {
 
     if (room.status === "playing") {
       this.updateStrip();
+      const pending = this.pendingReport;
+      if (pending && !this.reported && !this.reporting && now - pending.at >= REPORT_RETRY_MS) {
+        pending.at = now;
+        void this.submitScore(pending.score, true, pending.opts);
+      }
       if (deadline !== null) {
         this.overlay.setTimeText(`La ronda termina en ${formatClock(deadline - now)}`);
         if (!this.reported && now >= deadline) {
@@ -1235,12 +1301,19 @@ class RoomModeController implements RoomMode, RoomHub {
 
   // ---------- Logica de host ----------
 
-  private async hostAction(action: () => Promise<unknown>): Promise<void> {
+  /**
+   * Corre una mutacion de host y avisa. Si la mutacion devolvio la fila de la sala,
+   * viaja en el ping (los demas la aplican sin releer) y el host tambien la aplica
+   * ya, sin esperar su propia relectura.
+   */
+  private async hostAction(action: () => Promise<RoomRow | boolean | null>): Promise<void> {
     if (this.actionInFlight) return;
     this.actionInFlight = true;
     try {
-      await action();
-      this.channel?.ping();
+      const result = await action();
+      const row = typeof result === "object" ? result : null;
+      this.channel?.ping(row);
+      if (row) this.applyRoom(row);
       await this.refresh();
     } finally {
       this.actionInFlight = false;
@@ -1256,8 +1329,11 @@ class RoomModeController implements RoomMode, RoomHub {
     const allReported = state.players.every((p) => done.has(p));
 
     let onlyAbsentMissing = false;
-    if (!allReported) {
-      const present = this.channel?.presentPlayers() ?? [];
+    const present = this.channel?.presentPlayers() ?? [];
+    // Sin presencia propia (canal recien suscripto, o rearmandose tras una caida) la
+    // lista no dice nada: vacia, "todos los presentes terminaron" seria trivialmente
+    // cierto y se le cortaba la ronda a los que siguen jugando.
+    if (!allReported && present.includes(this.me)) {
       const presentAllDone = state.players
         .filter((p) => present.includes(p))
         .every((p) => done.has(p));
@@ -1455,8 +1531,11 @@ class RoomModeController implements RoomMode, RoomHub {
     if (Date.now() - this.takeoverAt < TAKEOVER_RETRY_MS) return;
 
     this.takeoverAt = Date.now();
-    void takeOverHost(this.code, this.me).then((ok) => {
-      if (ok) this.channel?.ping();
+    void takeOverHost(this.code, this.me).then((row) => {
+      if (row) {
+        this.channel?.ping(row);
+        this.applyRoom(row);
+      }
       void this.refresh();
     });
   }
