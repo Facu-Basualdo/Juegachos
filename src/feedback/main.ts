@@ -63,7 +63,7 @@ main.innerHTML = `
     <p class="fbp-head__lead">Un problema, una idea o el juego que te gustaría jugar acá. Lo leemos todo.</p>
   </header>
   <form class="fbp-form" novalidate>
-    <section class="fbp-step">
+    <section class="fbp-step" data-step="kind">
       <h2 class="fbp-step__title"><span class="fbp-step__n">1</span>¿Qué nos querés contar?</h2>
       <div class="fbp-kinds" role="radiogroup" aria-label="Tipo de mensaje">
         ${KINDS.map((k) => `<button type="button" class="fbp-kind" data-kind="${k.kind}" role="radio" aria-checked="false"><b>${k.label}</b><span>${k.hint}</span></button>`).join("")}
@@ -81,12 +81,12 @@ main.innerHTML = `
         <p class="fbp-empty" hidden>No hay ningún juego con ese nombre.</p>
       </div>
     </section>
-    <section class="fbp-step">
+    <section class="fbp-step" data-step="msg">
       <h2 class="fbp-step__title"><span class="fbp-step__n" data-n="msg">3</span>Tu mensaje</h2>
       <textarea class="fbp-text" rows="5" maxlength="${FEEDBACK_MAX}" aria-label="Tu mensaje"></textarea>
       <div class="fbp-count"></div>
     </section>
-    <section class="fbp-step">
+    <section class="fbp-step" data-step="contact">
       <h2 class="fbp-step__title"><span class="fbp-step__n" data-n="contact">4</span>¿Querés que te respondamos? <small>(opcional)</small></h2>
       <input type="text" class="fbp-contact" maxlength="120" autocomplete="off" placeholder="Tu usuario de Discord o tu mail" aria-label="Contacto" />
     </section>
@@ -157,11 +157,53 @@ const noteEl = q<HTMLElement>(".fbp-note");
 const sendBtn = q<HTMLButtonElement>(".fbp-form .fbp-send");
 const doneEl = q<HTMLElement>(".fbp-done");
 
-let kind: FeedbackKind = "bug";
+let kind: FeedbackKind | null = null;
 let gameId = "";
+/** Se toco una tarjeta de juego (incluida "General"): el paso 2 cuenta como hecho. */
+let gamePicked = false;
 let sending = false;
 
-function setKind(k: FeedbackKind): void {
+const steps = {
+  kind: q<HTMLElement>('[data-step="kind"]'),
+  game: gameStep,
+  msg: q<HTMLElement>('[data-step="msg"]'),
+  contact: q<HTMLElement>('[data-step="contact"]'),
+};
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const touch = matchMedia("(pointer: coarse)").matches;
+
+/**
+ * Autoguiado (pedido del programador): cada paso completo lleva al siguiente. Marca el
+ * paso actual, atenua los que faltan y le pone tilde a los hechos.
+ */
+function paintSteps(): void {
+  const order = (["kind", "game", "msg", "contact"] as const).filter((k) => !steps[k].hidden);
+  const done: Record<string, boolean> = {
+    kind: kind !== null,
+    game: gamePicked,
+    msg: textEl.value.trim().length >= 3,
+    contact: contactEl.value.trim().length > 0,
+  };
+  // El actual es el primero sin hacer; con todo lo obligatorio hecho, el contacto.
+  const current = order.find((k) => k !== "contact" && !done[k]) ?? "contact";
+  let past = true;
+  for (const k of order) {
+    if (k === current) past = false;
+    const el = steps[k];
+    el.classList.toggle("is-current", k === current);
+    el.classList.toggle("is-done", done[k] && k !== current);
+    el.classList.toggle("is-pending", !past && k !== current && !done[k]);
+  }
+}
+
+/** Lleva al paso (y al campo, si hay uno donde escribir). */
+function goTo(step: HTMLElement, field?: HTMLElement): void {
+  paintSteps();
+  step.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  field?.focus({ preventScroll: true });
+}
+
+function setKind(k: FeedbackKind, guide = false): void {
   kind = k;
   const def = KINDS.find((x) => x.kind === k)!;
   for (const b of main.querySelectorAll<HTMLButtonElement>("[data-kind]")) b.setAttribute("aria-checked", String(b.dataset.kind === k));
@@ -170,20 +212,30 @@ function setKind(k: FeedbackKind): void {
   q<HTMLElement>('[data-n="msg"]').textContent = gameStep.hidden ? "2" : "3";
   q<HTMLElement>('[data-n="contact"]').textContent = gameStep.hidden ? "3" : "4";
   textEl.placeholder = def.placeholder;
+  if (!guide) return paintSteps();
+  // Despues del tipo: a elegir el juego (sin abrir el teclado del celu con el buscador),
+  // o directo al mensaje si es un pedido de juego.
+  if (gameStep.hidden || gamePicked) goTo(steps.msg, textEl);
+  else goTo(steps.game, touch ? undefined : searchEl);
 }
 
-function setGame(id: string): void {
+function setGame(id: string, guide = false): void {
   gameId = id;
-  for (const b of gamesEl.querySelectorAll<HTMLButtonElement>("[data-game]")) b.setAttribute("aria-pressed", String(b.dataset.game === id));
+  if (guide) gamePicked = true;
+  // "General" (id vacio) se marca solo si se toco: al entrar no hay nada elegido.
+  for (const b of gamesEl.querySelectorAll<HTMLButtonElement>("[data-game]")) b.setAttribute("aria-pressed", String((gamePicked || id !== "") && b.dataset.game === id));
   const g = games.find((x) => x.id === id);
   pickedEl.innerHTML = g
     ? `<img src="${coverUrl(g.id)}" alt="" /><span><small>Elegiste</small><b>${esc(g.title)}</b></span><button type="button" class="fbp-picked__clear">Cambiar</button>`
     : "";
   pickedEl.hidden = !g;
   pickedEl.querySelector(".fbp-picked__clear")?.addEventListener("click", () => {
+    gamePicked = false;
     setGame("");
-    searchEl.focus();
+    goTo(steps.game, touch ? undefined : searchEl);
   });
+  if (guide) goTo(steps.msg, textEl);
+  else paintSteps();
 }
 
 function filterGames(): void {
@@ -199,27 +251,45 @@ function filterGames(): void {
 
 function sync(): void {
   const n = textEl.value.trim().length;
-  sendBtn.disabled = sending || n < 3;
+  sendBtn.disabled = sending || kind === null || n < 3;
   countEl.textContent = n > FEEDBACK_MAX * 0.8 ? `${n}/${FEEDBACK_MAX}` : "";
 }
 
-for (const b of main.querySelectorAll<HTMLButtonElement>("[data-kind]")) b.addEventListener("click", () => setKind(b.dataset.kind as FeedbackKind));
+for (const b of main.querySelectorAll<HTMLButtonElement>("[data-kind]")) b.addEventListener("click", () => setKind(b.dataset.kind as FeedbackKind, true));
 gamesEl.addEventListener("click", (e) => {
   const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-game]");
-  if (b) setGame(b.dataset.game ?? "");
+  if (b) setGame(b.dataset.game ?? "", true);
 });
 searchEl.addEventListener("input", filterGames);
-textEl.addEventListener("input", sync);
+// Enter en el buscador con un solo resultado: lo elige.
+searchEl.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const visible = [...gamesEl.querySelectorAll<HTMLButtonElement>("[data-game]")].filter((b) => !b.hidden && b.dataset.game);
+  if (visible.length === 1) setGame(visible[0].dataset.game!, true);
+});
+textEl.addEventListener("input", () => {
+  sync();
+  paintSteps();
+});
+contactEl.addEventListener("input", paintSteps);
+// Enter en el contacto envia (es el ultimo campo).
+contactEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    form.requestSubmit();
+  }
+});
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const message = textEl.value.trim();
-  if (sending || message.length < 3) return;
+  if (sending || kind === null || message.length < 3) return;
   sending = true;
   sync();
   noteEl.textContent = "Enviando...";
   const def = KINDS.find((x) => x.kind === kind)!;
-  const res = await sendFeedback({ kind, source: "landing", gameId: def.game === "none" ? null : gameId || null, message, contact: contactEl.value });
+  const res = await sendFeedback({ kind: kind!, source: "landing", gameId: def.game === "none" ? null : gameId || null, message, contact: contactEl.value });
   sending = false;
   noteEl.textContent = "";
   if (res === "ok") {
@@ -237,15 +307,18 @@ q<HTMLButtonElement>(".fbp-again").addEventListener("click", () => {
   doneEl.hidden = true;
   form.hidden = false;
   sync();
-  textEl.focus();
+  goTo(steps.kind);
 });
 
 // Estado inicial (con `?game=` / `?tipo=` desde un link).
 const params = new URLSearchParams(location.search);
 const startKind = params.get("tipo") as FeedbackKind | null;
-setKind(KINDS.some((k) => k.kind === startKind) ? startKind! : "bug");
+// Sin `?tipo=` no hay nada elegido: el primer paso es elegir.
+if (KINDS.some((k) => k.kind === startKind)) setKind(startKind!);
+else textEl.placeholder = "Primero elegí qué nos querés contar.";
 const startGame = params.get("game") ?? "";
-setGame(games.some((g) => g.id === startGame) ? startGame : "");
+gamePicked = games.some((g) => g.id === startGame);
+setGame(gamePicked ? startGame : "");
 sync();
 
 if (!isFeedbackEnabled()) {

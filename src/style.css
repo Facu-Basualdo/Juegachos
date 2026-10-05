@@ -1769,6 +1769,25 @@ a {
 .fbp-step {
   display: grid;
   gap: 12px;
+  /* Al bajar solo hasta un paso, que el titulo no quede pegado al borde. */
+  scroll-margin-top: 24px;
+  transition: opacity 0.25s;
+}
+
+/* Autoguiado: el paso actual resalta su numero, los que faltan se atenuan (siguen
+   tocables) y los hechos llevan tilde. */
+.fbp-step.is-pending {
+  opacity: 0.42;
+}
+
+.fbp-step.is-current .fbp-step__n {
+  background: #0091a6;
+  box-shadow: 0 0 0 4px rgba(0, 145, 166, 0.22);
+}
+
+.fbp-step.is-done .fbp-step__n {
+  font-size: 0;
+  background: var(--ink) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23efeee6' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 15px no-repeat;
 }
 
 .fbp-step__title {
