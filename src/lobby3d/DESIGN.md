@@ -39,7 +39,8 @@ Remeras de los jugadores (por asiento, apagadas por la noche pero distinguibles)
 ## Vocabulario
 
 - **Claro**: disco de tierra y pasto muerto, cercado por un alambrado torcido; afuera, pinos negros hasta perderse en la niebla.
-- **Carteleras**: las portadas de los juegos de sala como afiches en tableros de madera, en semicirculo al norte. En una votacion se puede votar cualquiera: delante de cada una hay una chapa en el piso que brilla apenas, y mas cuando el juego tiene votos; su foco colgando se prende en los votados, el que va ganando con mas fuerza y su contador en dorado.
+- **Carteleras**: las portadas de los juegos de sala como afiches en tableros de madera, en semicirculo al norte; cada votacion sortea que juegos muestran. Se puede votar cualquiera: delante de cada una hay una chapa en el piso que brilla apenas, y mas cuando el juego tiene votos; su foco colgando se prende en los votados, el que va ganando con mas fuerza y su contador en dorado.
 - **Televisor**: un CRT sobre un cajon en el centro; muestra el juego de la ronda con lineas de barrido, o estatica. Cuando salen los resultados se hunde y suben las columnas del marcador.
-- **Escenario LISTO**: tarima de madera al sur del centro con el cartel pintado.
+- **Escenario REROLL**: tarima de madera al sur del centro con el cartel pintado (era LISTO, para el briefing que la feria ya no tiene). Subirse pide otros afiches.
+- **Pizarra de la noche**: pizarron de tiza apaisado en un marco de chapa oxidada sobre patas, al sur detras del spawn, con la franja roja y blanca de los puestos de feria arriba y una lampara de obra con jaula. Ahi se anota quien gano el ultimo juego y los puntos de la noche, cada nombre en la tiza del color de su remera. Es lo opuesto al cartel de records de la torre (tablas pintadas en vertical): ese es para siempre, esta se borra y se vuelve a escribir.
 - **La Torre**: andamio oxidado al suroeste, parkour hasta una plataforma con un trono y la baliza roja.

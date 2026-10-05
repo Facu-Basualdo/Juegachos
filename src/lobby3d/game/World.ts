@@ -31,6 +31,7 @@ import {
   signTexture,
   woodTexture,
 } from "./textures";
+import { NightBoard } from "./NightBoard";
 import { RecordBoard } from "./RecordBoard";
 import { Tower } from "./Tower";
 
@@ -41,7 +42,11 @@ export interface PortalVote {
 }
 
 interface Portal {
+  /** Juego que muestra ahora esta cartelera: cambia en cada votacion (`setPosters`). */
   game: GameEntry;
+  frame: THREE.Group;
+  plate: THREE.Mesh;
+  titleMat: THREE.MeshBasicMaterial;
   x: number;
   z: number;
   /** Donde cuelga su foco (arriba del afiche). */
@@ -113,8 +118,13 @@ export class World {
   readonly tower: Tower;
   /** Cartel del Top 10 global de la torre, al sureste de la plaza. */
   readonly recordBoard: RecordBoard;
+  /** Pizarra de la noche: ganador del ultimo juego y puntos acumulados, al sur. */
+  readonly nightBoard: NightBoard;
   readonly readyBox: Box;
   private readonly portals: Portal[] = [];
+  /** Texturas de afiche y de titulo por juego: los afiches rotan y se repiten. */
+  private readonly posterTex = new Map<string, THREE.Texture>();
+  private readonly titleTex = new Map<string, THREE.Texture>();
   private readonly pickables: THREE.Object3D[] = [];
   private readonly voteLights: THREE.PointLight[] = [];
   private readonly bulbs: Bulb[] = [];
@@ -135,7 +145,11 @@ export class World {
   private dread = 0;
   private time = 0;
 
-  constructor(games: GameEntry[]) {
+  /**
+   * `slots` carteleras, mostrando al arrancar `initial` (los afiches despues los cambia
+   * cada votacion, ver `setPosters`).
+   */
+  constructor(slots: number, initial: GameEntry[]) {
     const rand = rng(20260930);
     this.world.boundary = FENCE_RADIUS;
     const wood = psxLambert({ map: woodTexture() });
@@ -152,7 +166,7 @@ export class World {
 
     this.buildFence(rand, rust);
     this.buildForest(rand);
-    this.buildGallery(games, woodDark);
+    this.buildGallery(slots, initial, woodDark);
 
     // Televisor sobre un cajon, mirando al sur (a la entrada).
     const crate = new THREE.Mesh(boxGeometry(1.2, 0.9, 1.0, 1), wood);
@@ -182,7 +196,9 @@ export class World {
     this.world.boxes.push(this.tvBox);
     this.setFeatured(null, "");
 
-    // Escenario LISTO.
+    // Escenario del medio: en la votacion es REROLL (subirse = pedir otros afiches). En una
+    // sala 3D ya no hay briefing, asi que el "LISTO" de antes no se usa (queda el codigo
+    // por si una sala vieja cae en esa fase).
     this.readyMat = psxLambert({ map: woodTexture("#5f4a34") });
     const stage = new THREE.Mesh(boxGeometry(READY_HALF * 2, READY_HEIGHT, READY_HALF * 2), this.readyMat);
     stage.position.set(READY_X, READY_HEIGHT / 2, READY_Z);
@@ -191,7 +207,7 @@ export class World {
     this.group.add(stage);
     const painted = new THREE.Mesh(
       new THREE.PlaneGeometry(2.6, 0.65),
-      decal(psxBasic({ map: signTexture("LISTO", { fg: "#d6c9a8", w: 64, h: 16 }), transparent: true, alphaTest: 0.5 })),
+      decal(psxBasic({ map: signTexture("REROLL", { fg: "#d6c9a8", w: 64, h: 16 }), transparent: true, alphaTest: 0.5 })),
     );
     painted.rotation.x = -Math.PI / 2;
     painted.position.set(READY_X, READY_HEIGHT + 0.02, READY_Z);
@@ -209,6 +225,8 @@ export class World {
     this.group.add(this.tower.group);
     this.recordBoard = new RecordBoard(this.world);
     this.group.add(this.recordBoard.group);
+    this.nightBoard = new NightBoard(this.world);
+    this.group.add(this.nightBoard.group);
   }
 
   private buildFence(rand: () => number, rust: THREE.Material): void {
@@ -271,10 +289,10 @@ export class World {
     this.group.add(cones, trunks);
   }
 
-  private buildGallery(games: GameEntry[], woodDark: THREE.Material): void {
-    const n = games.length;
+  private buildGallery(n: number, initial: GameEntry[], woodDark: THREE.Material): void {
     const bulbGeo = new THREE.IcosahedronGeometry(0.1, 0);
-    games.forEach((game, i) => {
+    for (let i = 0; i < n; i++) {
+      const game = initial[i % initial.length];
       const theta = n === 1 ? 0 : -GALLERY_SPAN / 2 + (GALLERY_SPAN * i) / (n - 1);
       const sin = Math.sin(theta);
       const cos = Math.cos(theta);
@@ -294,17 +312,15 @@ export class World {
       board.position.y = FRAME_Y;
       frame.add(board);
       // Sin niebla: el afiche se tiene que reconocer desde la otra punta del claro.
-      const posterMat = decal(psxBasic({ map: posterTexture(coverUrl(game.id), 300 + i), fog: false }));
+      const posterMat = decal(psxBasic({ map: this.posterFor(game), fog: false }));
       const poster = new THREE.Mesh(new THREE.PlaneGeometry(FRAME_SIZE, FRAME_SIZE), posterMat);
       poster.position.set(0, FRAME_Y, 0.1);
       poster.rotation.z = (i % 3 - 1) * 0.03;
       frame.add(poster);
 
       // Titulo pintado debajo, y el foco que cuelga arriba (se prende si es candidato).
-      const title = new THREE.Mesh(
-        new THREE.PlaneGeometry(FRAME_SIZE, FRAME_SIZE / 8),
-        decal(psxBasic({ map: signTexture(game.title.toUpperCase(), { bg: "#2a2118", fg: "#cfc5ae", w: 96, h: 12 }), fog: false })),
-      );
+      const titleMat = decal(psxBasic({ map: this.titleFor(game), fog: false }));
+      const title = new THREE.Mesh(new THREE.PlaneGeometry(FRAME_SIZE, FRAME_SIZE / 8), titleMat);
       title.position.set(0, FRAME_Y - FRAME_SIZE / 2 - 0.3, 0.1);
       frame.add(title);
       const arm = new THREE.Mesh(boxGeometry(0.06, 0.06, 0.7), woodDark);
@@ -343,6 +359,9 @@ export class World {
       // Punto de luz del foco: 0.7 m hacia adelante del afiche (hacia el centro).
       this.portals.push({
         game,
+        frame,
+        plate,
+        titleMat,
         x: px,
         z: pz,
         lx: frame.position.x - sin * 0.7,
@@ -356,7 +375,7 @@ export class World {
         active: false,
         mine: false,
       });
-    });
+    }
 
     // Luces de los candidatos: un grupo fijo que se reparte entre los encendidos.
     for (let i = 0; i < VOTE_LIGHTS; i++) {
@@ -460,6 +479,20 @@ export class World {
     return best;
   }
 
+  /**
+   * Cartelera (indice) cuya chapa encendida esta bajo (x, z), o -1. Por indice y no por
+   * juego: el que se queda parado mientras cambian los afiches (reroll) no tiene que
+   * votar solo el juego nuevo que aparecio debajo suyo.
+   */
+  portalSlotAt(x: number, z: number): number {
+    return this.portals.findIndex((p) => p.active && Math.hypot(p.x - x, p.z - z) < PORTAL_RADIUS * 0.92);
+  }
+
+  /** Juego que muestra ahora la cartelera `slot`. */
+  portalGame(slot: number): string | null {
+    return this.portals[slot]?.game.id ?? null;
+  }
+
   /** Chapa encendida bajo (x, z), o null. */
   portalAt(x: number, z: number): string | null {
     for (const p of this.portals) {
@@ -486,6 +519,50 @@ export class World {
   }
 
   // ---------- Estado de la sala ----------
+
+  private posterFor(game: GameEntry): THREE.Texture {
+    let tex = this.posterTex.get(game.id);
+    if (!tex) {
+      // La semilla solo decide las manchas del papel: por juego, asi un afiche que
+      // vuelve a salir se ve igual.
+      let seed = 300;
+      for (let i = 0; i < game.id.length; i++) seed = (seed * 31 + game.id.charCodeAt(i)) >>> 0;
+      tex = posterTexture(coverUrl(game.id), seed);
+      this.posterTex.set(game.id, tex);
+    }
+    return tex;
+  }
+
+  private titleFor(game: GameEntry): THREE.Texture {
+    let tex = this.titleTex.get(game.id);
+    if (!tex) {
+      tex = signTexture(game.title.toUpperCase(), { bg: "#2a2118", fg: "#cfc5ae", w: 96, h: 12 });
+      this.titleTex.set(game.id, tex);
+    }
+    return tex;
+  }
+
+  /**
+   * Cambia los juegos de las carteleras (uno por cartelera, en orden). Lo llama cada
+   * votacion con sus `vote_options`, que son las mismas para toda la sala, asi todos
+   * ven el mismo afiche en el mismo lugar. Las carteleras que sobran conservan el que
+   * tenian y quedan apagadas por `setVoting` (no son candidatas).
+   */
+  setPosters(games: GameEntry[]): void {
+    this.portals.forEach((p, i) => {
+      const game = games[i];
+      if (!game || game.id === p.game.id) return;
+      p.game = game;
+      p.posterMat.map = this.posterFor(game);
+      p.titleMat.map = this.titleFor(game);
+      p.posterMat.needsUpdate = true;
+      p.titleMat.needsUpdate = true;
+      p.frame.userData.portal = game.id;
+      p.plate.userData.portal = game.id;
+      // El contador era del juego anterior: se rehace en el proximo setVoting.
+      p.countText = "";
+    });
+  }
 
   /**
    * Votacion: en una sala 3D se vota entre todos los afiches, asi que "encendido" ya
@@ -656,5 +733,6 @@ export class World {
     }
     this.tower.update(dt, t);
     this.recordBoard.update(this.time, this.dread);
+    this.nightBoard.update(this.time, this.dread);
   }
 }

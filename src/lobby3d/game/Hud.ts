@@ -1,8 +1,8 @@
 import type { HowToAction } from "../../shared/howto";
 import { renderHowTo } from "../../shared/howtoView";
 import type { BriefingView, FinalView, ResultsView, TotalEntry, VotingView } from "../../shared/room/RoomOverlay";
+import { REROLL_VOTE } from "../../shared/room/hub";
 import type { HubLobbyView } from "../../shared/room/roomMode";
-import { TOTAL_ROUNDS_OPTIONS } from "../../shared/room/types";
 import { EMOTES } from "./constants";
 import { drawEmoteFace } from "./textures";
 
@@ -57,6 +57,9 @@ export class Hud {
   private readonly crosshair: HTMLDivElement;
   private readonly lockHint: HTMLDivElement;
   private readonly flashEl: HTMLDivElement;
+  private readonly myVoteEl: HTMLDivElement;
+  private readonly myVoteLabel: HTMLSpanElement;
+  private readonly myVoteTitle: HTMLSpanElement;
   private flashTimer = 0;
   private viewKey = "";
   private collapsed = false;
@@ -91,6 +94,16 @@ export class Hud {
     this.runEl.style.display = "none";
     this.announceEl = document.createElement("div");
     this.announceEl.className = "isl-announce";
+
+    // Tu voto (cada uno ve el suyo), arriba al medio, debajo de la barra.
+    this.myVoteEl = document.createElement("div");
+    this.myVoteEl.className = "isl-myvote";
+    this.myVoteEl.style.display = "none";
+    this.myVoteLabel = document.createElement("span");
+    this.myVoteLabel.className = "isl-myvote__label";
+    this.myVoteTitle = document.createElement("span");
+    this.myVoteTitle.className = "isl-myvote__title";
+    this.myVoteEl.append(this.myVoteLabel, this.myVoteTitle);
 
     this.panel = document.createElement("div");
     this.panel.className = "isl-panel";
@@ -172,6 +185,7 @@ export class Hud {
       this.flashEl,
       this.runEl,
       this.announceEl,
+      this.myVoteEl,
     );
     container.append(this.root);
   }
@@ -345,9 +359,7 @@ export class Hud {
       view.players,
       view.present,
       view.host,
-      view.totalRounds,
-      view.canStart,
-      !!view.onStart,
+      view.startsAt !== null,
       look.name,
     ]);
     if (!this.begin(key)) return;
@@ -395,32 +407,40 @@ export class Hud {
       "isl-hint-text",
     );
 
-    if (view.onStart && view.onSetRounds) {
-      this.panelBody.append(this.el("div", "isl-sub", "Juegos de la partida"));
-      const choices = this.el("div", "isl-choices");
-      const onSet = view.onSetRounds;
-      for (const n of TOTAL_ROUNDS_OPTIONS.filter((x) => x <= 10)) {
-        const c = this.el("button", "isl-choice" + (n === view.totalRounds ? " is-on" : ""), String(n));
-        c.type = "button";
-        c.addEventListener("click", () => onSet(n));
-        choices.append(c);
-      }
-      this.panelBody.append(choices);
-      if (!view.canStart) this.text("Hacen falta al menos 2 jugadores conectados.", "isl-hint-text");
-      this.actions([
-        { label: "Empezar", onClick: view.onStart, primary: true, disabled: !view.canStart },
-        { label: "Salir de la sala", onClick: view.onLeave },
-      ]);
-    } else {
-      this.text(`${view.totalRounds} juegos. Esperando a que el anfitrion empiece...`, "isl-hint-text");
-      this.actions([{ label: "Salir de la sala", onClick: view.onLeave }]);
+    // Sin boton de empezar ni cantidad de juegos: con 2+ conectados la votacion se abre
+    // sola (la cuenta va en la barra de arriba) y se juega de a un juego, sin final.
+    this.text(
+      "Se juega de a un juego: lo votan, lo juegan y vuelven a la feria. Los puntos se acumulan en la pizarra de la noche, al sur.",
+      "isl-hint-text",
+    );
+    this.text(
+      view.startsAt === null
+        ? "La votacion arranca sola cuando haya al menos 2 jugadores conectados."
+        : "La votacion del primer juego arranca sola en unos segundos: pisa la chapa del afiche que quieras jugar.",
+      "isl-hint-text",
+    );
+    this.actions([{ label: "Salir de la sala", onClick: view.onLeave }]);
+  }
+
+  /**
+   * Tu voto, siempre a la vista durante la votacion (cada uno ve el suyo): el nombre
+   * del juego, o la invitacion a pisar una chapa. null lo oculta.
+   */
+  setMyVote(view: { title: string | null } | null): void {
+    if (!view) {
+      this.myVoteEl.style.display = "none";
+      return;
     }
+    this.myVoteEl.style.display = "";
+    this.myVoteEl.classList.toggle("is-empty", view.title === null);
+    this.myVoteLabel.textContent = view.title === null ? "Todavia no votaste" : "Tu voto";
+    this.myVoteTitle.textContent = view.title ?? "Pisa la chapa de un afiche";
   }
 
   showVoting(view: VotingView, mine: string | null): void {
     const counts = view.options.map((o) => view.counts[o.id] ?? 0);
     const names = view.options.map((o) => view.voters?.[o.id] ?? []);
-    const key = JSON.stringify(["vote", view.round, view.options.map((o) => o.id), counts, names, mine, view.title]);
+    const key = JSON.stringify(["vote", view.round, view.options.map((o) => o.id), counts, names, mine, view.title, view.reroll]);
     if (!this.begin(key)) return;
     this.heading(view.kicker ?? "Votacion", view.title ?? "Elegi el proximo juego");
     this.text("Pisa la chapa encendida de un afiche, o apuntale y hace clic (tambien podes tocar el juego aca).", "isl-hint-text");
@@ -445,6 +465,21 @@ export class Hud {
       ul.append(li);
     }
     this.panelBody.append(ul);
+
+    // REROLL: el escenario del medio. Con mas de la mitad de los conectados ahi, afiches
+    // nuevos, votos en cero y la cuenta de nuevo.
+    if (view.reroll) {
+      const r = view.reroll;
+      this.panelBody.append(this.el("div", "isl-sub", "No te gusta ninguno?"));
+      const rr = this.el("ul", "isl-list");
+      const li = this.el("li", "isl-row isl-row--vote isl-row--reroll" + (r.mine ? " is-me" : ""));
+      const name = this.el("span", "isl-row__name", "REROLL: otros juegos");
+      name.append(this.el("small", "isl-row__voters", "Subite al escenario del medio"));
+      li.append(name, this.el("span", "isl-row__value", `${r.count}/${r.needed}`));
+      li.addEventListener("click", () => view.onVote(REROLL_VOTE));
+      rr.append(li);
+      this.panelBody.append(rr);
+    }
   }
 
   showBriefing(view: BriefingView, iAmReady: boolean): void {
@@ -458,7 +493,7 @@ export class Hud {
       view.host ? view.host.allReady : null,
     ]);
     if (!this.begin(key)) return;
-    this.heading(`Ronda ${view.roundNo}/${view.totalRounds} - proximo juego`, view.gameTitle);
+    this.heading(`Ronda ${view.roundNo}${view.totalRounds ? `/${view.totalRounds}` : ""} - proximo juego`, view.gameTitle);
     if (view.howTo) {
       const how = renderHowTo(view.howTo, { compact: true });
       how.classList.add("isl-howto");
@@ -488,7 +523,7 @@ export class Hud {
   showResults(view: ResultsView): void {
     const key = JSON.stringify(["res", view.roundNo, view.rows, view.totals, view.waitingText, view.hostAction?.label]);
     if (!this.begin(key)) return;
-    this.heading(`Ronda ${view.roundNo}/${view.totalRounds} - ${view.gameTitle}`, "Resultados");
+    this.heading(`${view.totalRounds ? `Ronda ${view.roundNo}/${view.totalRounds}` : `Juego ${view.roundNo}`} - ${view.gameTitle}`, "Resultados");
     this.list(
       view.rows.map((r) => ({
         left: String(r.rank),

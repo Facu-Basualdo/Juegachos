@@ -2,8 +2,8 @@
 
 La sala 3D: una feria abandonada de noche, en primera persona, donde los jugadores
 de una sala caminan juntos **entre juego y juego**. Ahi se ve el lobby, se vota el
-proximo juego parandose frente a su afiche, se marca "listo" subiendose al escenario,
-se ven los resultados de cada ronda y la final. Mientras esperan, trepan **La Torre**
+proximo juego parandose en la chapa frente a su afiche (o se pide REROLL subiendose al
+escenario del medio), se ven los resultados de cada ronda y la final. Mientras esperan, trepan **La Torre**
 (un parkour) por la corona de la sala. **No es un juego**: no tiene `meta.ts` (si lo
 tuviera apareceria en el roster), vive en `/rooms/lobby/` (`rooms/lobby/index.html`,
 entry `lobby3d` en `vite.config.ts`).
@@ -35,14 +35,61 @@ server configurado. Las salas comunes no cambian en nada.
   al volver al lobby limpia lo latcheado por ronda (`resetHubMatch`), porque la
   revancha vuelve a numerar desde la ronda 1 y reusaria las mismas claves (voto
   programado, votacion comprimida, final ya mostrado).
-- **Pool de juegos**: solo los `roomsOnly` (campo de `GameEntry`; hoy 13). Son los
-  afiches de las carteleras y el pool de `pickVoteOptions(settings)` en una sala 3D
-  (`votePool` en `src/shared/room/hub.ts`). Un juego rooms-only nuevo tiene que
-  declarar `roomsOnly: true` para aparecer.
-- **Se votan todos, no 5** (pedido del programador: "que cada uno vote el juego que
-  quiera"). En una sala 3D `pickVoteOptions` devuelve el pool entero; la sala comun
-  sigue sorteando `VOTE_OPTION_COUNT` (5). Como "encendido" ya no distingue nada, lo
-  que se lee de lejos son los votos (`World.setVoting`): la chapa de un afiche votado
+- **Sin botones (pedido del programador: "hacela jugable").** Todo pasa caminando:
+  - **Lobby**: con 2+ jugadores conectados, el host (su cliente, solo) fija el
+    `deadline` de la sala a `LOBBY3D_AUTOSTART_SEC` (15 s) y la barra de todos muestra
+    "Votacion en 0:15"; al vencer se abre la votacion. Si quedan menos de 2, se suspende
+    (`armHubLobby` en `roomMode.ts`). En ese margen el host puede elegir cuantos juegos
+    tiene la partida (el panel ya no tiene "Empezar").
+  - **Votacion**: `VOTE_SECONDS_3D` (30 s; hay que caminar hasta la chapa). Cuando ya
+    votaron todos los conectados se comprime a 10 s, no a 3: tienen que ver como quedo y
+    poder cambiar.
+  - **Al vencer, directo al juego**: no hay briefing (`startRoundNow` registra la ronda y
+    la pone en `playing`; todos navegan). El juego tiene su cuenta 3/2/1.
+- **De a un juego, sin partida de N juegos ni final** (pedido del programador): se vota,
+  se juega el juego votado y todos vuelven a la feria; despues de los resultados
+  (`RESULTS_TO_VOTE_MS`) se abre la votacion siguiente, y asi mientras sigan ahi. En una
+  sala 3D `totalRounds()` es `Infinity` (ninguna ronda es la ultima; se muestra "Juego N"
+  sin total) y el lobby no tiene "Juegos de la partida". La final (luna roja, bengalas,
+  cornetas) ya no se alcanza desde una sala 3D; el codigo queda para una sala vieja.
+  La noche empeora con cada juego pero cada vez menos (`done / (done + DREAD_HALF_GAMES)`
+  hacia `DREAD_LAST_ROUND`), sin llegar a la luna roja.
+- **La pizarra de la noche** (`NightBoard.ts`, pedido del programador): quien gano el
+  ultimo juego y los puntos acumulados de todos los juegos terminados (el mismo
+  `computeTotals` de las salas: 1ro de N suma N), con lo que sumo cada uno en el ultimo.
+  La arma `RoomHub.standings()` (una ronda en curso todavia no cuenta: se actualiza al
+  volver) y la repinta `Hub.updateNightBoard` en cada cambio de la sala, solo si cambio
+  algo. **Es otro cartel que el de records de la torre** (que no se toco) y se ve
+  distinto a proposito: pizarron de tiza **apaisado** en un marco de chapa oxidada sobre
+  patas, con la franja roja y blanca de los puestos y una lampara de obra con jaula,
+  contra las tablas pintadas en vertical del de records. Cada nombre va en la tiza del
+  color de su remera (aclarado: sobre el verde casi negro se apagaba) y el puntero lleva
+  la corona. Va al **sur, detras del spawn**, de cara al centro (0, 19): a los costados
+  del arco de carteleras, vista desde el centro, se superponia con los afiches de las
+  puntas. Verificado con dos jugadores reales y dos juegos seguidos: acumula, las dos
+  pantallas muestran lo mismo y despues del segundo se abre otra votacion.
+- **Los afiches rotan y salen de TODOS los juegos de sala** (pedido del programador).
+  Hay `LOBBY3D_POSTERS` (15) carteleras fijas y cada votacion sortea 15 juegos de
+  `roomGames` (`pickVoteOptions` -> `sampleGames` en `src/shared/room/hub.ts`). Como
+  viajan en `vote_options`, todas las pantallas muestran el mismo afiche en la misma
+  cartelera (`World.setPosters`, con las texturas cacheadas por juego). Antes de la
+  primera votacion se muestran 15 sorteados con el codigo de sala como semilla (iguales
+  para todos). El arco de carteleras esta medido para 15: si se cambia la cantidad,
+  revisar que no tape el cartel de records ni la torre.
+- **Tu voto en pantalla** (`Hud.setMyVote`, arriba al medio): "Tu voto: <juego>",
+  "REROLL (otros juegos)" o "Todavia no votaste - pisa la chapa de un afiche". Cada uno
+  ve el suyo.
+- **REROLL**: el escenario del medio (era LISTO, para el briefing que ya no existe en la
+  feria; ahora dice REROLL). Subirse es un voto mas (`REROLL_VOTE` en `room_votes`,
+  como el "ready"), que se cambia pisando una chapa. Con **mas de la mitad de los
+  conectados** en REROLL, el host sortea 15 afiches nuevos (evitando los de ahora),
+  borra los votos y reinicia la cuenta (`maybeReroll` / `rerollVote`). El panel tiene
+  la fila "REROLL: otros juegos" con `n/necesarios`.
+- **Se vota al ENTRAR a la chapa o al escenario, no por estar parado** (`Hub.standingSpot`,
+  por indice de cartelera): si no, el que pidio REROLL y se queda arriba lo repetiria en
+  bucle, y el que esta parado en una chapa votaria sin querer el juego nuevo que aparece
+  ahi. Verificado: con los dos arriba del escenario hay un solo reroll.
+- **Lo que se lee de lejos son los votos** (`World.setVoting`): la chapa de un afiche votado
   brilla mas, su foco se prende (hay `VOTE_LIGHTS` = 5 focos, van a los mas votados; el
   lider mas fuerte) y arriba sale el contador (solo en los votados, dorado el que va
   ganando, rojo el propio). El contador es un sprite **a tamaño fijo en pantalla**
@@ -54,9 +101,9 @@ server configurado. Las salas comunes no cambian en nada.
   nombres (me muevo de afiche al toque) y va primero, para no quedar escondido en el
   "+N".
 - **Pisar = tocar.** Pararse en la chapa encendida de un afiche llama al mismo
-  `onVote` que el boton del overlay; subirse al escenario LISTO, al mismo `onReady`.
+  `onVote` que el boton del overlay; subirse al escenario, a `onVote(REROLL_VOTE)`.
   Con el mouse capturado tambien se apunta y se hace clic (`World.pick`). El panel
-  del HUD deja votar / marcar listo tocando, por si alguien esta arriba de la torre.
+  del HUD deja votar tocando, por si alguien esta arriba de la torre.
   El voto propio es optimista (`voteLocal`) hasta que la DB lo confirma.
 
 ## Red: relay en el game server
@@ -297,6 +344,20 @@ Gotchas de Playwright:
   dos pestañas del mismo navegador dejan una en segundo plano y su rAF no dibuja.
 - Con el mouse capturado, `page.mouse.move` no trae `movementX`, asi que no gira. Se
   simula con `document.dispatchEvent(new MouseEvent("mousemove", { movementX, movementY }))`.
+
+## Probarlo con dos jugadores reales
+
+En dev la pagina deja el `Hub` en `window.__isla` tambien en una sala real (no solo con
+`?dev=`), asi Playwright puede pararse en una chapa: `__isla.player.placeAt(x, 0, z)` con
+la `x`/`z` de `__isla.world.portals[i]`, o en el escenario con `placeAt(0, 0.4, 6.8)`.
+Dos navegadores (ver gotchas), sala 3D privada creada desde `/rooms/`. **Interceptar el
+`POST /rest/v1/scores`**: un juego que termina solo (Flappy) en una sala de prueba
+registra la partida en el ranking global real.
+
+Rendimiento: el renderer pide `powerPreference: "high-performance"` (en una notebook con
+placa dedicada el navegador usa esa). Medido en la escena de votacion: 180 FPS con una
+RTX 4050 en una ventana normal, 59 en headless con GPU y ~29 sin GPU (SwiftShader, que
+es lo que usa Playwright por defecto: no sacar conclusiones de rendimiento de ahi).
 
 ## Pendiente
 

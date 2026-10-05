@@ -21,8 +21,9 @@ export interface RoomSettings {
   playlist: string[] | null;
   /**
    * Sala 3D (la Isla, `/rooms/lobby/`): entre ronda y ronda los jugadores vuelven a
-   * una isla compartida en vez de ver el overlay de la sala, y votan parandose en
-   * un portal. Solo se juegan los juegos `roomsOnly`. Ausente o false = sala comun.
+   * una isla compartida en vez de ver el overlay de la sala, y votan parandose
+   * en la chapa de un afiche (sorteados de todos los juegos de sala en cada votacion).
+   * Ausente o false = sala comun.
    * Vive en el jsonb de settings, asi que no pide migracion.
    */
   lobby3d?: boolean;

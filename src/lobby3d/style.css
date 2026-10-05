@@ -260,6 +260,15 @@ body {
   background: rgba(232, 228, 216, 0.08);
 }
 
+/* REROLL: una fila aparte, con la letra del escenario y sin portada. */
+.isl-row--reroll .isl-row__name {
+  letter-spacing: 1px;
+}
+
+.isl-row--reroll .isl-row__voters {
+  color: var(--isl-dim);
+}
+
 .isl-thumb {
   width: 34px;
   height: 34px;
@@ -420,6 +429,45 @@ body {
 
 .isl-announce.is-on {
   opacity: 1;
+}
+
+/* Tu voto: arriba al medio, debajo del cronometro de la torre y de los anuncios. */
+.isl-myvote {
+  position: absolute;
+  left: 50%;
+  top: 140px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 2px 14px;
+  background: var(--isl-bg-solid);
+  border-left: 3px solid var(--isl-red);
+  white-space: nowrap;
+  pointer-events: none !important;
+}
+
+.isl-myvote__label {
+  color: var(--isl-dim);
+  font-size: 18px;
+  text-transform: uppercase;
+}
+
+.isl-myvote__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 26px;
+  text-transform: uppercase;
+}
+
+.isl-myvote.is-empty {
+  border-left-color: var(--isl-dim);
+}
+
+.isl-myvote.is-empty .isl-myvote__title {
+  color: var(--isl-dim);
+  font-size: 20px;
 }
 
 .isl-stick {
@@ -687,5 +735,13 @@ body {
   .isl-announce {
     top: 88px;
     font-size: 18px;
+  }
+
+  .isl-myvote {
+    top: 120px;
+  }
+
+  .isl-myvote__title {
+    font-size: 22px;
   }
 }
