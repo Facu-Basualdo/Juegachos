@@ -135,7 +135,7 @@ export class Game {
     if (this.room && this.resumeSavedRun()) return;
 
     this.used = new Set();
-    this.questions = this.room ? buildRoomQuiz(`${this.room.code}:${this.room.round()}`) : [];
+    this.questions = this.room ? buildRoomQuiz(this.roomSeed()) : [];
     this.index = 0;
     this.score = 0;
     this.hits = 0;
@@ -154,6 +154,19 @@ export class Game {
     this.hud.hideOverlay();
     this.hud.showTopBar(this.progressLabel(), this.score, this.room ? null : this.lives);
     this.hud.clearQuestion();
+  }
+
+  /**
+   * Semilla de las banderas de la ronda. `code:round` solo no alcanza: "Volver a la
+   * sala" reinicia la numeracion, asi que la revancha en la misma sala repetia las
+   * mismas 15 banderas. Se le suma el vencimiento de la ronda (`roomTimeLimitSec` en
+   * meta.ts), que lo escribe el host al arrancarla: es el mismo para todos, cambia
+   * en cada ronda y sobrevive un F5. Sin el (DB vieja) cae a `code:round`.
+   */
+  private roomSeed(): string {
+    const room = this.room!;
+    const deadline = room.deadline();
+    return `${room.code}:${room.round()}:${deadline ? deadline.getTime() : ""}`;
   }
 
   /** Arma (solitario) la pregunta `i` si todavia no existe. */
@@ -340,7 +353,7 @@ export class Game {
     const s = loadRoomRun<SavedRun>(this.room!, GAME_ID);
     if (!s || typeof s.index !== "number" || typeof s.phaseStart !== "number") return false;
 
-    this.questions = buildRoomQuiz(`${this.room!.code}:${this.room!.round()}`);
+    this.questions = buildRoomQuiz(this.roomSeed());
     if (s.index < 0 || s.index >= this.questions.length) return false;
     this.index = s.index;
     this.score = s.score;
