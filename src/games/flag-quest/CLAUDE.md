@@ -27,8 +27,9 @@ cuatro opciones. Todo DOM + CSS, sin canvas (estetica de atlas antiguo, ver
 - **Solitario ("clasico")**: sin fin, 3 vidas (`SOLO_LIVES`). Un error o un tiempo
   vencido cuesta una vida. Sube un nivel cada `SOLO_LEVEL_EVERY` (6) banderas.
 - **Sala ("sala")**: 15 banderas fijas, tres de cada nivel (`ROOM_TIERS`), sin vidas.
-  Termina sola: 15 x (5 s + 1.1 s) ~ 92 s como mucho, asi que **no** necesita
-  `roomTimeLimitSec` (dejado quieto llega al final por los tiempos vencidos).
+  Termina sola: 15 x (5 s + 1.1 s) ~ 92 s como mucho (dejado quieto llega al final
+  por los tiempos vencidos). Igual declara `roomTimeLimitSec: 150`, pero no como
+  corte: es por la semilla (ver abajo).
 
 Puntaje igual en los dos: por acierto `100 + 100 * (tiempo que sobro / 5 s)`. Son
 tableros separados (`variants: ["clasico", "sala"]`) porque no se comparan: un
@@ -67,9 +68,17 @@ aunque el jugador no vuelva. Al cobrar de a varias no suena la rafaga (`live` en
 descarto con el programador): castigaria una notificacion o un cambio de app sin
 querer en el celular, y con 5 s buscar la bandera en otra pestana ya casi no da.
 
-**Mismas banderas en sala sin game server.** `buildRoomQuiz` siembra el PRNG con
-`code:round:flag-quest`: todos generan las mismas 15 banderas, con las mismas
-opciones en el mismo orden.
+**Mismas banderas en sala sin game server, distintas en cada ronda.** `buildRoomQuiz`
+siembra el PRNG con `code:round:<vencimiento>` (`Game.roomSeed`): todos generan las
+mismas 15 banderas, con las mismas opciones en el mismo orden. El vencimiento
+(`room.deadline()`) es lo que la hace distinta en cada partida: con `code:round`
+solo, "Volver a la sala" reinicia la numeracion y **la revancha en la misma sala
+repetia exactamente las mismas banderas** (bug reportado por el programador). El
+vencimiento lo escribe el host en la misma fila que pasa la ronda a `playing`, asi
+que es igual para todos, cambia en cada ronda y sobrevive un F5 — por eso el juego
+declara `roomTimeLimitSec` aunque termine solo; sacarlo vuelve a traer el bug. Ojo:
+`birome`, `cannon-dodge`, `el-cohete`, `flash-math`, `minotauro` y `templo-rodante`
+siembran con `code:round` y tienen el mismo problema en la revancha.
 
 **F5 en sala (`roomRun.ts`).** Es un juego `"higher"`, que normalmente no lo
 necesita, pero aca si: como las banderas son las mismas al recargar, reiniciar seria
