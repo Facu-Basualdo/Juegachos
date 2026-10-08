@@ -17,6 +17,10 @@ export const meta: GameEntry = {
   order: 1080,
   added: "2026-10-07",
   mobile: true,
+  // La ronda termina sola (15 x 6.1 s), asi que no lo necesita como corte: el tope
+  // da un vencimiento unico por ronda, que es parte de la semilla de las banderas
+  // (ver roomSeed en Game.ts). Sin el, la revancha repetia las mismas.
+  roomTimeLimitSec: 150,
   seo: {
     title: "FlagQuest: adiviná la bandera, juego de banderas online gratis",
   },
