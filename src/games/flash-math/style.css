@@ -38,26 +38,6 @@ body {
   user-select: none;
 }
 
-/* ---------- Volver ---------- */
-.back-link {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  z-index: 60;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--muted);
-  text-decoration: none;
-  transition: color 0.2s ease, transform 0.2s ease;
-}
-
-.back-link:hover {
-  color: var(--ink);
-  transform: translateX(-2px);
-}
-
 .hidden {
   display: none !important;
 }
@@ -384,4 +364,12 @@ body {
   45% { transform: scale(1); }
   85% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.2); }
+}
+
+/* El boton "menu" compartido (src/shared/backLink.ts) va arriba a la izquierda;
+   cuando la barra no entra a su costado, la barra baja por debajo de el. */
+@media (max-width: 719px) {
+  .fm-topbar {
+    top: 52px;
+  }
 }

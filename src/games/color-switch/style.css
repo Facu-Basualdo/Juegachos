@@ -38,25 +38,6 @@ body {
   touch-action: none;
 }
 
-.back-link {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 30;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--ash);
-  text-decoration: none;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
-  opacity: 0.9;
-}
-
-.back-link:hover {
-  color: var(--cream);
-}
-
 /* ---------- HUD (score en vivo) ---------- */
 .hud {
   position: absolute;

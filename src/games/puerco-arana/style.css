@@ -32,25 +32,6 @@ body {
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
 }
 
-.back-link {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 30;
-  font-size: 13px;
-  letter-spacing: 2px;
-  color: #ff5d8f;
-  text-shadow: 0 0 5px rgba(255, 93, 143, 0.5);
-  text-decoration: none;
-  opacity: 0.85;
-  transition: opacity 0.2s, text-shadow 0.2s;
-}
-
-.back-link:hover {
-  opacity: 1;
-  text-shadow: 0 0 10px rgba(255, 93, 143, 0.8);
-}
-
 /* HUD */
 .hud {
   position: absolute;

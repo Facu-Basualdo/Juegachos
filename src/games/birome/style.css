@@ -41,22 +41,6 @@ body {
   touch-action: none;
 }
 
-.back-link {
-  position: absolute;
-  top: 12px;
-  left: 16px;
-  z-index: 30;
-  font-size: 13px;
-  letter-spacing: 1px;
-  color: var(--pencil);
-  text-decoration: none;
-  opacity: 0.75;
-}
-
-.back-link:hover {
-  opacity: 1;
-}
-
 /* El HUD arranca debajo de la barra de la sala (RoomOverlay), que va arriba de todo. */
 .hud {
   position: absolute;

@@ -31,38 +31,6 @@ body {
   touch-action: none;
 }
 
-.back-link {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  z-index: 30;
-  font-family: "Orbitron", sans-serif;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.03);
-  padding: 8px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  text-decoration: none;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-}
-
-.back-link:hover {
-  color: #00f3ff;
-  border-color: rgba(0, 243, 255, 0.4);
-  background: rgba(0, 243, 255, 0.05);
-  box-shadow: 0 0 15px rgba(0, 243, 255, 0.15);
-  transform: translateY(-1px);
-}
-
-.back-link:active {
-  transform: translateY(0);
-}
-
 .hud {
   position: absolute;
   inset: 0;

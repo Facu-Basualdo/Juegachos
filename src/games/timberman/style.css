@@ -29,33 +29,6 @@ canvas {
   display: block;
 }
 
-.back-link {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  z-index: 30;
-  font-size: 14px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: rgba(255, 255, 255, 0.65);
-  text-decoration: none;
-  padding: 6px 12px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  transition: all 0.2s ease;
-}
-
-.back-link:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.25);
-  transform: translateX(-2px);
-}
-
 .hud {
   position: absolute;
   inset: 0;

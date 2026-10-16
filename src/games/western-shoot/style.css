@@ -46,26 +46,6 @@ body {
   z-index: 5;
 }
 
-.back-link {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 30;
-  font-size: 13px;
-  letter-spacing: 2px;
-  color: #c9883e;
-  text-shadow: 0 0 5px rgba(201, 136, 62, 0.5);
-  text-decoration: none;
-  opacity: 0.85;
-  transition: opacity 0.2s, text-shadow 0.2s;
-  font-family: "Rye", serif;
-}
-
-.back-link:hover {
-  opacity: 1;
-  text-shadow: 0 0 10px rgba(201, 136, 62, 0.8);
-}
-
 /* ── HUD ────────────────────────────────────────────────────────── */
 .hud {
   position: absolute;

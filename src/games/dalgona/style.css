@@ -49,18 +49,6 @@ body {
   touch-action: none;
 }
 
-.back-link {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 40;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  color: var(--ink);
-  text-decoration: none;
-}
-
 .dg {
   position: absolute;
   inset: 0;
@@ -364,5 +352,13 @@ body {
 
   .dg__banner {
     font-size: 17px;
+  }
+}
+
+/* El boton "menu" compartido (src/shared/backLink.ts) va arriba a la izquierda;
+   cuando la barra no entra a su costado, la barra baja por debajo de el. */
+@media (max-width: 599px) {
+  .dg__top {
+    top: 52px;
   }
 }

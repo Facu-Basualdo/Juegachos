@@ -30,23 +30,6 @@ body {
   touch-action: none;
 }
 
-.back-link {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 30;
-  font-size: 13px;
-  letter-spacing: 2px;
-  color: #7bfaff;
-  text-decoration: none;
-  text-shadow: 0 0 10px rgba(34, 224, 255, 0.6);
-  opacity: 0.85;
-}
-
-.back-link:hover {
-  opacity: 1;
-}
-
 .hud {
   position: absolute;
   inset: 0;

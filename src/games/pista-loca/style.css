@@ -45,19 +45,6 @@ body {
   touch-action: none;
 }
 
-.back-link {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 40;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  color: rgba(255, 255, 255, 0.8);
-  text-shadow: 2px 2px 0 var(--shadow);
-  text-decoration: none;
-}
-
 .pl {
   position: absolute;
   inset: 0;

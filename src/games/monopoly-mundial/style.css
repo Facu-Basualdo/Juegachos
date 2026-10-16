@@ -52,20 +52,6 @@ body {
   height: 100dvh;
 }
 
-.back-link {
-  position: fixed;
-  left: 12px;
-  bottom: 8px;
-  color: rgba(242, 232, 205, 0.7);
-  text-decoration: none;
-  font-size: 12px;
-  font-family: var(--font-cond);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  z-index: 40;
-}
-.back-link:hover { color: var(--gold-2); }
-
 /* ---------- Layout ---------- */
 
 .mono-root {
@@ -1110,4 +1096,11 @@ body {
   }
   .log-box { min-height: 120px; max-height: 30vh; }
   .team-summary { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Boton "menu" compartido (src/shared/backLink.ts): abajo a la izquierda, arriba
+   esta el HUD de la mesa. */
+:root {
+  --mg-back-top: auto;
+  --mg-back-bottom: 8px;
 }

@@ -521,17 +521,6 @@ body {
   }
 }
 
-.back-link {
-  position: fixed;
-  top: 10px;
-  left: 12px;
-  z-index: 20;
-  color: var(--mt-cream);
-  font: 800 13px var(--mt-font);
-  text-decoration: none;
-  opacity: 0.7;
-}
-
 /* ---------- Biblioteca de audios (pagina fuera de sala) ---------- */
 
 .mt--library {

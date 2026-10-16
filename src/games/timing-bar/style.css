@@ -326,23 +326,3 @@ body {
   }
 }
 
-/* ---------- Back link ---------- */
-.back-link {
-  position: fixed;
-  top: 16px;
-  left: 16px;
-  z-index: 40;
-  padding: 8px 14px;
-  border-radius: 999px;
-  border: 2.5px solid var(--ink);
-  background: var(--paper);
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.back-link:hover {
-  background: var(--ink);
-  color: var(--paper);
-}

@@ -39,27 +39,6 @@ canvas {
   display: block;
 }
 
-.back-link {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 30;
-  font-size: 13px;
-  letter-spacing: 2px;
-  font-weight: 700;
-  color: #2a2419;
-  background: rgba(255, 252, 240, 0.85);
-  border: 2px solid #2a2419;
-  border-radius: 999px;
-  padding: 6px 14px;
-  text-decoration: none;
-  opacity: 0.85;
-}
-
-.back-link:hover {
-  opacity: 1;
-}
-
 .hud {
   position: absolute;
   top: 16px;
@@ -257,4 +236,12 @@ canvas {
   30% { transform: translateX(-50%) scale(1); }
   70% { opacity: 1; }
   100% { opacity: 0; transform: translateX(-50%) scale(1.05); }
+}
+
+/* El boton "menu" compartido (src/shared/backLink.ts) va arriba a la izquierda;
+   cuando la barra no entra a su costado, la barra baja por debajo de el. */
+@media (max-width: 479px) {
+  .hud {
+    top: 52px;
+  }
 }

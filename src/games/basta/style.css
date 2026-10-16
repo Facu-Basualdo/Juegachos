@@ -589,25 +589,16 @@ body {
   }
 }
 
-/* ---------- Back link (compartido) ---------- */
-
-.back-link {
-  position: fixed;
-  top: 10px;
-  right: 12px;
-  z-index: 20;
-  font-family: system-ui, sans-serif;
-  font-size: 14px;
-  color: var(--bt-ink);
-  text-decoration: none;
-  background: rgba(251, 250, 243, 0.85);
-  padding: 5px 12px;
-  border-radius: 20px;
-  border: 1.5px solid rgba(47, 91, 216, 0.3);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .bt__countdown.is-pop {
     animation: none;
   }
+}
+
+/* Boton "menu" compartido (src/shared/backLink.ts): arriba a la derecha, la
+   izquierda la ocupa el HUD de la partida. */
+:root {
+  --mg-back-top: 10px;
+  --mg-back-left: auto;
+  --mg-back-right: 12px;
 }

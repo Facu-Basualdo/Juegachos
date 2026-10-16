@@ -39,24 +39,6 @@ body::after {
   background: radial-gradient(circle at center, rgba(0, 0, 0, 0) 58%, rgba(60, 20, 0, 0.34) 100%);
 }
 
-.back-link {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 30;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: #fff3e0;
-  text-decoration: none;
-  text-shadow: 0 2px 6px rgba(90, 30, 0, 0.7);
-  opacity: 0.85;
-}
-
-.back-link:hover {
-  opacity: 1;
-}
-
 .hud {
   position: absolute;
   /* Below the room-mode top strip (~38px tall, fixed top-centre), so the score

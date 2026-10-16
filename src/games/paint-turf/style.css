@@ -41,21 +41,6 @@ body {
   touch-action: none;
 }
 
-.back-link {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 40;
-  font-size: 13px;
-  letter-spacing: 2px;
-  color: rgba(244, 234, 216, 0.55);
-  text-decoration: none;
-}
-
-.back-link:hover {
-  color: var(--paper);
-}
-
 .pt {
   position: absolute;
   inset: 0;

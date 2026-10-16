@@ -35,22 +35,6 @@ canvas {
   touch-action: none;
 }
 
-.back-link {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 30;
-  font-size: 13px;
-  letter-spacing: 2px;
-  color: var(--ink);
-  text-decoration: none;
-  opacity: 0.7;
-}
-
-.back-link:hover {
-  opacity: 1;
-}
-
 /* ------------------------------------------------------------------ HUD */
 
 .hud {

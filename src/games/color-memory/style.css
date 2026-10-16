@@ -29,25 +29,6 @@ body {
   padding: 24px;
 }
 
-/* Back link (kept, muted, above the card) */
-.back-link {
-  position: fixed;
-  top: 20px;
-  left: 22px;
-  z-index: 50;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  color: rgba(20, 17, 13, 0.5);
-  text-decoration: none;
-  text-transform: lowercase;
-  transition: color 0.2s ease, transform 0.2s ease;
-}
-.back-link:hover {
-  color: #14110d;
-  transform: translateX(-2px);
-}
-
 /* ---------- The card ---------- */
 .cm-card {
   position: relative;
