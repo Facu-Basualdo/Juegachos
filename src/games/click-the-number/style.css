@@ -32,29 +32,6 @@ body {
   padding: 24px;
 }
 
-/* --- Back Link --- */
-.back-link {
-  position: absolute;
-  top: 24px;
-  left: 24px;
-  z-index: 50;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 2px;
-  color: rgba(232, 244, 255, 0.55);
-  text-decoration: none;
-  text-transform: uppercase;
-  transition: color 0.2s ease, transform 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.back-link:hover {
-  color: #fff;
-  transform: translateX(-2px);
-}
-
 /* --- HUD Top Bar --- */
 /* Cifras tabulares: el reloj corriendo no debe tironear el ojo cambiando de ancho. */
 .hud-bar {

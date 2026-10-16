@@ -61,25 +61,6 @@ body {
   display: block;
 }
 
-.back-link {
-  position: fixed;
-  top: 14px;
-  left: 16px;
-  z-index: 40;
-  font-family: var(--round);
-  font-size: 13px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--muted);
-  text-decoration: none;
-  opacity: 0.8;
-}
-
-.back-link:hover {
-  color: var(--bulb);
-  opacity: 1;
-}
-
 .hidden {
   display: none !important;
 }

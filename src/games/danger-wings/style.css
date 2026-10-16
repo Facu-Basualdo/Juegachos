@@ -28,23 +28,6 @@ canvas {
   touch-action: none;
 }
 
-.back-link {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 30;
-  font-size: 13px;
-  letter-spacing: 3px;
-  color: #cbb98a;
-  text-decoration: none;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
-  opacity: 0.8;
-}
-
-.back-link:hover {
-  opacity: 1;
-}
-
 /* Blood-red impact flash on death */
 .flash {
   position: absolute;

@@ -30,22 +30,6 @@ canvas {
   display: block;
 }
 
-.back-link {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 30;
-  font-size: 13px;
-  letter-spacing: 2px;
-  color: #9fc0ff;
-  text-decoration: none;
-  text-shadow: 0 0 8px #3ba7ff;
-  opacity: 0.75;
-}
-.back-link:hover {
-  opacity: 1;
-}
-
 /* Marcador y reloj */
 .scoreboard {
   position: absolute;

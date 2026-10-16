@@ -67,23 +67,6 @@ body {
   display: none !important;
 }
 
-.back-link {
-  position: absolute;
-  top: 24px;
-  left: 26px;
-  z-index: 60;
-  font-family: "IM Fell English SC", Georgia, serif;
-  font-size: 16px;
-  letter-spacing: 1px;
-  color: var(--ink-soft);
-  text-decoration: none;
-  transition: color 0.2s ease;
-}
-
-.back-link:hover {
-  color: var(--seal);
-}
-
 /* ---------- Barra superior ---------- */
 .fq-topbar {
   position: absolute;
@@ -702,11 +685,6 @@ body {
     width: calc(100% - 40px);
     top: 52px;
     font-size: 16px;
-  }
-
-  .back-link {
-    top: 20px;
-    left: 22px;
   }
 
   .fq-stage {

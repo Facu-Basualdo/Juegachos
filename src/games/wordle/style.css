@@ -54,6 +54,14 @@ body:has(.mg-room-strip) #app {
   padding-top: 44px;
 }
 
+/* Lo mismo para el boton "menu" compartido (src/shared/backLink.ts), arriba a la
+   izquierda: cuando no entra al costado de la barra (520px), va encima. */
+@media (max-width: 720px) {
+  #app {
+    padding-top: 48px;
+  }
+}
+
 /* ---------- Barra superior ---------- */
 .hud-bar {
   width: 100%;
@@ -410,24 +418,3 @@ body:has(.mg-room-strip) #app {
   }
 }
 
-/* ---------- Volver al menu ---------- */
-.back-link {
-  position: fixed;
-  top: 12px;
-  left: 12px;
-  z-index: 30;
-  padding: 6px 12px;
-  border: 2px solid var(--ink);
-  border-radius: 999px;
-  background: var(--paper);
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 800;
-  text-decoration: none;
-}
-
-@media (max-width: 480px) {
-  .back-link {
-    display: none;
-  }
-}

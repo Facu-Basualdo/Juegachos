@@ -61,25 +61,6 @@ body {
   display: none !important;
 }
 
-.back-link {
-  position: absolute;
-  top: 18px;
-  left: 18px;
-  z-index: 120;
-  color: var(--green-dim);
-  text-decoration: none;
-  font-size: 13px;
-  letter-spacing: 1px;
-  padding: 6px 10px;
-  border: 1px solid var(--green-faint);
-  border-radius: 4px;
-  transition: color 0.15s, border-color 0.15s;
-}
-.back-link:hover {
-  color: var(--green);
-  border-color: var(--border);
-}
-
 /* --- HUD bar --- */
 .hud-bar {
   width: min(760px, 96vw);

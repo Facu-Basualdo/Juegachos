@@ -28,23 +28,6 @@ canvas {
   touch-action: none;
 }
 
-.back-link {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 30;
-  font-size: 13px;
-  letter-spacing: 2px;
-  color: #fff;
-  text-decoration: none;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
-  opacity: 0.85;
-}
-
-.back-link:hover {
-  opacity: 1;
-}
-
 .hud {
   position: absolute;
   inset: 0;

@@ -1302,23 +1302,6 @@ body {
   100% { transform: scale(1) rotate(-6deg); opacity: 0.95; }
 }
 
-/* ---------- Back link (compartido) ---------- */
-
-.back-link {
-  position: fixed;
-  top: 10px;
-  right: 12px;
-  z-index: 20;
-  font-family: system-ui, sans-serif;
-  font-size: 14px;
-  color: var(--im-ink);
-  text-decoration: none;
-  background: rgba(20, 19, 17, 0.85);
-  padding: 5px 12px;
-  border-radius: 3px;
-  border: 1px solid #3a352c;
-}
-
 /* ---------- Compu: fichas mas grandes ---------- */
 
 @media (min-width: 760px) {
@@ -1432,4 +1415,12 @@ body {
   .im__grain {
     animation: none;
   }
+}
+
+/* Boton "menu" compartido (src/shared/backLink.ts): arriba a la derecha, la
+   izquierda la ocupa el HUD de la partida. */
+:root {
+  --mg-back-top: 10px;
+  --mg-back-left: auto;
+  --mg-back-right: 12px;
 }

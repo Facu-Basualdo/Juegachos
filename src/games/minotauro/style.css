@@ -68,23 +68,6 @@ body::before {
   touch-action: none;
 }
 
-.back-link {
-  position: absolute;
-  top: 14px;
-  left: 16px;
-  z-index: 60;
-  font-family: var(--roman);
-  font-size: 11px;
-  letter-spacing: 0.3em;
-  color: var(--muted);
-  text-decoration: none;
-  text-transform: uppercase;
-}
-
-.back-link:hover {
-  color: var(--sand);
-}
-
 .mn {
   position: absolute;
   inset: 0;
@@ -317,9 +300,10 @@ body::before {
     display: flex;
   }
 
-  .back-link {
-    top: auto;
-    bottom: 12px;
+  /* Boton "menu" compartido (src/shared/backLink.ts): abajo, arriba va .mn-top. */
+  :root {
+    --mg-back-top: auto;
+    --mg-back-bottom: 12px;
   }
 }
 

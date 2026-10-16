@@ -33,29 +33,6 @@ body {
   background: radial-gradient(circle at center, #141330 0%, #07070f 100%);
 }
 
-/* --- Back Link --- */
-.back-link {
-  position: absolute;
-  top: 24px;
-  left: 24px;
-  z-index: 50;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 2px;
-  color: rgba(255, 255, 255, 0.7);
-  text-decoration: none;
-  text-transform: uppercase;
-  transition: color 0.2s ease, transform 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.back-link:hover {
-  color: #fff;
-  transform: translateX(-2px);
-}
-
 /* --- Board (3x3) --- */
 .ttt-board {
   display: grid;
@@ -359,5 +336,13 @@ body {
 
   .players-panel {
     bottom: 16px;
+  }
+}
+
+/* El boton "menu" compartido (src/shared/backLink.ts) va arriba a la izquierda;
+   cuando la barra no entra a su costado, la barra baja por debajo de el. */
+@media (max-width: 899px) {
+  .hud-bar {
+    top: 52px;
   }
 }

@@ -63,23 +63,6 @@ body {
   display: none !important;
 }
 
-.back-link {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 30;
-  font-size: 13px;
-  letter-spacing: 2px;
-  color: var(--ivory);
-  text-decoration: none;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
-  opacity: 0.85;
-}
-
-.back-link:hover {
-  opacity: 1;
-}
-
 /* ---------- HUD superior (nivel grande centrado) ---------- */
 .vm-hud {
   position: relative;

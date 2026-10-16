@@ -29,32 +29,6 @@ canvas {
   display: block;
 }
 
-.back-link {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  z-index: 30;
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  color: rgba(210, 226, 255, 0.6);
-  text-decoration: none;
-  padding: 6px 12px;
-  border-radius: 8px;
-  background: rgba(120, 160, 220, 0.06);
-  border: 1px solid rgba(150, 180, 230, 0.12);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  transition: all 0.2s ease;
-}
-
-.back-link:hover {
-  color: #ffffff;
-  background: rgba(120, 160, 220, 0.14);
-  transform: translateX(-2px);
-}
-
 /* --- HUD --- */
 .hud {
   position: absolute;

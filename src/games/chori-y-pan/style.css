@@ -54,23 +54,6 @@ body {
   display: block;
 }
 
-.back-link {
-  position: fixed;
-  top: 14px;
-  left: 16px;
-  z-index: 40;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--muted);
-  text-decoration: none;
-}
-
-.back-link:hover {
-  color: var(--glyph);
-}
-
 .hidden {
   display: none !important;
 }
@@ -708,4 +691,12 @@ body {
   right: 22px;
   width: 92px;
   height: 92px;
+}
+
+/* El boton "menu" compartido (src/shared/backLink.ts) va arriba a la izquierda;
+   cuando la barra no entra a su costado, la barra baja por debajo de el. */
+@media (max-width: 479px) {
+  .cp-bar {
+    top: 52px;
+  }
 }

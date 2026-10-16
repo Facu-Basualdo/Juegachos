@@ -32,27 +32,6 @@ body {
   touch-action: none;
 }
 
-.back-link {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  z-index: 30;
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 1px;
-  color: rgba(255, 255, 255, 0.7);
-  text-decoration: none;
-  transition: color 0.2s ease, transform 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.back-link:hover {
-  color: #00f0ff;
-  transform: translateX(-2px);
-}
-
 .hud {
   position: absolute;
   inset: 0;

@@ -39,22 +39,6 @@ body {
   position: relative;
 }
 
-.back-link {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  color: rgba(255, 255, 255, 0.5);
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 500;
-  transition: color 0.2s ease;
-  z-index: 100;
-}
-
-.back-link:hover {
-  color: var(--neon-cyan);
-}
-
 /* 1. HUD Bar */
 .hud-bar {
   width: 100%;

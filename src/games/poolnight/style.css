@@ -46,18 +46,6 @@ body {
   touch-action: none;
 }
 
-.back-link {
-  position: absolute;
-  bottom: 14px;
-  left: 16px;
-  z-index: 40;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  color: var(--muted);
-  text-decoration: none;
-}
-
 .pn {
   position: absolute;
   inset: 0;
@@ -522,4 +510,11 @@ body {
   .pn__results {
     flex-direction: column;
   }
+}
+
+/* Boton "menu" compartido (src/shared/backLink.ts): abajo a la izquierda, arriba
+   esta el HUD de la mesa. */
+:root {
+  --mg-back-top: auto;
+  --mg-back-bottom: 14px;
 }

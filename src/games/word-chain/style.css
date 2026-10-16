@@ -44,24 +44,6 @@ body {
   height: 100dvh;
 }
 
-.back-link {
-  position: fixed;
-  top: 12px;
-  left: 14px;
-  z-index: 60;
-  color: var(--name);
-  text-decoration: none;
-  font-weight: 700;
-  font-size: 0.85rem;
-  padding: 6px 12px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.25);
-}
-.back-link:hover {
-  background: rgba(0, 0, 0, 0.5);
-}
-
 .wc {
   height: 100%;
   position: relative;
