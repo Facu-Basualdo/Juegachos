@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
-import type { AgInit, AgPlayerInfo, AgSnap } from "../protocol.js";
+import type { AgDead, AgInit, AgPhase, AgPlayerInfo, AgSnap, AgTop } from "../protocol.js";
+import { SpatialHash } from "./agar-grid.js";
 import {
   AGAR_CONFIG,
   clientConfig,
@@ -28,6 +29,10 @@ import {
  */
 
 const TICK_MS = 1000 / AGAR_CONFIG.sim.tickHz;
+/** Lado de un balde de la spatial hash. Del orden de una celula mediana. */
+const HASH_CELL = 200;
+/** Pasos entre dos `ag:top` (1 por segundo). */
+const TOP_EVERY = AGAR_CONFIG.sim.tickHz;
 
 interface QueuedInput {
   /** simTime en que rige. */
@@ -36,6 +41,15 @@ interface QueuedInput {
   dy: number;
   act: number;
   seq: number;
+}
+
+export class Pellet {
+  constructor(
+    readonly id: number,
+    readonly x: number,
+    readonly y: number,
+    readonly color: number,
+  ) {}
 }
 
 export class Cell {
@@ -88,12 +102,17 @@ export class Player {
   lastActiveAt = 0;
 
   // ---- Vida ----
+  /** Ya aparecio alguna vez (en sala hay una sola vida). */
+  everSpawned = false;
   bornAt = 0;
   peak = 0;
   deadAt = -Infinity;
   /** Donde mira el espectador: donde murio, o el centro del mapa. */
   camX = 0;
   camY = 0;
+
+  /** Comida que este cliente ya tiene dibujada: el snapshot le manda solo las diferencias. */
+  readonly knownPellets = new Set<number>();
 
   constructor(
     readonly id: number,
@@ -139,6 +158,12 @@ export class Arena {
   readonly mode: ModeConfig;
   readonly size: number;
   readonly players = new Map<number, Player>();
+  readonly pellets = new Map<number, Pellet>();
+  private readonly pelletHash: SpatialHash<Pellet>;
+  /** Se reconstruye en cada paso: las celulas se mueven. */
+  private readonly cellHash: SpatialHash<Cell>;
+  private phase: AgPhase = "playing";
+  private nextPelletId = 1;
 
   private nextPlayerId = 1;
   private nextCellId = 1;
@@ -158,6 +183,9 @@ export class Arena {
   ) {
     this.mode = modeConfig(kind);
     this.size = this.mode.mapSize;
+    this.pelletHash = new SpatialHash(this.size, HASH_CELL);
+    this.cellHash = new SpatialHash(this.size, HASH_CELL);
+    while (this.pellets.size < this.mode.pelletCount) this.addPellet();
     this.loop = setInterval(() => this.tick(), TICK_MS);
   }
 
@@ -211,13 +239,15 @@ export class Arena {
     // le acusaria ninguno y el cliente no podria reconciliar.
     player.release(this.simTime);
     player.lastActiveAt = this.simTime;
+    // Pagina nueva = no tiene nada dibujado: el proximo snapshot le manda toda la comida.
+    player.knownPellets.clear();
     const init: AgInit = {
       cfg: clientConfig(this.kind),
       me: player.id,
       tk: player.token,
       players: [...this.players.values()].map((p) => p.info()),
       alive: player.alive,
-      phase: "playing",
+      phase: this.phase,
     };
     this.host.emit(socketId, "ag:init", init);
   }
@@ -234,12 +264,15 @@ export class Arena {
   }
 
   spawn(player: Player, name: string): boolean {
-    if (player.alive) return false;
+    if (player.alive || this.phase !== "playing") return false;
+    // En sala hay una sola vida: el que ya aparecio y murio queda mirando.
+    if (player.everSpawned && !this.mode.respawn) return false;
     player.name = name;
     this.broadcastPlayers({ add: [player.info()] });
     const pos = this.spawnPoint();
     const mass = AGAR_CONFIG.cell.startMass;
     player.cells = [new Cell(this.nextCellId++, player, pos.x, pos.y, mass)];
+    player.everSpawned = true;
     player.bornAt = this.simTime;
     player.peak = mass;
     player.lastActiveAt = this.simTime;
@@ -305,8 +338,162 @@ export class Arena {
   }
 
   private step(): void {
+    // Terminada (sala con ganador), la arena queda congelada mostrando el final.
+    if (this.phase !== "playing") return;
     for (const player of this.players.values()) this.stepPlayer(player);
+    this.rebuildCellHash();
+    this.eatPellets();
+    this.eatCells();
+    this.decay();
+    this.refillPellets();
     this.expirePlayers();
+    this.checkWinner();
+    if (this.stepNo % TOP_EVERY === 0) this.broadcastTop();
+  }
+
+  // ---------------------------------------------------------------- comer
+
+  private rebuildCellHash(): void {
+    this.cellHash.clear();
+    for (const player of this.players.values()) for (const cell of player.cells) this.cellHash.insert(cell);
+  }
+
+  /** La comida se come cuando su centro cae adentro de la celula. */
+  private eatPellets(): void {
+    const eaten: Pellet[] = [];
+    for (const player of this.players.values()) {
+      for (const cell of player.cells) {
+        const r = cell.r;
+        const r2 = r * r;
+        this.pelletHash.query(cell.x - r, cell.y - r, cell.x + r, cell.y + r, (pellet) => {
+          const dx = pellet.x - cell.x;
+          const dy = pellet.y - cell.y;
+          if (dx * dx + dy * dy < r2) eaten.push(pellet);
+        });
+        for (const pellet of eaten) {
+          if (!this.pellets.has(pellet.id)) continue; // otra celula llego antes este paso
+          this.removePellet(pellet);
+          this.grow(cell, AGAR_CONFIG.pellet.mass);
+        }
+        eaten.length = 0;
+      }
+    }
+  }
+
+  /**
+   * Celula contra celula. Se procesan de la mas grande a la mas chica, asi una cadena
+   * (A come a B que comia a C en el mismo paso) se resuelve a favor del mas grande.
+   * Regla: al menos `eat.ratio` veces la masa, y que la cubra mayormente
+   * (distancia entre centros < R - overlap * r).
+   */
+  private eatCells(): void {
+    const all: Cell[] = [];
+    for (const player of this.players.values()) for (const cell of player.cells) all.push(cell);
+    if (all.length < 2) return;
+    all.sort((a, b) => b.mass - a.mass);
+
+    const gone = new Set<Cell>();
+    const killers = new Map<Player, Player>();
+    const { ratio, overlap } = AGAR_CONFIG.eat;
+    for (const big of all) {
+      if (gone.has(big)) continue;
+      const R = big.r;
+      this.cellHash.query(big.x - R, big.y - R, big.x + R, big.y + R, (small) => {
+        if (small === big || gone.has(small)) return;
+        // Las celulas propias no se comen entre si (al dividir, se fusionarian aca).
+        if (small.owner === big.owner) return;
+        if (big.mass < small.mass * ratio) return;
+        const reach = R - overlap * small.r;
+        if (reach <= 0) return;
+        const dx = small.x - big.x;
+        const dy = small.y - big.y;
+        if (dx * dx + dy * dy >= reach * reach) return;
+        gone.add(small);
+        killers.set(small.owner, big.owner);
+        this.grow(big, small.mass);
+      });
+    }
+    if (gone.size === 0) return;
+
+    for (const [victim, killer] of killers) {
+      victim.cells = victim.cells.filter((c) => !gone.has(c));
+      if (victim.cells.length === 0) this.kill(victim, killer.name, "eaten");
+    }
+  }
+
+  private grow(cell: Cell, mass: number): void {
+    cell.mass = Math.min(AGAR_CONFIG.cell.maxMass, cell.mass + mass);
+    const owner = cell.owner;
+    const total = owner.mass;
+    if (total > owner.peak) owner.peak = total;
+  }
+
+  /** Las grandes pierden masa de a poco: sin esto el primero que crece no para nunca. */
+  private decay(): void {
+    const { decayMinMass, decayPerSec } = AGAR_CONFIG.cell;
+    const k = decayPerSec * (TICK_MS / 1000);
+    for (const player of this.players.values()) {
+      for (const cell of player.cells) {
+        if (cell.mass > decayMinMass) cell.mass = Math.max(decayMinMass, cell.mass - cell.mass * k);
+      }
+    }
+  }
+
+  private kill(player: Player, by: string | null, reason: AgDead["reason"]): void {
+    const last = player.cells[0];
+    if (last) {
+      player.camX = last.x;
+      player.camY = last.y;
+    }
+    player.cells = [];
+    player.deadAt = this.simTime;
+    if (player.socketId) {
+      const dead: AgDead = {
+        peak: Math.round(player.peak),
+        by,
+        ms: Math.round(this.simTime - player.bornAt),
+        reason,
+      };
+      this.host.emit(player.socketId, "ag:dead", dead);
+    }
+  }
+
+  /** Sala: el primer humano que llega a la meta gana y la arena se congela. */
+  private checkWinner(): void {
+    const target = this.mode.winMass;
+    if (target <= 0) return;
+    for (const player of this.players.values()) {
+      if (player.bot || player.mass < target) continue;
+      this.phase = "over";
+      const msg = { winner: player.name, mass: Math.round(player.mass) };
+      for (const p of this.players.values()) if (p.socketId) this.host.emit(p.socketId, "ag:over", msg);
+      return;
+    }
+  }
+
+  // ---------------------------------------------------------------- comida
+
+  private addPellet(): void {
+    const pellet = new Pellet(
+      this.nextPelletId++,
+      Math.round(20 + Math.random() * (this.size - 40)),
+      Math.round(20 + Math.random() * (this.size - 40)),
+      Math.floor(Math.random() * AGAR_CONFIG.pellet.colors),
+    );
+    this.pellets.set(pellet.id, pellet);
+    this.pelletHash.insert(pellet);
+  }
+
+  private removePellet(pellet: Pellet): void {
+    this.pellets.delete(pellet.id);
+    this.pelletHash.remove(pellet);
+  }
+
+  /** De a poco: que la comida no reaparezca toda junta donde se la acaban de comer. */
+  private refillPellets(): void {
+    for (let i = 0; i < AGAR_CONFIG.pellet.respawnPerTick && this.pellets.size < this.mode.pelletCount; i++) {
+      this.addPellet();
+    }
   }
 
   private stepPlayer(player: Player): void {
@@ -357,6 +544,12 @@ export class Arena {
       if (player.bot) continue;
       if (!player.socketId && this.simTime - player.offSince > this.mode.reconnectGraceMs) {
         this.removePlayer(player);
+        continue;
+      }
+      // Pestana abierta sin tocar nada: en sala es lo que deja cerrar la ronda sin un
+      // reloj (ver `room.afkMs`); en la publica libera el lugar.
+      if (player.alive && this.simTime - player.lastActiveAt > this.mode.afkMs) {
+        this.kill(player, null, "afk");
       }
     }
     // Sin conexiones y sin nadie esperando reconectarse, la arena no tiene para quien
@@ -370,12 +563,31 @@ export class Arena {
     this.broadcastPlayers({ del: [player.id] });
   }
 
+  /**
+   * Lugar para aparecer: de varios candidatos al azar, el mas lejos de cualquier
+   * celula que se lo pueda comer. Aparecer adentro de la boca de alguien no es justo.
+   */
   private spawnPoint(): { x: number; y: number } {
     const margin = 100;
-    return {
-      x: margin + Math.random() * (this.size - margin * 2),
-      y: margin + Math.random() * (this.size - margin * 2),
-    };
+    const danger = AGAR_CONFIG.cell.startMass * AGAR_CONFIG.eat.ratio;
+    let best = { x: this.size / 2, y: this.size / 2 };
+    let bestScore = -Infinity;
+    for (let i = 0; i < 12; i++) {
+      const x = margin + Math.random() * (this.size - margin * 2);
+      const y = margin + Math.random() * (this.size - margin * 2);
+      let score = Infinity;
+      for (const player of this.players.values()) {
+        for (const cell of player.cells) {
+          if (cell.mass < danger) continue;
+          score = Math.min(score, Math.hypot(cell.x - x, cell.y - y) - cell.r);
+        }
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = { x, y };
+      }
+    }
+    return best;
   }
 
   private takeColor(): number {
@@ -399,7 +611,39 @@ export class Arena {
         n: player.lastSeq,
         a: Math.round((this.simTime - player.lastSeqAt) * 10) / 10,
       };
+      this.pelletDiff(player, snap);
       this.host.emit(player.socketId, "ag:snap", snap);
+    }
+  }
+
+  /** Comida nueva y comida que ya no esta, respecto de lo que el cliente tiene dibujado. */
+  private pelletDiff(player: Player, snap: AgSnap): void {
+    const known = player.knownPellets;
+    const add: number[] = [];
+    const del: number[] = [];
+    for (const id of known) {
+      if (!this.pellets.has(id)) {
+        known.delete(id);
+        del.push(id);
+      }
+    }
+    for (const pellet of this.pellets.values()) {
+      if (known.has(pellet.id)) continue;
+      known.add(pellet.id);
+      add.push(pellet.id, pellet.x, pellet.y, pellet.color);
+    }
+    if (add.length > 0) snap.pa = add;
+    if (del.length > 0) snap.pd = del;
+  }
+
+  /** Top 10 por masa y el puesto de cada uno. */
+  private broadcastTop(): void {
+    const ranked = [...this.players.values()].filter((p) => p.alive).sort((a, b) => b.mass - a.mass);
+    const top: [number, number][] = ranked.slice(0, 10).map((p) => [p.id, Math.round(p.mass)]);
+    for (const player of this.players.values()) {
+      if (!player.socketId) continue;
+      const msg: AgTop = { top, rank: player.alive ? ranked.indexOf(player) + 1 : 0, alive: ranked.length };
+      this.host.emit(player.socketId, "ag:top", msg);
     }
   }
 

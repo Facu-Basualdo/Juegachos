@@ -11,7 +11,7 @@ import {
 } from "./constants";
 import { Hud } from "./Hud";
 import { InputController } from "./InputController";
-import { Renderer, type Camera, type CellView } from "./Renderer";
+import { Renderer, type Camera, type CellView, type PelletView } from "./Renderer";
 import { SoundEffects } from "./SoundEffects";
 
 type State = "connecting" | "ready" | "countdown" | "playing" | "dead";
@@ -44,6 +44,8 @@ export class Game {
   private lastTime = 0;
 
   private latest: AgSnap | null = null;
+  /** Comida conocida (el server manda altas y bajas en cada snapshot). */
+  private readonly pellets = new Map<number, PelletView>();
   private camera: Camera = { x: 0, y: 0, viewH: 1000 };
 
   private inputSeq = 0;
@@ -87,10 +89,10 @@ export class Game {
     }
     const socket = new AgarSocket(url, () => ({ mode: "public", aspect: this.aspect() }));
     socket.onInit((init) => this.onInit(init));
-    socket.onSnap((snap) => (this.latest = snap));
+    socket.onSnap((snap) => this.onSnap(snap));
     socket.onPlayers((msg) => this.onPlayers(msg));
     socket.onSpawned(() => this.startPlaying());
-    socket.onDead(() => this.onDead());
+    socket.onDead((dead) => this.onDead(dead.peak, dead.by));
     socket.onStatus((up) => this.hud.setBanner(up || this.state === "connecting" ? null : "Reconectando..."));
     this.socket = socket;
     await socket.connect();
@@ -101,6 +103,8 @@ export class Game {
     this.me = init.me;
     this.renderer.setConfig(init.cfg);
     this.players.clear();
+    // Arena nueva o reconexion: el server vuelve a mandar toda la comida.
+    this.pellets.clear();
     this.onPlayers({ add: init.players });
     if (init.alive) {
       this.startPlaying();
@@ -108,6 +112,13 @@ export class Game {
       this.state = "ready";
       this.hud.showMessage("Agar", "Comete la comida y a las celulas mas chicas.", "ENTER o toca para jugar");
     }
+  }
+
+  private onSnap(snap: AgSnap): void {
+    this.latest = snap;
+    const add = snap.pa;
+    if (add) for (let i = 0; i < add.length; i += 4) this.pellets.set(add[i], { x: add[i + 1], y: add[i + 2], color: add[i + 3] });
+    for (const id of snap.pd ?? []) this.pellets.delete(id);
   }
 
   private onPlayers(msg: { add?: AgPlayerInfo[]; del?: number[] }): void {
@@ -159,10 +170,10 @@ export class Game {
     this.input.enabled = true;
   }
 
-  private onDead(): void {
+  private onDead(peak: number, by: string | null): void {
     this.state = "dead";
     this.input.enabled = false;
-    this.hud.showMessage("Te comieron", "Volve a intentarlo.", "ENTER o toca para jugar");
+    this.hud.showMessage(by ? `Te comio ${by}` : "Te disolviste", `Masa maxima: ${peak}`, "ENTER o toca para jugar");
   }
 
   // ---------------------------------------------------------------- bucle
@@ -174,7 +185,7 @@ export class Game {
     if (this.state === "countdown") this.updateCountdown(dt);
     if (this.state === "playing") this.sendInput(dt, now);
     this.updateCamera();
-    this.renderer.draw(this.ctx, this.cssW, this.cssH, this.camera, this.cellViews());
+    this.renderer.draw(this.ctx, this.cssW, this.cssH, this.camera, this.pellets, this.cellViews());
 
     requestAnimationFrame(this.tick);
   };

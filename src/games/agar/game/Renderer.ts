@@ -8,6 +8,14 @@ export interface Camera {
   viewH: number;
 }
 
+export interface PelletView {
+  x: number;
+  y: number;
+  color: number;
+}
+
+const PELLET_COLORS = ["#f4d35e", "#ee964b", "#f95738", "#9bc53d", "#5bc0eb", "#c3a6ff"];
+
 export interface CellView {
   id: number;
   x: number;
@@ -36,7 +44,14 @@ export class Renderer {
     return cssH / cam.viewH;
   }
 
-  draw(ctx: CanvasRenderingContext2D, cssW: number, cssH: number, cam: Camera, cells: CellView[]): void {
+  draw(
+    ctx: CanvasRenderingContext2D,
+    cssW: number,
+    cssH: number,
+    cam: Camera,
+    pellets: ReadonlyMap<number, PelletView>,
+    cells: CellView[],
+  ): void {
     ctx.fillStyle = "#101418";
     ctx.fillRect(0, 0, cssW, cssH);
     if (!this.cfg) return;
@@ -48,6 +63,7 @@ export class Renderer {
     ctx.translate(-cam.x, -cam.y);
 
     this.drawGrid(ctx, cam, cssW / scale, cssH / scale, scale);
+    this.drawPellets(ctx, cam, cssW / scale, cssH / scale, pellets);
 
     // Las chicas arriba de las grandes no taparian nada que importe; al reves si.
     const sorted = [...cells].sort((a, b) => a.r - b.r);
@@ -81,6 +97,27 @@ export class Renderer {
     ctx.strokeStyle = "rgba(255,255,255,0.35)";
     ctx.lineWidth = 3 / scale;
     ctx.strokeRect(0, 0, size, size);
+  }
+
+  private drawPellets(
+    ctx: CanvasRenderingContext2D,
+    cam: Camera,
+    w: number,
+    h: number,
+    pellets: ReadonlyMap<number, PelletView>,
+  ): void {
+    const r = this.cfg!.pelletRadius;
+    const x0 = cam.x - w / 2 - r;
+    const x1 = cam.x + w / 2 + r;
+    const y0 = cam.y - h / 2 - r;
+    const y1 = cam.y + h / 2 + r;
+    for (const p of pellets.values()) {
+      if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
+      ctx.fillStyle = PELLET_COLORS[p.color % PELLET_COLORS.length];
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   private drawCell(ctx: CanvasRenderingContext2D, cell: CellView, scale: number): void {
