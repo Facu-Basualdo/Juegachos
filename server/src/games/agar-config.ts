@@ -21,8 +21,10 @@ export interface ModeConfig {
   mapSize: number;
   /** Comida que el mapa intenta mantener en todo momento. */
   pelletCount: number;
-  /** Bots que completan la arena (0 = sin bots). Se van a medida que entran humanos. */
+  /** Bots que completan la arena (0 = sin bots). */
   bots: number;
+  /** Los bots se van (al morir) a medida que entran humanos. */
+  botsYield: boolean;
   /** Con una sola vida (salas) no hay reaparicion. */
   respawn: boolean;
   /** Masa con la que se gana la ronda (0 = no hay meta, la arena no termina). */
@@ -67,6 +69,7 @@ export const AGAR_CONFIG = {
     mapSize: 5000,
     pelletCount: 900,
     bots: 10,
+    botsYield: true,
     respawn: true,
     winMass: 0,
     afkMs: 120_000,
@@ -81,7 +84,10 @@ export const AGAR_CONFIG = {
   room: {
     mapSize: 3200,
     pelletCount: 450,
+    // Se quedan aunque la sala este llena: son los que terminan comiendose al que
+    // se queda quieto, que es parte de lo que garantiza que la ronda cierre sola.
     bots: 6,
+    botsYield: false,
     respawn: false,
     winMass: 1000,
     afkMs: 45_000,
@@ -145,6 +151,8 @@ export const AGAR_CONFIG = {
     rateRefillPerSec: 40,
     /** Mensajes descartados (por rate o invalidos) en 10 s antes de cortar la conexion. */
     maxStrikes: 200,
+    /** Minimo entre morir y volver a aparecer (el cliente ya espera la cuenta 3/2/1). */
+    spawnCooldownMs: 1000,
   },
 
   names: {

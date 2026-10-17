@@ -10,7 +10,8 @@
     "start": "node dist/index.js",
     "check:pool": "tsx scripts/pool-physics-check.ts && tsx scripts/pool-match-check.ts && tsx scripts/pool-bot-check.ts",
     "check:pool-net": "tsx scripts/pool-net-check.ts",
-    "check:agar": "tsx scripts/agar-check.ts"
+    "check:agar": "tsx scripts/agar-check.ts",
+    "check:agar-net": "tsx scripts/agar-net-check.ts"
   },
   "dependencies": {
     "an-array-of-spanish-words": "^2.0.0",

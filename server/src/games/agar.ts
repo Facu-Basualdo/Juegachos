@@ -55,6 +55,17 @@ export function registerAgar(io: Server): () => AgarStats {
     let arena: Arena | null = null;
     let player: Player | null = null;
 
+    // Antes que cualquier handler: rate limit, eventos conocidos y tamano. Lo que no
+    // pasa se descarta en silencio (no se llama `next`) y suma una falta; demasiadas
+    // faltas seguidas cortan la conexion. El tope de bytes de socket.io
+    // (`maxHttpBufferSize`, 1 MB) es del server entero y no se baja aca porque Imitame
+    // sube audios: este chequeo es el del juego.
+    const guard = new Guard(() => socket.disconnect(true));
+    socket.use(([event, payload], next) => {
+      if (!guard.allow(event, payload)) return;
+      next();
+    });
+
     socket.on("ag:join", (payload: unknown) => {
       if (arena) return; // un join por socket
       const aspect = readAspect(payload);
@@ -142,6 +153,51 @@ export function registerAgar(io: Server): () => AgarStats {
 }
 
 // ------------------------------------------------------------------ validacion
+
+const EVENTS = new Set(["ag:join", "ag:spawn", "ag:in", "ag:view"]);
+const STRIKE_WINDOW_MS = 10_000;
+
+/**
+ * Rate limit por conexion (token bucket: `rateCapacity` de rafaga, recarga de
+ * `rateRefillPerSec`) mas validacion de evento y tamano. El cliente legitimo manda
+ * ~30 inputs/s de ~40 bytes, asi que nunca toca estos topes.
+ */
+export class Guard {
+  private tokens: number = AGAR_CONFIG.net.rateCapacity;
+  private last = Date.now();
+  private strikes = 0;
+  private windowStart = Date.now();
+
+  constructor(private readonly onAbuse: () => void) {}
+
+  allow(event: unknown, payload: unknown): boolean {
+    const { rateCapacity, rateRefillPerSec, maxMessageBytes } = AGAR_CONFIG.net;
+    const now = Date.now();
+    this.tokens = Math.min(rateCapacity, this.tokens + ((now - this.last) / 1000) * rateRefillPerSec);
+    this.last = now;
+    if (this.tokens < 1) return this.strike();
+    this.tokens -= 1;
+    if (typeof event !== "string" || !EVENTS.has(event)) return this.strike();
+    let size: number;
+    try {
+      size = JSON.stringify(payload ?? null).length;
+    } catch {
+      return this.strike();
+    }
+    if (size > maxMessageBytes) return this.strike();
+    return true;
+  }
+
+  private strike(): false {
+    const now = Date.now();
+    if (now - this.windowStart > STRIKE_WINDOW_MS) {
+      this.windowStart = now;
+      this.strikes = 0;
+    }
+    if (++this.strikes > AGAR_CONFIG.net.maxStrikes) this.onAbuse();
+    return false;
+  }
+}
 
 /**
  * Nombre visible: sin caracteres de control ni simbolos raros (solo letras de

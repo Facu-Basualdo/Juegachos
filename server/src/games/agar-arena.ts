@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { AgDead, AgInit, AgPhase, AgPlayerInfo, AgSnap, AgTop } from "../protocol.js";
 import { SpatialHash } from "./agar-grid.js";
+import { botSteer, newBrain, type BotBrain, type BotCell, type BotWorld } from "./agar-bot.js";
 import {
   AGAR_CONFIG,
   clientConfig,
@@ -114,6 +115,8 @@ export class Player {
 
   /** Comida que este cliente ya tiene dibujada: el snapshot le manda solo las diferencias. */
   readonly knownPellets = new Set<number>();
+  /** Solo los bots: su estado de paseo. */
+  brain: BotBrain | null = null;
 
   constructor(
     readonly id: number,
@@ -188,6 +191,7 @@ export class Arena {
     this.pelletHash = new SpatialHash(this.size, HASH_CELL);
     this.cellHash = new SpatialHash(this.size, HASH_CELL);
     while (this.pellets.size < this.mode.pelletCount) this.addPellet();
+    while (this.botCount < this.botTarget()) this.addBot();
     this.loop = setInterval(() => this.tick(), TICK_MS);
   }
 
@@ -270,6 +274,7 @@ export class Arena {
     if (player.alive || this.phase !== "playing") return false;
     // En sala hay una sola vida: el que ya aparecio y murio queda mirando.
     if (player.everSpawned && !this.mode.respawn) return false;
+    if (this.simTime - player.deadAt < AGAR_CONFIG.net.spawnCooldownMs) return false;
     player.name = name;
     this.broadcastPlayers({ add: [player.info()] });
     const pos = this.spawnPoint();
@@ -343,6 +348,8 @@ export class Arena {
   private step(): void {
     // Terminada (sala con ganador), la arena queda congelada mostrando el final.
     if (this.phase !== "playing") return;
+    if (this.stepNo % AGAR_CONFIG.bots.thinkEvery === 0) this.thinkBots();
+    if (this.stepNo % TOP_EVERY === 0) this.manageBots();
     for (const player of this.players.values()) this.stepPlayer(player);
     this.rebuildCellHash();
     this.eatPellets();
@@ -471,6 +478,60 @@ export class Arena {
       const msg = { winner: player.name, mass: Math.round(player.mass) };
       for (const p of this.players.values()) if (p.socketId) this.host.emit(p.socketId, "ag:over", msg);
       return;
+    }
+  }
+
+  // ---------------------------------------------------------------- bots
+
+  private botTarget(): number {
+    if (!AGAR_CONFIG.bots.enabled) return 0;
+    return this.mode.botsYield ? Math.max(0, this.mode.bots - this.humanCount) : this.mode.bots;
+  }
+
+  private addBot(): void {
+    const names = AGAR_CONFIG.bots.names;
+    const used = new Set([...this.players.values()].filter((p) => p.bot).map((p) => p.name));
+    const name = names.find((n) => !used.has(n)) ?? names[this.nextPlayerId % names.length];
+    const bot = new Player(this.nextPlayerId++, name, this.takeColor(), true, "");
+    bot.brain = newBrain();
+    this.players.set(bot.id, bot);
+    this.spawn(bot, name);
+  }
+
+  /** Una vez por segundo: reaparecen los muertos y, si sobran (entraron humanos), se van. */
+  private manageBots(): void {
+    const target = this.botTarget();
+    let count = this.botCount;
+    for (const bot of this.players.values()) {
+      if (!bot.bot || bot.alive || this.simTime - bot.deadAt < AGAR_CONFIG.bots.respawnMs) continue;
+      if (count > target) {
+        // Se va al morir, no a mitad de vida: desaparecer de golpe se veria como un bug.
+        this.removePlayer(bot);
+        count--;
+      } else {
+        this.spawn(bot, bot.name);
+      }
+    }
+    if (count < target) this.addBot();
+  }
+
+  private thinkBots(): void {
+    for (const bot of this.players.values()) {
+      if (!bot.bot || !bot.brain) continue;
+      const cell = bot.cells[0];
+      if (!cell) continue;
+      const world: BotWorld = {
+        size: this.size,
+        queryCells: (x0, y0, x1, y1, cb) =>
+          this.cellHash.query(x0, y0, x1, y1, (other) => {
+            // La grilla es del paso anterior: puede traer celulas ya comidas.
+            if (other.owner !== bot && other.owner.cells.includes(other)) cb(other as BotCell);
+          }),
+        queryPellets: (x0, y0, x1, y1, cb) => this.pelletHash.query(x0, y0, x1, y1, cb),
+      };
+      const v = botSteer(cell, bot.brain, world, this.simTime);
+      bot.dx = v.x;
+      bot.dy = v.y;
     }
   }
 

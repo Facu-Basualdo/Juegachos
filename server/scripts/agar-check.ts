@@ -20,6 +20,9 @@ function check(name: string, ok: boolean, detail = ""): void {
 }
 
 const TICK_MS = 1000 / AGAR_CONFIG.sim.tickHz;
+// Las reglas se prueban sin bots (que andarian comiendose a los de prueba); los bots
+// tienen su seccion propia, que los vuelve a prender.
+AGAR_CONFIG.bots.enabled = false;
 
 type Sent = { socketId: string; event: string; payload: unknown };
 function makeArena(kind: "public" | "room"): { arena: Arena; sent: Sent[] } {
@@ -125,6 +128,8 @@ function clearPellets(arena: Arena): void {
   check("come si la cubre mayormente", !small.alive && Math.round(big.cells[0].mass) === 150, `masa ${big.cells[0].mass}`);
   const dead = sent.find((m) => m.socketId === "s2" && m.event === "ag:dead")?.payload as { by: string; peak: number } | undefined;
   check("la victima recibe ag:dead con quien la comio", dead?.by === "Grande" && dead.peak === 50, JSON.stringify(dead));
+  check("no se reaparece en el mismo instante", !arena.spawn(small, "Chica"));
+  step(arena, Math.ceil(AGAR_CONFIG.net.spawnCooldownMs / TICK_MS) + 1);
   check("en la publica se puede volver a aparecer", arena.spawn(small, "Chica"));
 }
 
@@ -203,6 +208,54 @@ function clearPellets(arena: Arena): void {
   snap = lastSnap("s1");
   check("culling: al moverme sale la comida vieja y aparece el vecino", (snap.pd?.length ?? 0) > 0 && ids(snap).includes(b.cells[0].id));
 }
+
+// ------------------------------------------------------------------ bots
+
+AGAR_CONFIG.bots.enabled = true;
+{
+  const { arena } = makeArena("public");
+  check("bots: la arena publica arranca con sus bots", arena.botCount === AGAR_CONFIG.public.bots, `${arena.botCount}`);
+  const h = arena.addHuman("h1", "Humano", 1.6);
+  for (const bot of arena.players.values()) if (bot.bot) bot.cells = []; // mueren todos
+  for (const bot of arena.players.values()) if (bot.bot) bot.deadAt = -1e9;
+  step(arena, AGAR_CONFIG.sim.tickHz + 1);
+  check("bots: al entrar un humano, uno cede su lugar", arena.botCount === AGAR_CONFIG.public.bots - 1, `${arena.botCount}`);
+  void h;
+}
+{
+  const { arena } = makeArena("room");
+  clearPellets(arena);
+  // Solo un bot y un humano quieto: el bot lo tiene que encontrar y comer.
+  for (const p of [...arena.players.values()]) if (p.bot) arena.players.delete(p.id);
+  (arena as unknown as { addBot(): void }).addBot();
+  const bot = [...arena.players.values()].find((p) => p.bot)!;
+  const idle = arena.addHuman("r1", "Quieto", 1.6);
+  arena.spawn(idle, "Quieto");
+  place(bot, 1000, 1000, 120);
+  place(idle, 1300, 1150, 20);
+  let steps = 0;
+  while (idle.alive && steps < 40 * 20) {
+    step(arena);
+    steps++;
+  }
+  check("bots: se comen al que se queda quieto", !idle.alive, `${(steps / 40).toFixed(1)} s`);
+}
+{
+  const { arena } = makeArena("public");
+  clearPellets(arena);
+  for (const p of [...arena.players.values()]) if (p.bot) arena.players.delete(p.id);
+  (arena as unknown as { addBot(): void }).addBot();
+  const bot = [...arena.players.values()].find((p) => p.bot)!;
+  const big = arena.addHuman("h1", "Grande", 1.6);
+  arena.spawn(big, "Grande");
+  place(bot, 1000, 1000, 30);
+  place(big, 1150, 1000, 400);
+  const d0 = Math.hypot(bot.cells[0].x - 1150, bot.cells[0].y - 1000);
+  step(arena, 40);
+  const d1 = bot.alive ? Math.hypot(bot.cells[0].x - big.cells[0].x, bot.cells[0].y - big.cells[0].y) : 0;
+  check("bots: huyen del que se los puede comer", bot.alive && d1 > d0, `${d0.toFixed(0)} -> ${d1.toFixed(0)}`);
+}
+AGAR_CONFIG.bots.enabled = false;
 
 // ------------------------------------------------------------------ nombres
 

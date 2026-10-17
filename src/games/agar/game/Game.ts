@@ -396,7 +396,9 @@ export class Game {
       this.toSpectating(`${title}. Masa maxima ${dead.peak}. Mirando la ronda...`);
       return;
     }
-    this.hud.showDead(title, stats, true, getNickname() ?? "");
+    // Sin nombre guardado la vida no entra al ranking (no hay a nombre de quien).
+    const hint = getNickname() ? "" : "  ·  pone tu nombre para el ranking";
+    this.hud.showDead(title, stats + hint, true, getNickname() ?? "");
     this.hud.showRanking(dead.peak);
   }
 
@@ -452,9 +454,35 @@ export class Game {
     this.flushDrops(now - INTERP_DELAY);
     this.updateCamera(dt);
     this.renderer.draw(this.ctx, this.cssW, this.cssH, this.camera, this.pellets, this.cellViews(now), now / 1000);
+    if (this.state === "playing") this.drawJoystick();
 
     requestAnimationFrame(this.tick);
   };
+
+  /** El joystick del celular, en pixeles de pantalla y en tinta (ver DESIGN.md). */
+  private drawJoystick(): void {
+    const stick = this.input.joystick;
+    if (!stick) return;
+    const range = this.input.joystickRange;
+    const { ctx } = this;
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = "#2a2118";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(stick.originX, stick.originY, range, 0, Math.PI * 2);
+    ctx.stroke();
+    const dx = stick.x - stick.originX;
+    const dy = stick.y - stick.originY;
+    const len = Math.hypot(dx, dy) || 1;
+    const k = Math.min(len, range) / len;
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = "#2a2118";
+    ctx.beginPath();
+    ctx.arc(stick.originX + dx * k, stick.originY + dy * k, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 
   /** Si el `ag:spawned` no vuelve (se perdio en un corte), se pide de nuevo. */
   private spawnWait = 0;
