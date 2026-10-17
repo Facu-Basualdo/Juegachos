@@ -121,6 +121,41 @@ function human(arena: Arena, id: string, name: string): Player {
   check("cuerpo: mide lo que dice su masa", Math.abs(a.length - expected) <= 1, `${a.length} puntos (esperado ${expected})`);
 }
 
+{
+  // El cuerpo que arma el CLIENTE con las cabezas de los snapshots (20 Hz) contra el
+  // del server (estela a 40 Hz). Se usa el Trail real del cliente: es lo que dibuja.
+  const { Trail } = await import("../../src/games/viborita/game/Trail.ts");
+  const { arena } = makeArena("public");
+  const p = human(arena, "x", "X");
+  const s = new Snake(1, p, 1000, 1000, 0, 300);
+  const trail = new Trail();
+  const seed: number[] = [];
+  s.walkBody(12, s.bodyLength, (x, y) => seed.push(x, y));
+  trail.seed(seed, 0);
+  let t = 0;
+  for (let i = 0; i < 40 * 6; i++) {
+    const target = Math.sin(t / 700) * 3; // zigzag con curvas cerradas
+    advanceHead(s, target, turnRateOf(s.mass), i % 80 < 30 ? 470 : 230, 0.025);
+    s.pushHead();
+    t += 25;
+    if (i % 2 === 1) trail.push(t, s.x, s.y);
+  }
+  const drawn: number[] = [];
+  trail.body(s.x, s.y, Infinity, s.bodyLength, drawn);
+  let worst = 0;
+  s.walkBody(10, s.bodyLength - 10, (x, y) => {
+    let best = Infinity;
+    for (let i = 0; i + 3 < drawn.length; i += 2) {
+      const ax = drawn[i], ay = drawn[i + 1], bx = drawn[i + 2], by = drawn[i + 3];
+      const vx = bx - ax, vy = by - ay;
+      const k = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy || 1)));
+      best = Math.min(best, Math.hypot(ax + vx * k - x, ay + vy * k - y));
+    }
+    worst = Math.max(worst, best);
+  });
+  check("cuerpo: el que dibuja el cliente coincide con el del server", worst < 1.5, `${worst.toFixed(2)} u de desvio maximo (radio ${radiusOf(300).toFixed(0)})`);
+}
+
 // ------------------------------------------------------------------ spatial hash
 
 {

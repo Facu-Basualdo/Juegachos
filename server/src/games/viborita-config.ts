@@ -92,7 +92,7 @@ export const VIBORITA_CONFIG = {
     rBase: 9,
     rK: 0.6,
     /** largo del cuerpo (u) = lenBase + lenK * masa. */
-    lenBase: 60,
+    lenBase: 100,
     lenK: 3,
     /** Velocidad normal y con turbo (u/s). */
     speed: 230,
