@@ -20,6 +20,8 @@ import { registerLaCuerda } from "./games/lacuerda.js";
 import { registerLaserShow } from "./games/lasershow.js";
 import { registerPool } from "./games/pool.js";
 import { registerLobby } from "./games/lobby.js";
+import { registerAgar } from "./games/agar.js";
+import { AGAR_CONFIG } from "./games/agar-config.js";
 import { impostorWordCount } from "./words-impostor.js";
 
 /**
@@ -63,7 +65,11 @@ const httpServer = createServer((req, res) => {
         // Sockets conectados ahora mismo. Lo consume el auto-update de la netbook
         // (`update-server.sh --auto`): el restart borra el estado en-ronda, que vive
         // en memoria, asi que espera a que no haya nadie jugando. Ver docs/self-host.md.
-        clients: io.engine.clientsCount,
+        // No cuenta a los de la arena publica de Agar: es un mapa abierto que casi
+        // nunca queda vacio y el deploy no saldria nunca. Ellos reconectan solos
+        // despues del reinicio (pierden la vida en curso, no la partida de una sala).
+        clients: Math.max(0, io.engine.clientsCount - agarStats().publicSockets),
+        agar: agarStats(),
       }),
     );
     return;
@@ -74,6 +80,11 @@ const httpServer = createServer((req, res) => {
 
 const io = new Server(httpServer, {
   cors: { origin: ORIGINS && ORIGINS.length > 0 ? ORIGINS : "*", methods: ["GET", "POST"] },
+  // Heartbeat de TODO el server (socket.io no lo configura por namespace). Son los
+  // defaults de socket.io, explicitos porque Cloudflare Tunnel corta un WebSocket
+  // inactivo a los 100 s: no subirlos por encima de eso. Viven en la config de Agar.
+  pingInterval: AGAR_CONFIG.net.pingIntervalMs,
+  pingTimeout: AGAR_CONFIG.net.pingTimeoutMs,
 });
 
 registerWordBomb(io);
@@ -95,6 +106,7 @@ registerLaCuerda(io);
 registerLaserShow(io);
 registerPool(io);
 registerLobby(io);
+const agarStats = registerAgar(io);
 
 httpServer.listen(PORT, () => {
   console.log(
