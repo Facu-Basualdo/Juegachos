@@ -1,10 +1,11 @@
 import type { Server, Socket } from "socket.io";
 import { sanitizeCode } from "../rooms.js";
-import { AGAR_CONFIG } from "./agar-config.js";
-import { Arena, type ArenaHost, type Player } from "./agar-arena.js";
+import { VIBORITA_CONFIG } from "./viborita-config.js";
+import { Arena, type ArenaHost, type Player } from "./viborita-arena.js";
 
 /**
- * Agar (namespace `/agar`, prefijo `ag:`): capa de red y administrador de arenas.
+ * Viborita (namespace `/viborita`, prefijo `vb:`): capa de red y administrador de
+ * arenas.
  *
  * No usa `registerGame` de `rooms.ts` a proposito: ese molde es "una sala de Supabase
  * = un GameRoom con su roster", y la arena publica no tiene codigo ni roster — es un
@@ -15,7 +16,7 @@ import { Arena, type ArenaHost, type Player } from "./agar-arena.js";
  * rangos, nombres); la arena confia en lo que le pasa esta capa.
  */
 
-export interface AgarStats {
+export interface ViboritaStats {
   arenas: number;
   /** Conexiones en arenas publicas: el auto-update de la netbook no las espera. */
   publicSockets: number;
@@ -23,8 +24,8 @@ export interface AgarStats {
   bots: number;
 }
 
-export function registerAgar(io: Server): () => AgarStats {
-  const nsp = io.of("/agar");
+export function registerViborita(io: Server): () => ViboritaStats {
+  const nsp = io.of("/viborita");
   /** Arenas publicas, en orden de creacion: se llena la primera con lugar. */
   const publicArenas: Arena[] = [];
   /** Arenas de sala por `CODIGO:ronda`. */
@@ -44,7 +45,7 @@ export function registerAgar(io: Server): () => AgarStats {
   };
 
   function publicArenaWithRoom(): Arena {
-    const free = publicArenas.find((a) => a.socketCount < AGAR_CONFIG.arena.maxSocketsPerArena);
+    const free = publicArenas.find((a) => a.socketCount < VIBORITA_CONFIG.arena.maxSocketsPerArena);
     if (free) return free;
     const arena = new Arena(`P${++publicSeq}`, "public", host);
     publicArenas.push(arena);
@@ -66,7 +67,7 @@ export function registerAgar(io: Server): () => AgarStats {
       next();
     });
 
-    socket.on("ag:join", (payload: unknown) => {
+    socket.on("vb:join", (payload: unknown) => {
       if (arena) return; // un join por socket
       const aspect = readAspect(payload);
       const mode = field(payload, "mode");
@@ -86,7 +87,7 @@ export function registerAgar(io: Server): () => AgarStats {
           }
         }
         arena = publicArenaWithRoom();
-        player = arena.addHuman(socket.id, AGAR_CONFIG.names.fallback, aspect);
+        player = arena.addHuman(socket.id, VIBORITA_CONFIG.names.fallback, aspect);
         return;
       }
 
@@ -101,7 +102,7 @@ export function registerAgar(io: Server): () => AgarStats {
           arena = new Arena(key, "room", host);
           roomArenas.set(key, arena);
         }
-        // En sala la identidad es el nickname de la sala: un F5 vuelve a su celula.
+        // En sala la identidad es el nickname de la sala: un F5 vuelve a su viborita.
         const existing = arena.findByName(nickname);
         if (existing) {
           if (existing.socketId) nsp.sockets.get(existing.socketId)?.disconnect(true);
@@ -113,23 +114,23 @@ export function registerAgar(io: Server): () => AgarStats {
       }
     });
 
-    socket.on("ag:spawn", (payload: unknown) => {
+    socket.on("vb:spawn", (payload: unknown) => {
       if (!arena || !player) return;
       // En sala el nombre es el de la sala, no el que mande el cliente.
       const name = arena.kind === "room" ? player.name : sanitizeName(field(payload, "name"));
-      arena.spawn(player, name || AGAR_CONFIG.names.fallback);
+      arena.spawn(player, name || VIBORITA_CONFIG.names.fallback);
     });
 
-    socket.on("ag:in", (payload: unknown) => {
+    socket.on("vb:in", (payload: unknown) => {
       if (!arena || !player) return;
-      if (!Array.isArray(payload) || payload.length !== 5) return;
-      const [n, t, dx, dy, act] = payload as unknown[];
-      if (!isInt(n) || n < 1 || !isFiniteNum(t) || !isFiniteNum(dx) || !isFiniteNum(dy) || !isInt(act)) return;
-      if (Math.abs(dx) > 2 || Math.abs(dy) > 2 || act < 0 || act > 3) return;
-      arena.input(player, n, t, dx, dy, act);
+      if (!Array.isArray(payload) || payload.length !== 4) return;
+      const [n, t, angle, boost] = payload as unknown[];
+      if (!isInt(n) || n < 1 || !isFiniteNum(t) || !isFiniteNum(angle) || (boost !== 0 && boost !== 1)) return;
+      if (Math.abs(angle) > 4) return; // un angulo en radianes, ya envuelto en [-pi, pi]
+      arena.input(player, n, t, angle, boost === 1);
     });
 
-    socket.on("ag:view", (payload: unknown) => {
+    socket.on("vb:view", (payload: unknown) => {
       if (!arena || !player) return;
       arena.setAspect(player, readAspect(payload));
     });
@@ -154,7 +155,7 @@ export function registerAgar(io: Server): () => AgarStats {
 
 // ------------------------------------------------------------------ validacion
 
-const EVENTS = new Set(["ag:join", "ag:spawn", "ag:in", "ag:view"]);
+const EVENTS = new Set(["vb:join", "vb:spawn", "vb:in", "vb:view"]);
 const STRIKE_WINDOW_MS = 10_000;
 
 /**
@@ -163,7 +164,7 @@ const STRIKE_WINDOW_MS = 10_000;
  * ~30 inputs/s de ~40 bytes, asi que nunca toca estos topes.
  */
 export class Guard {
-  private tokens: number = AGAR_CONFIG.net.rateCapacity;
+  private tokens: number = VIBORITA_CONFIG.net.rateCapacity;
   private last = Date.now();
   private strikes = 0;
   private windowStart = Date.now();
@@ -171,7 +172,7 @@ export class Guard {
   constructor(private readonly onAbuse: () => void) {}
 
   allow(event: unknown, payload: unknown): boolean {
-    const { rateCapacity, rateRefillPerSec, maxMessageBytes } = AGAR_CONFIG.net;
+    const { rateCapacity, rateRefillPerSec, maxMessageBytes } = VIBORITA_CONFIG.net;
     const now = Date.now();
     this.tokens = Math.min(rateCapacity, this.tokens + ((now - this.last) / 1000) * rateRefillPerSec);
     this.last = now;
@@ -194,7 +195,7 @@ export class Guard {
       this.windowStart = now;
       this.strikes = 0;
     }
-    if (++this.strikes > AGAR_CONFIG.net.maxStrikes) this.onAbuse();
+    if (++this.strikes > VIBORITA_CONFIG.net.maxStrikes) this.onAbuse();
     return false;
   }
 }
@@ -212,7 +213,7 @@ export function sanitizeName(raw: unknown): string {
     .replace(/[^\p{L}\p{N} _.\-]/gu, "")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, AGAR_CONFIG.names.maxLen)
+    .slice(0, VIBORITA_CONFIG.names.maxLen)
     .trim();
 }
 
@@ -222,7 +223,7 @@ function field(payload: unknown, key: string): unknown {
 
 function readAspect(payload: unknown): number {
   const raw = field(payload, "aspect");
-  const { minAspect, maxAspect } = AGAR_CONFIG.view;
+  const { minAspect, maxAspect } = VIBORITA_CONFIG.view;
   return isFiniteNum(raw) ? Math.min(maxAspect, Math.max(minAspect, raw)) : 16 / 9;
 }
 

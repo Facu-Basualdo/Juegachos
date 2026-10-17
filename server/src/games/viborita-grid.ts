@@ -1,5 +1,5 @@
 /**
- * Spatial hash grid de Agar (SIMULATION_ARCHITECTURE.md, ficha 3.3): el mapa partido
+ * Spatial hash grid de Viborita (SIMULATION_ARCHITECTURE.md, ficha 3.3): el mapa partido
  * en baldes cuadrados, para que las colisiones y el culling consulten solo los baldes
  * cercanos en vez de todas las entidades contra todas (nada de O(n^2)).
  *
