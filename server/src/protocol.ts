@@ -1605,6 +1605,8 @@ export interface AgInit {
   players: AgPlayerInfo[];
   /** Ya tiene celula viva (reconexion a mitad de vida). */
   alive: boolean;
+  /** Puede aparecer (en sala, false si ya uso su unica vida: un F5 no da otra). */
+  canSpawn: boolean;
   phase: AgPhase;
 }
 

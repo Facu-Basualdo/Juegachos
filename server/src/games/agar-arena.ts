@@ -249,6 +249,7 @@ export class Arena {
       tk: player.token,
       players: [...this.players.values()].map((p) => p.info()),
       alive: player.alive,
+      canSpawn: this.phase === "playing" && !player.alive && (this.mode.respawn || !player.everSpawned),
       phase: this.phase,
     };
     this.host.emit(socketId, "ag:init", init);
