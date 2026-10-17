@@ -1,6 +1,6 @@
 # MiniGames
 
-Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rhythm Tap, Jump Ball, Reaction Time, City Bloxx, Sliding Puzzle, Asteroids, Mini Frogger, Neon Drift, Odd One Out, Dunk Shot, Memoria, Kunai Throw, Keepers!, Western Shoot, Barra Libre, Crono Ciego, El Trile, PONG, Block Paddle, Simon, Topos, Snake, Ta-Te-Ti, Conecta 4, Mecano, Final Sentence, Neon Sawblades, Space Rush, Lights Out, Boilerbound, Timber!, Puerco Araña, Circuit Breaker, Ring Runner, Pulso de Acero, Memoria de Color, Al Centro, Bomba Palabra, Cadena de Palabras, Hole in None, Cannon Dodge, Pizza Express, Danger Wings, Click the Number, Macaco Tilt, Templo Rodante, Basta, Impostor, Manchon, Imitame, Birome, Papa Caliente, Derrumbe, Luz Roja, Luz Verde, Pista Loca, Marea de Lava, Dalgona, La Cuerda, Telefono Cortado, Laser Show, Poolnight, Minotauro, El Cohete, Chori y Pan, FlagQuest and Agar), each independently playable — except Bomba Palabra, Cadena de Palabras, Basta, Impostor, Manchon, La Escalera, Imitame, Papa Caliente, Derrumbe, Luz Roja, Luz Verde, Pista Loca, Marea de Lava, La Cuerda, Telefono Cortado, Laser Show and Poolnight), which are **rooms-only** (they need a multiplayer room and the game server; see "Game server" below). Agar plays from the landing too, but needs the game server for both its public arena and its room mode — plus a landing page to pick one. (Rocket SpaceX / `rocket-arena` and Patas Largas / `patas-largas` still live in the repo but are hidden from the roster via `hidden: true` in their `meta.ts`: rocket-arena due to errors, Patas Largas because its walk is not playable yet — its simulation work and findings are deliberately kept on main, see its `CLAUDE.md`. Their code stays in place.) Stack: Vite + TypeScript, no framework. Deployed as a static site (Vercel), plus a separate Node game server (`server/`) on Railway for the real-time / server-authoritative games.
+Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rhythm Tap, Jump Ball, Reaction Time, City Bloxx, Sliding Puzzle, Asteroids, Mini Frogger, Neon Drift, Odd One Out, Dunk Shot, Memoria, Kunai Throw, Keepers!, Western Shoot, Barra Libre, Crono Ciego, El Trile, PONG, Block Paddle, Simon, Topos, Snake, Ta-Te-Ti, Conecta 4, Mecano, Final Sentence, Neon Sawblades, Space Rush, Lights Out, Boilerbound, Timber!, Puerco Araña, Circuit Breaker, Ring Runner, Pulso de Acero, Memoria de Color, Al Centro, Bomba Palabra, Cadena de Palabras, Hole in None, Cannon Dodge, Pizza Express, Danger Wings, Click the Number, Macaco Tilt, Templo Rodante, Basta, Impostor, Manchon, Imitame, Birome, Papa Caliente, Derrumbe, Luz Roja, Luz Verde, Pista Loca, Marea de Lava, Dalgona, La Cuerda, Telefono Cortado, Laser Show, Poolnight, Minotauro, El Cohete, Chori y Pan, FlagQuest and Viborita), each independently playable — except Bomba Palabra, Cadena de Palabras, Basta, Impostor, Manchon, La Escalera, Imitame, Papa Caliente, Derrumbe, Luz Roja, Luz Verde, Pista Loca, Marea de Lava, La Cuerda, Telefono Cortado, Laser Show and Poolnight), which are **rooms-only** (they need a multiplayer room and the game server; see "Game server" below). Viborita plays from the landing too, but needs the game server for both its public arena and its room mode — plus a landing page to pick one. (Rocket SpaceX / `rocket-arena` and Patas Largas / `patas-largas` still live in the repo but are hidden from the roster via `hidden: true` in their `meta.ts`: rocket-arena due to errors, Patas Largas because its walk is not playable yet — its simulation work and findings are deliberately kept on main, see its `CLAUDE.md`. Their code stays in place.) Stack: Vite + TypeScript, no framework. Deployed as a static site (Vercel), plus a separate Node game server (`server/`) on Railway for the real-time / server-authoritative games.
 
 ## Conventions (must follow)
 
@@ -223,9 +223,9 @@ del reloj; cada cliente juzga su propia eliminacion en rojo para no castigar la 
 **Pista Loca** (`pista-loca`, Block Party: el server arma el dibujo de
 cada ronda y decide la musica, el color y el tiempo; cada cliente juzga su propia caida),
 **Marea de Lava** (`marea-lava`, pared de plataformas con la lava subiendo: el server manda la
-semilla de la torre y lleva el reloj de la lava), **Agar** (`agar`, clon de agar.io: el server
-simula todo — movimiento, comer, bots — en una arena PUBLICA que se juega desde la landing y en
-arenas de sala; es el unico juego del server que no es solo de sala), **La Cuerda** (`la-cuerda`, puente angosto con dos
+semilla de la torre y lleva el reloj de la lava), **Viborita** (`viborita`, clon de slither.io: el
+server simula todo — movimiento, choques, turbo, bots — en una arena PUBLICA que se juega desde la
+landing y en arenas de sala; es el unico juego del server que no es solo de sala), **La Cuerda** (`la-cuerda`, puente angosto con dos
 cuerdas gigantes que aceleran: el server lleva el reloj del que sale el angulo de cada cuerda y
 resuelve los empujones; cada cliente juzga su propio golpe), **Laser Show** (`laser-show`, escenario
 redondo de programa de TV barrido por lasers: el server manda la semilla del show y el reloj, y
@@ -250,9 +250,9 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
 - `src/index.ts` — crea `io` + health check HTTP (`/health`, devuelve `{ ok: true }`,
   el tamano del diccionario y `clients` = sockets conectados ahora mismo, que es lo que
   usa el auto-update de la maquina self-hosted para no reiniciar con gente jugando; ver
-  `docs/self-host.md`. **`clients` no cuenta la arena publica de Agar**: es un mapa
+  `docs/self-host.md`. **`clients` no cuenta la arena publica de Viborita**: es un mapa
   abierto que casi nunca queda vacio y con el el deploy no saldria nunca; esos
-  jugadores reconectan solos tras el reinicio. El detalle viene aparte en `agar`) + registra los namespaces de cada juego. Escucha en
+  jugadores reconectan solos tras el reinicio. El detalle viene aparte en `viborita`) + registra los namespaces de cada juego. Escucha en
   `PORT` (Railway lo inyecta), CORS a `ALLOWED_ORIGINS` (coma-separado; `*` en dev).
   El `/health` **manda sus propias cabeceras CORS** (echo del `Origin` si esta en
   `ALLOWED_ORIGINS`, `*` sin la lista): el `cors` del `Server` de socket.io solo cubre
@@ -270,7 +270,7 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   usa declara `join(nickname, roster)` y listo.
 - `src/protocol.ts` — tipos de mensajes (por juego: `wb:*` de Bomba Palabra,
   `wc:*` de Cadena de Palabras, `pg:*` de PONG, `bt:*` de Basta, `im:*` de Impostor,
-  `tc:*` de Telefono Cortado, `pt:*` de Manchon, `mt:*` de Imitame, `hp:*` de Papa Caliente, `dr:*` de Derrumbe, `lr:*` de Luz Roja, Luz Verde, `pl:*` de Pista Loca, `ml:*` de Marea de Lava, `lc:*` de La Cuerda, `ls:*` de Laser Show, `bi:*` de Poolnight, `cp:*` de Chori y Pan, `ag:*` de Agar, `lb:*` de La Feria). **Se duplican en el cliente**
+  `tc:*` de Telefono Cortado, `pt:*` de Manchon, `mt:*` de Imitame, `hp:*` de Papa Caliente, `dr:*` de Derrumbe, `lr:*` de Luz Roja, Luz Verde, `pl:*` de Pista Loca, `ml:*` de Marea de Lava, `lc:*` de La Cuerda, `ls:*` de Laser Show, `bi:*` de Poolnight, `cp:*` de Chori y Pan, `vb:*` de Viborita, `lb:*` de La Feria). **Se duplican en el cliente**
   (p.ej. `src/games/word-bomb/game/WordBombTransport.ts`,
   `src/games/word-chain/game/WordChainTransport.ts` y
   `src/games/pong/game/PongProtocol.ts`) por la regla de decoupling (no se
@@ -464,14 +464,17 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   pasa cuando los dos estan en su puerta (`cp:door` -> `cp:level`). Las posiciones solo se
   reenvian (`cp:pos` -> `cp:peer`) al companero y a los que apostaron por esa pareja. Estado
   scopeado por **ronda**. Tope de 300 s. Ver el `CLAUDE.md` de `chori-y-pan`.
-- `src/games/agar.ts`, `agar-arena.ts`, `agar-config.ts`, `agar-grid.ts`, `agar-bot.ts` — Agar
-  (namespace `/agar`, prefijo `ag:`). **No usa `registerGame`**: la arena publica no tiene codigo
+- `src/games/viborita.ts`, `viborita-arena.ts`, `viborita-config.ts`, `viborita-grid.ts`, `viborita-bot.ts` —
+  Viborita (namespace `/viborita`, prefijo `vb:`). **No usa `registerGame`**: la arena publica no tiene codigo
   ni roster, es un mapa abierto que al llenarse (`maxSocketsPerArena`) abre otro; las de sala van
-  por `CODIGO:ronda`. `agar-config.ts` es **toda** la configuracion y viaja al cliente en el
-  `ag:init`, asi que el front no duplica constantes de juego. Paso fijo de 40 Hz con snapshot cada
+  por `CODIGO:ronda`. `viborita-config.ts` es **toda** la configuracion y viaja al cliente en el
+  `vb:init`, asi que el front no duplica constantes de juego. Paso fijo de 40 Hz con snapshot cada
   2 pasos (20 Hz), un snapshot por cliente con culling por viewport, spatial hash para colisiones,
   prediccion con acuse de input como Manchon, rate limit por conexion (`Guard`) y bots con Utility
-  AI. Chequeos: `npm run check:agar` y `npm run check:agar-net`. Ver el `CLAUDE.md` de `agar`.
+  AI. Los snapshots llevan solo las CABEZAS: cada cliente arma los
+  cuerpos con la estela de cabezas, y el cuerpo entero viaja solo cuando una viborita entra a su
+  vista. Chequeos: `npm run check:viborita` y `npm run check:viborita-net`. Ver el `CLAUDE.md` de
+  `viborita` (reemplazo a Agar, el clon de agar.io, antes de mergearse).
 - `src/games/carrace.ts` — `CarRaceSim`: **relay puro**, el sim mas corto del server y el
   unico que no simula nada. Reenvia el snapshot de posicion de cada auto (`cr:pos`) al
   resto de la sala y estampa el nickname del socket emisor (asi nadie mueve el auto ajeno,
@@ -561,7 +564,7 @@ usan). **Degradacion:** depende del juego. PONG degrada con gracia: sin
 sigue siendo 1 jugador en la landing). Neon Drift tambien: sin server el enlace de sala
 cae al broadcast de Supabase de siempre (`RaceChannel`), con su tope de mensajes y su
 cadencia mas baja, pero la carrera es identica. Bomba Palabra, Cadena de Palabras, Basta,
-Impostor, Telefono Cortado, Manchon, Imitame, Papa Caliente, Derrumbe, Luz Roja, Pista Loca, Marea de Lava, La Cuerda, Laser Show, Poolnight y Agar **no** pueden: existen por el server (en Bomba/Cadena porque el
+Impostor, Telefono Cortado, Manchon, Imitame, Papa Caliente, Derrumbe, Luz Roja, Pista Loca, Marea de Lava, La Cuerda, Laser Show, Poolnight y Viborita **no** pueden: existen por el server (en Bomba/Cadena porque el
 diccionario vive ahi; en Basta e Impostor porque el server arbitra las fases, los votos y el
 puntaje —y en Impostor tambien reparte los roles privados; en Telefono Cortado porque es el
 unico que conoce las frases secretas y valida las adivinanzas; en Manchon porque el
@@ -572,7 +575,7 @@ el mismo para todos y solo el server lo puede sortear; en Pista Loca porque el d
 y el ritmo tienen que ser los mismos para todos; en Marea de Lava porque la torre y la lava
 tienen que ser las mismas para todos; en La Cuerda porque el reloj de las cuerdas tiene que ser el
 mismo para todos; en Laser Show porque la semilla y el reloj del show tienen que ser los mismos
-para todos; en Poolnight porque la mesa y las reglas tienen que ser las mismas para todos y los bots viven ahi; en Agar porque
+para todos; en Poolnight porque la mesa y las reglas tienen que ser las mismas para todos y los bots viven ahi; en Viborita porque
 el server simula la arena entera, tambien la publica de la landing), asi
 que sin `VITE_GAME_SERVER_URL` muestran "no disponible" (excepcion deliberada y documentada a la
 regla de degradacion del repo). Chori y Pan queda en el medio: su modo local (dos en la misma compu)
@@ -601,7 +604,7 @@ contra el `/health` y gana la primera que contesta.
 - `resolveGameServerUrl()` — la URL a la que conectarse, con caida al respaldo. **La
   llaman los diecinueve juegos server-side** en su `connect()` (`word-bomb`, `word-chain`,
   `basta`, `impostor`, `telefono-cortado`, `pong`, `car-race`, `paint-turf`, `imitame`,
-  `hot-potato`, `derrumbe`, `luz-roja`, `pista-loca`, `marea-lava`, `la-cuerda`, `laser-show`, `poolnight`, `chori-y-pan`, `agar`), que por eso es `async` y
+  `hot-potato`, `derrumbe`, `luz-roja`, `pista-loca`, `marea-lava`, `la-cuerda`, `laser-show`, `poolnight`, `chori-y-pan`, `viborita`), que por eso es `async` y
   tiene un flag `connecting`
   contra la doble conexion en la ventana del `await`. Si el resolver viviera solo en la
   landing el respaldo seria decorativo: el chip diria "en linea" y los juegos seguirian

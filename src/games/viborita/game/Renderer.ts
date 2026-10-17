@@ -39,7 +39,6 @@ export interface SnakeView {
 const BG = "#d6d3bd";
 const CARD = "#efeee6";
 const INK = "#111111";
-const ACCENT = "#00f0ff";
 
 /** Colores de las viboritas y de la comida (DESIGN.md). El server manda el indice. */
 const COLORS = [
@@ -48,6 +47,11 @@ const COLORS = [
 ];
 /** El mismo color mezclado con blanco: las rayas del lomo. */
 const STRIPES = COLORS.map((c) => mix(c, "#ffffff", 0.45));
+/**
+ * Halo del turbo: el mismo tono, mucho mas claro. Un acento fijo (el cian del sitio)
+ * no servia: sobre una viborita cian se leia como cuerpo, no como turbo.
+ */
+const HALOS = COLORS.map((c) => mix(c, "#ffffff", 0.62));
 
 export class Renderer {
   private cfg: VbClientConfig | null = null;
@@ -186,8 +190,8 @@ export class Renderer {
 
     this.tracePath(ctx, s.points);
     if (s.boosting) {
-      // Turbo: el acento cian del sitio rodeando el contorno.
-      ctx.strokeStyle = ACCENT;
+      // Turbo: un halo claro del mismo color alrededor del contorno de tinta.
+      ctx.strokeStyle = HALOS[s.color % HALOS.length];
       ctx.lineWidth = s.r * 2 + border * 2 + Math.max(10 / scale, s.r * 0.6);
       ctx.stroke();
     }
