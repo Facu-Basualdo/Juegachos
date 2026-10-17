@@ -165,6 +165,45 @@ function clearPellets(arena: Arena): void {
   check("sala: el inactivo se disuelve (la ronda puede cerrar)", !p.alive && dead?.reason === "afk");
 }
 
+// ------------------------------------------------------------------ culling
+
+{
+  const { arena, sent } = makeArena("public");
+  const a = arena.addHuman("s1", "Cerca", 16 / 9);
+  const b = arena.addHuman("s2", "Lejos", 16 / 9);
+  arena.spawn(a, "Cerca");
+  arena.spawn(b, "Lejos");
+  place(a, 500, 500, 20);
+  place(b, 4500, 4500, 20);
+  const broadcast = () => (arena as unknown as { broadcastSnapshots(): void }).broadcastSnapshots();
+  type Snap = { c: number[]; pa?: number[]; pd?: number[] };
+  const lastSnap = (id: string) =>
+    sent.filter((m) => m.socketId === id && m.event === "ag:snap").at(-1)?.payload as Snap;
+
+  sent.length = 0;
+  broadcast();
+  let snap = lastSnap("s1");
+  const ids = (s: Snap) => s.c.filter((_, i) => i % 5 === 0);
+  check("culling: veo mi celula y no la del otro lado del mapa", ids(snap).includes(a.cells[0].id) && !ids(snap).includes(b.cells[0].id));
+  const hh = (AGAR_CONFIG.view.baseHeight / 2) * AGAR_CONFIG.view.cullMargin;
+  const hw = hh * (16 / 9);
+  const pa = snap.pa ?? [];
+  let outside = 0;
+  for (let i = 0; i < pa.length; i += 4) if (Math.abs(pa[i + 1] - 500) > hw || Math.abs(pa[i + 2] - 500) > hh) outside++;
+  check("culling: solo comida adentro de la vista", pa.length > 0 && outside === 0 && pa.length / 4 < arena.pellets.size, `${pa.length / 4} de ${arena.pellets.size}`);
+
+  sent.length = 0;
+  broadcast();
+  snap = lastSnap("s1");
+  check("culling: la comida ya enviada no se repite", !snap.pa && !snap.pd);
+
+  place(a, 4400, 4400, 20);
+  sent.length = 0;
+  broadcast();
+  snap = lastSnap("s1");
+  check("culling: al moverme sale la comida vieja y aparece el vecino", (snap.pd?.length ?? 0) > 0 && ids(snap).includes(b.cells[0].id));
+}
+
 // ------------------------------------------------------------------ nombres
 
 check("nombre: saca simbolos y recorta", sanitizeName("  <b>Hola</b>\u0000 mundo!!!  ") === "bHolab mundo", sanitizeName("  <b>Hola</b>\u0000 mundo!!!  "));

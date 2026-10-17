@@ -2,6 +2,34 @@ import type { Socket } from "socket.io-client";
 import type { AgDead, AgInit, AgInput, AgJoin, AgPlayerInfo, AgSnap, AgTop } from "./AgarProtocol";
 
 /**
+ * Simulador de latencia para probar en local: `?lag=150&jitter=40` en la URL.
+ *
+ * `lag` es la ida y vuelta (ms): se agrega la mitad a cada mensaje que sale y la mitad
+ * a cada uno que llega, mas un extra al azar de 0 a `jitter` en cada sentido. Los
+ * mensajes nunca se adelantan entre si (como en TCP, que es lo que va debajo del
+ * WebSocket). Va aca y no en las devtools porque el "throttling" de red del navegador
+ * no afecta a los WebSockets.
+ */
+const params = typeof location !== "undefined" ? new URLSearchParams(location.search) : null;
+const LAG_MS = Math.max(0, Number(params?.get("lag")) || 0);
+const JITTER_MS = Math.max(0, Number(params?.get("jitter")) || 0);
+
+class LagLine {
+  private last = 0;
+
+  run(fn: () => void): void {
+    if (LAG_MS === 0 && JITTER_MS === 0) {
+      fn();
+      return;
+    }
+    const now = performance.now();
+    const at = Math.max(now + LAG_MS / 2 + Math.random() * JITTER_MS, this.last);
+    this.last = at;
+    setTimeout(fn, at - now);
+  }
+}
+
+/**
  * Transporte socket.io contra el namespace `/agar`. La lib se carga con import
  * dinamico (no pesa en los juegos que no la usan).
  *
@@ -20,6 +48,9 @@ export class AgarSocket {
   private deadCb: (dead: AgDead) => void = () => {};
   private overCb: (msg: { winner: string; mass: number }) => void = () => {};
   private statusCb: (connected: boolean) => void = () => {};
+
+  private readonly up = new LagLine();
+  private readonly down = new LagLine();
 
   /** Token que manda el server para recuperar el jugador tras un corte. */
   private token: string | null = null;
@@ -46,22 +77,25 @@ export class AgarSocket {
     socket.on("connect", () => {
       const msg = this.join();
       if (msg.mode === "public" && this.token) msg.tk = this.token;
-      socket.emit("ag:join", msg);
+      this.send("ag:join", msg);
       this.statusCb(true);
     });
     socket.on("disconnect", () => this.statusCb(false));
     socket.on("connect_error", () => this.statusCb(false));
 
-    socket.on("ag:init", (init: AgInit) => {
+    // Todo lo que llega pasa por la linea de bajada (latencia simulada, si hay).
+    const recv = <T>(event: string, cb: (msg: T) => void) =>
+      socket.on(event, (msg: T) => this.down.run(() => cb(msg)));
+    recv<AgInit>("ag:init", (init) => {
       this.token = init.tk;
       this.initCb(init);
     });
-    socket.on("ag:snap", (snap: AgSnap) => this.snapCb(snap));
-    socket.on("ag:players", (msg: { add?: AgPlayerInfo[]; del?: number[] }) => this.playersCb(msg));
-    socket.on("ag:top", (top: AgTop) => this.topCb(top));
-    socket.on("ag:spawned", (msg: { mass: number }) => this.spawnedCb(msg));
-    socket.on("ag:dead", (dead: AgDead) => this.deadCb(dead));
-    socket.on("ag:over", (msg: { winner: string; mass: number }) => this.overCb(msg));
+    recv<AgSnap>("ag:snap", (snap) => this.snapCb(snap));
+    recv<{ add?: AgPlayerInfo[]; del?: number[] }>("ag:players", (msg) => this.playersCb(msg));
+    recv<AgTop>("ag:top", (top) => this.topCb(top));
+    recv<{ mass: number }>("ag:spawned", (msg) => this.spawnedCb(msg));
+    recv<AgDead>("ag:dead", (dead) => this.deadCb(dead));
+    recv<{ winner: string; mass: number }>("ag:over", (msg) => this.overCb(msg));
   }
 
   get connected(): boolean {
@@ -93,16 +127,23 @@ export class AgarSocket {
     this.statusCb = cb;
   }
 
+  /** Todo lo que sale pasa por la linea de subida (latencia simulada, si hay). */
+  private send(event: string, payload: unknown): void {
+    const socket = this.socket;
+    if (!socket) return;
+    this.up.run(() => socket.emit(event, payload));
+  }
+
   spawn(name: string): void {
-    this.socket?.emit("ag:spawn", { name });
+    this.send("ag:spawn", { name });
   }
 
   sendInput(input: AgInput): void {
-    this.socket?.emit("ag:in", input);
+    this.send("ag:in", input);
   }
 
   sendView(aspect: number): void {
-    this.socket?.emit("ag:view", { aspect: Math.round(aspect * 100) / 100 });
+    this.send("ag:view", { aspect: Math.round(aspect * 100) / 100 });
   }
 
   dispose(): void {

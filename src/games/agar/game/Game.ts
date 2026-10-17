@@ -7,12 +7,16 @@ import {
   INPUT_INTERVAL,
   INPUT_MIN_GAP,
   INPUT_TURN_EPS,
+  INTERP_DELAY,
   MAX_DT,
+  ZOOM_RATE,
 } from "./constants";
 import { Hud } from "./Hud";
 import { InputController } from "./InputController";
+import { Predictor } from "./Predictor";
 import { Renderer, type Camera, type CellView, type PelletView } from "./Renderer";
 import { SoundEffects } from "./SoundEffects";
+import { Timeline } from "./Timeline";
 
 type State = "connecting" | "ready" | "countdown" | "playing" | "dead";
 
@@ -22,9 +26,24 @@ interface PlayerMeta {
   bot: boolean;
 }
 
+interface Pellet extends PelletView {
+  /** Snapshot que la trajo: una baja vieja que sale de la cola no puede borrar un alta nueva. */
+  seq: number;
+}
+
 /**
- * Agar: el server (namespace `/agar`) simula todo y este cliente manda su input y
- * dibuja. Ver `server/src/games/agar-arena.ts`.
+ * Agar: el server (namespace `/agar`) simula todo; este cliente manda su input,
+ * predice sus propias celulas e interpola a las demas. Ver
+ * `server/src/games/agar-arena.ts`.
+ *
+ * Tres relojes conviven en pantalla, y es a proposito:
+ *  - Las celulas PROPIAS van en el presente predicho (`Predictor`): el control
+ *    responde al toque aunque el server este a 150 ms.
+ *  - Las AJENAS van INTERP_DELAY en el pasado (`Timeline`), interpoladas entre dos
+ *    snapshots reales: se mueven suave aunque los snapshots lleguen desparejos.
+ *  - La COMIDA que desaparece se borra cuando la interpolacion llega al snapshot que
+ *    lo informo: borrarla al llegar la hacia desaparecer antes de que la celula ajena
+ *    (dibujada en el pasado) llegara a tocarla.
  */
 export class Game {
   private readonly canvas: HTMLCanvasElement;
@@ -32,6 +51,8 @@ export class Game {
   private readonly hud: Hud;
   private readonly renderer = new Renderer();
   private readonly input: InputController;
+  private readonly timeline = new Timeline();
+  private readonly predictor = new Predictor();
 
   private socket: AgarSocket | null = null;
   private cfg: AgClientConfig | null = null;
@@ -41,16 +62,21 @@ export class Game {
   private state: State = "connecting";
   private countdownTime = 0;
   private lastCountdownIndex = -1;
+  /** Hora del ultimo cuadro (la de requestAnimationFrame). */
   private lastTime = 0;
 
-  private latest: AgSnap | null = null;
   /** Comida conocida (el server manda altas y bajas en cada snapshot). */
-  private readonly pellets = new Map<number, PelletView>();
+  private readonly pellets = new Map<number, Pellet>();
+  /** Bajas de comida esperando a que la interpolacion llegue a su snapshot. */
+  private pendingDrops: { t: number; seq: number; ids: number[] }[] = [];
+  private snapSeq = 0;
+  /** Centro de la camara del espectador que manda el server. */
+  private spectatorAt: { x: number; y: number } | null = null;
+
   private camera: Camera = { x: 0, y: 0, viewH: 1000 };
 
   private inputSeq = 0;
   private inputTimer = 0;
-  private sentDir = { x: 0, y: 0 };
 
   private cssW = 0;
   private cssH = 0;
@@ -72,6 +98,8 @@ export class Game {
       this.hud.showMessage("No disponible", "Agar necesita el game server y no esta configurado (VITE_GAME_SERVER_URL).");
       return;
     }
+    // Para medir en local (ver README): expone el juego a la consola / Playwright.
+    if (new URLSearchParams(location.search).has("debug")) (window as unknown as { __agar: Game }).__agar = this;
     this.hud.showMessage("Agar", "Conectando...");
     void this.connect();
 
@@ -102,28 +130,60 @@ export class Game {
     this.cfg = init.cfg;
     this.me = init.me;
     this.renderer.setConfig(init.cfg);
+    this.predictor.setConfig(init.cfg);
     this.players.clear();
-    // Arena nueva o reconexion: el server vuelve a mandar toda la comida.
-    this.pellets.clear();
     this.onPlayers({ add: init.players });
+    // Arena nueva o reconexion: el server vuelve a mandar toda la comida, y la
+    // numeracion de inputs arranca de cero del otro lado.
+    this.pellets.clear();
+    this.pendingDrops = [];
+    this.timeline.reset();
+    this.predictor.reset();
+    this.inputSeq = 0;
     if (init.alive) {
       this.startPlaying();
-    } else if (this.state === "connecting") {
+    } else if (this.state === "connecting" || this.state === "playing") {
       this.state = "ready";
       this.hud.showMessage("Agar", "Comete la comida y a las celulas mas chicas.", "ENTER o toca para jugar");
     }
   }
 
   private onSnap(snap: AgSnap): void {
-    this.latest = snap;
+    const now = performance.now();
+    const t = this.timeline.push(snap, now);
+    const seq = ++this.snapSeq;
+
     const add = snap.pa;
-    if (add) for (let i = 0; i < add.length; i += 4) this.pellets.set(add[i], { x: add[i + 1], y: add[i + 2], color: add[i + 3] });
-    for (const id of snap.pd ?? []) this.pellets.delete(id);
+    if (add) {
+      for (let i = 0; i < add.length; i += 4) {
+        this.pellets.set(add[i], { x: add[i + 1], y: add[i + 2], color: add[i + 3], seq });
+      }
+    }
+    if (snap.pd) this.pendingDrops.push({ t, seq, ids: snap.pd });
+    this.spectatorAt = snap.cx !== undefined && snap.cy !== undefined ? { x: snap.cx, y: snap.cy } : null;
+
+    if (this.state === "playing") {
+      const own: [number, number, number, number][] = [];
+      const c = snap.c;
+      for (let i = 0; i < c.length; i += 5) if (c[i + 1] === this.me) own.push([c[i], c[i + 2], c[i + 3], c[i + 4]]);
+      this.predictor.reconcile(own, snap.n, snap.a, this.lastTime);
+    }
   }
 
   private onPlayers(msg: { add?: AgPlayerInfo[]; del?: number[] }): void {
     for (const [id, name, color, bot] of msg.add ?? []) this.players.set(id, { name, color, bot: bot === 1 });
     for (const id of msg.del ?? []) this.players.delete(id);
+  }
+
+  /** Aplica las bajas de comida cuyo snapshot ya alcanzo la interpolacion. */
+  private flushDrops(until: number): void {
+    while (this.pendingDrops.length > 0 && this.pendingDrops[0].t <= until) {
+      const { seq, ids } = this.pendingDrops.shift()!;
+      for (const id of ids) {
+        const p = this.pellets.get(id);
+        if (p && p.seq < seq) this.pellets.delete(id);
+      }
+    }
   }
 
   // ---------------------------------------------------------------- flujo
@@ -166,6 +226,7 @@ export class Game {
     this.state = "playing";
     this.hud.hideMessage();
     this.hud.showCountdown(null);
+    this.predictor.reset();
     this.inputTimer = INPUT_INTERVAL;
     this.input.enabled = true;
   }
@@ -173,19 +234,28 @@ export class Game {
   private onDead(peak: number, by: string | null): void {
     this.state = "dead";
     this.input.enabled = false;
+    this.predictor.reset();
     this.hud.showMessage(by ? `Te comio ${by}` : "Te disolviste", `Masa maxima: ${peak}`, "ENTER o toca para jugar");
   }
 
   // ---------------------------------------------------------------- bucle
 
   private tick = (now: number): void => {
-    const dt = Math.min(Math.max(0, (now - this.lastTime) / 1000), MAX_DT);
+    const rawDt = Math.max(0, (now - this.lastTime) / 1000);
+    const dt = Math.min(rawDt, MAX_DT);
     this.lastTime = now;
 
     if (this.state === "countdown") this.updateCountdown(dt);
-    if (this.state === "playing") this.sendInput(dt, now);
-    this.updateCamera();
-    this.renderer.draw(this.ctx, this.cssW, this.cssH, this.camera, this.pellets, this.cellViews());
+    if (this.state === "playing") {
+      // Primero se avanza con el input vigente y despues se manda el nuevo, fechado en
+      // este cuadro: exactamente los tramos que reproduce `reconcile`. Con el tiempo
+      // REAL, sin el tope: el server movio la celula ese tiempo entero.
+      this.predictor.advance(rawDt);
+      this.sendInput(dt, now);
+    }
+    this.flushDrops(now - INTERP_DELAY);
+    this.updateCamera(dt);
+    this.renderer.draw(this.ctx, this.cssW, this.cssH, this.camera, this.pellets, this.cellViews(now));
 
     requestAnimationFrame(this.tick);
   };
@@ -199,10 +269,9 @@ export class Game {
     const dx = mouse.x - this.cssW / 2;
     const dy = mouse.y - this.cssH / 2;
     const len = Math.hypot(dx, dy);
-    // A toda velocidad con el mouse a mas de un radio de distancia; mas cerca, frena.
-    const scale = this.cssH / this.camera.viewH;
-    const full = Math.max(40, this.myRadius() * scale);
     if (len < 1) return { x: 0, y: 0 };
+    // A toda velocidad con el mouse a mas de un radio de distancia; mas cerca, frena.
+    const full = Math.max(40, this.myRadius() * (this.cssH / this.camera.viewH));
     const mag = Math.min(1, len / full);
     return { x: (dx / len) * mag, y: (dy / len) * mag };
   }
@@ -213,72 +282,83 @@ export class Game {
     const dx = Math.round(v.x * 1000) / 1000;
     const dy = Math.round(v.y * 1000) / 1000;
     const act = this.input.consumeActions();
-    const turned = Math.abs(dx - this.sentDir.x) + Math.abs(dy - this.sentDir.y) > INPUT_TURN_EPS;
+    const sent = this.predictor.dir;
+    const turned = Math.abs(dx - sent.x) + Math.abs(dy - sent.y) > INPUT_TURN_EPS;
     if (act === 0 && this.inputTimer < INPUT_INTERVAL && !(turned && this.inputTimer >= INPUT_MIN_GAP)) return;
     this.inputTimer = 0;
-    this.sentDir = { x: dx, y: dy };
-    this.socket?.sendInput([++this.inputSeq, Math.round(now * 10) / 10, dx, dy, act]);
+    const n = ++this.inputSeq;
+    // Fechado con el cuadro, no con performance.now(): la prediccion avanza por
+    // cuadros y el replay tiene que cortar los tramos en los mismos instantes.
+    this.predictor.recordInput(n, now, dx, dy);
+    this.socket?.sendInput([n, Math.round(now * 10) / 10, dx, dy, act]);
   }
 
   // ---------------------------------------------------------------- vista
 
-  private myCells(): { x: number; y: number; mass: number }[] {
-    const out: { x: number; y: number; mass: number }[] = [];
-    const c = this.latest?.c;
-    if (!c) return out;
-    for (let i = 0; i < c.length; i += 5) {
-      if (c[i + 1] === this.me) out.push({ x: c[i + 2], y: c[i + 3], mass: c[i + 4] });
-    }
-    return out;
+  private radiusOf(mass: number): number {
+    return this.cfg ? this.cfg.radiusK * Math.sqrt(mass) : 0;
   }
 
   private myRadius(): number {
-    if (!this.cfg) return 0;
-    let mass = 0;
-    for (const cell of this.myCells()) mass += cell.mass;
-    return this.cfg.radiusK * Math.sqrt(mass);
+    return this.radiusOf(this.predictor.center().mass);
   }
 
-  private updateCamera(): void {
+  private updateCamera(dt: number): void {
     const cfg = this.cfg;
     if (!cfg) return;
-    const mine = this.myCells();
-    if (this.state === "playing" && mine.length > 0) {
-      let x = 0;
-      let y = 0;
-      let m = 0;
-      for (const cell of mine) {
-        x += cell.x * cell.mass;
-        y += cell.y * cell.mass;
-        m += cell.mass;
-      }
-      const r0 = cfg.radiusK * Math.sqrt(cfg.startMass);
-      this.camera = {
-        x: x / m,
-        y: y / m,
-        viewH: cfg.viewBase * Math.pow(Math.max(this.myRadius(), r0) / r0, cfg.viewExp),
-      };
-      return;
+    let target: Camera;
+    if (this.state === "playing" && this.predictor.alive) {
+      const c = this.predictor.center();
+      const r0 = this.radiusOf(cfg.startMass);
+      const viewH = cfg.viewBase * Math.pow(Math.max(this.radiusOf(c.mass), r0) / r0, cfg.viewExp);
+      // Sobre la celula propia, sin suavizar: el mouse se mide desde el centro de la
+      // pantalla, que tiene que ser la celula.
+      target = { x: c.x, y: c.y, viewH };
+      this.camera.x = target.x;
+      this.camera.y = target.y;
+    } else {
+      const at = this.spectatorAt ?? { x: cfg.mapSize / 2, y: cfg.mapSize / 2 };
+      target = { x: at.x, y: at.y, viewH: cfg.spectatorView };
+      const k = 1 - Math.exp(-ZOOM_RATE * dt);
+      this.camera.x += (target.x - this.camera.x) * k;
+      this.camera.y += (target.y - this.camera.y) * k;
     }
-    this.camera = { x: cfg.mapSize / 2, y: cfg.mapSize / 2, viewH: cfg.spectatorView };
+    // El zoom si se suaviza: comer de golpe no puede pegar un salto de camara.
+    const k = 1 - Math.exp(-ZOOM_RATE * dt);
+    this.camera.viewH += (target.viewH - this.camera.viewH) * k;
   }
 
-  private cellViews(): CellView[] {
+  private cellViews(now: number): CellView[] {
     const views: CellView[] = [];
-    const c = this.latest?.c;
-    if (!c || !this.cfg) return views;
-    for (let i = 0; i < c.length; i += 5) {
-      const owner = c[i + 1];
-      const meta = this.players.get(owner);
+    if (!this.cfg) return views;
+    const predicted = this.state === "playing";
+    this.timeline.sample(now - INTERP_DELAY, (id, cell) => {
+      // Las propias salen del predictor, no del pasado interpolado.
+      if (predicted && cell.owner === this.me) return;
+      const meta = this.players.get(cell.owner);
       views.push({
-        id: c[i],
-        x: c[i + 2],
-        y: c[i + 3],
-        r: this.cfg.radiusK * Math.sqrt(c[i + 4]),
+        id,
+        x: cell.x,
+        y: cell.y,
+        r: this.radiusOf(cell.mass),
         color: meta?.color ?? 0,
         name: meta?.name ?? "",
-        mine: owner === this.me,
+        mine: cell.owner === this.me,
       });
+    });
+    if (predicted) {
+      const meta = this.players.get(this.me);
+      for (const [id, c] of this.predictor.cells) {
+        views.push({
+          id,
+          x: c.x + c.visX,
+          y: c.y + c.visY,
+          r: this.radiusOf(c.mass),
+          color: meta?.color ?? 0,
+          name: meta?.name ?? "",
+          mine: true,
+        });
+      }
     }
     return views;
   }

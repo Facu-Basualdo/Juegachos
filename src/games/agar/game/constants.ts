@@ -21,3 +21,22 @@ export const INPUT_INTERVAL = 1 / 30;
 export const INPUT_MIN_GAP = 1 / 30;
 /** Cuanto tiene que cambiar el vector (suma de |d|) para contar como giro. */
 export const INPUT_TURN_EPS = 0.12;
+
+/**
+ * Retraso con el que se dibuja a los demas (ms): dos espaciados de snapshot (2 x 50)
+ * mas margen. Con uno solo, cualquier hipo de red seca el buffer (ver "Interpolar
+ * sobre el reloj del server" en el CLAUDE.md raiz).
+ */
+export const INTERP_DELAY = 110;
+/** Correccion lenta hacia arriba del offset de reloj (deriva entre relojes). */
+export const CLOCK_DRIFT_RATE = 0.01;
+/** Si falta un snapshot, cuanto se sigue el ultimo tramo antes de frenar (ms). */
+export const EXTRAPOLATE_MS = 120;
+/** Inputs propios que se guardan para reconciliar (ms). */
+export const HISTORY_MS = 1000;
+/** Velocidad con que se disuelve en pantalla el resto de una correccion (1/s). */
+export const ERROR_FADE_RATE = 9;
+/** Una correccion mas grande que esto (u) se muestra de golpe en vez de disolverse. */
+export const SNAP_DIST = 220;
+/** Suavizado del zoom de la camara (1/s). */
+export const ZOOM_RATE = 3;

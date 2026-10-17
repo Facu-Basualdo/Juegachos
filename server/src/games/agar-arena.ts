@@ -7,6 +7,7 @@ import {
   modeConfig,
   radiusOf,
   speedOf,
+  viewHeightOf,
   type ArenaKind,
   type ModeConfig,
 } from "./agar-config.js";
@@ -181,7 +182,8 @@ export class Arena {
     readonly kind: ArenaKind,
     private readonly host: ArenaHost,
   ) {
-    this.mode = modeConfig(kind);
+    // Copia: nada de lo que haga una arena puede tocar la config compartida.
+    this.mode = { ...modeConfig(kind) };
     this.size = this.mode.mapSize;
     this.pelletHash = new SpatialHash(this.size, HASH_CELL);
     this.cellHash = new SpatialHash(this.size, HASH_CELL);
@@ -596,41 +598,97 @@ export class Arena {
 
   // ---------------------------------------------------------------- salida
 
+  /**
+   * Un snapshot POR CLIENTE, con solo lo que entra en su vista (culling por viewport).
+   * La vista es la misma cuenta que hace la camara del cliente — centro de masa de sus
+   * celulas y alto `viewHeightOf(radio)` — por la proporcion de su pantalla y con un
+   * margen (`cullMargin`), para que nada aparezca de golpe en el borde.
+   */
   private broadcastSnapshots(): void {
-    const cells: number[] = [];
-    for (const player of this.players.values()) {
-      for (const cell of player.cells) {
-        cells.push(cell.id, player.id, Math.round(cell.x), Math.round(cell.y), Math.round(cell.mass));
-      }
-    }
+    // La grilla del paso puede tener celulas que se comieron despues de armarla.
+    this.rebuildCellHash();
+    let maxR = 0;
+    for (const player of this.players.values()) for (const cell of player.cells) maxR = Math.max(maxR, cell.r);
+
     for (const player of this.players.values()) {
       if (!player.socketId) continue;
+      const view = this.viewOf(player);
       const snap: AgSnap = {
         t: this.simTime,
-        c: cells,
+        c: this.visibleCells(player, view, maxR),
         n: player.lastSeq,
         a: Math.round((this.simTime - player.lastSeqAt) * 10) / 10,
       };
-      this.pelletDiff(player, snap);
+      if (!player.alive) {
+        snap.cx = Math.round(view.x);
+        snap.cy = Math.round(view.y);
+      }
+      this.pelletDiff(player, snap, view);
       this.host.emit(player.socketId, "ag:snap", snap);
     }
   }
 
-  /** Comida nueva y comida que ya no esta, respecto de lo que el cliente tiene dibujado. */
-  private pelletDiff(player: Player, snap: AgSnap): void {
+  /** Centro y medio tamano de lo que ve el jugador (ya con el margen del culling). */
+  private viewOf(player: Player): { x: number; y: number; hw: number; hh: number } {
+    let x = player.camX;
+    let y = player.camY;
+    let viewH = AGAR_CONFIG.view.spectatorHeight;
+    if (player.alive) {
+      let m = 0;
+      x = 0;
+      y = 0;
+      for (const cell of player.cells) {
+        x += cell.x * cell.mass;
+        y += cell.y * cell.mass;
+        m += cell.mass;
+      }
+      x /= m;
+      y /= m;
+      viewH = viewHeightOf(radiusOf(m));
+    }
+    const hh = (viewH / 2) * AGAR_CONFIG.view.cullMargin;
+    return { x, y, hh, hw: hh * player.aspect };
+  }
+
+  private visibleCells(player: Player, view: { x: number; y: number; hw: number; hh: number }, maxR: number): number[] {
+    const out: number[] = [];
+    // Se buscan centros en la vista agrandada por el radio mas grande: una celula
+    // enorme con el centro afuera igual asoma.
+    this.cellHash.query(view.x - view.hw - maxR, view.y - view.hh - maxR, view.x + view.hw + maxR, view.y + view.hh + maxR, (cell) => {
+      const r = cell.r;
+      if (Math.abs(cell.x - view.x) > view.hw + r || Math.abs(cell.y - view.y) > view.hh + r) return;
+      out.push(cell.id, cell.owner.id, Math.round(cell.x), Math.round(cell.y), Math.round(cell.mass));
+    });
+    // Las propias van siempre, aunque el culling las dejara afuera: son la base de la
+    // reconciliacion del cliente.
+    for (const cell of player.cells) {
+      let listed = false;
+      for (let i = 0; i < out.length; i += 5) if (out[i] === cell.id) listed = true;
+      if (!listed) out.push(cell.id, player.id, Math.round(cell.x), Math.round(cell.y), Math.round(cell.mass));
+    }
+    return out;
+  }
+
+  /**
+   * Comida que entra a la vista y la que sale (comida o fuera de rango), respecto de
+   * lo que el cliente ya tiene dibujado. La comida no se mueve, asi que mandarla en
+   * cada snapshot seria repetir lo mismo veinte veces por segundo.
+   */
+  private pelletDiff(player: Player, snap: AgSnap, view: { x: number; y: number; hw: number; hh: number }): void {
     const known = player.knownPellets;
     const add: number[] = [];
     const del: number[] = [];
-    for (const id of known) {
-      if (!this.pellets.has(id)) {
-        known.delete(id);
-        del.push(id);
-      }
-    }
-    for (const pellet of this.pellets.values()) {
-      if (known.has(pellet.id)) continue;
+    const visible = new Set<number>();
+    this.pelletHash.query(view.x - view.hw, view.y - view.hh, view.x + view.hw, view.y + view.hh, (pellet) => {
+      visible.add(pellet.id);
+      if (known.has(pellet.id)) return;
       known.add(pellet.id);
       add.push(pellet.id, pellet.x, pellet.y, pellet.color);
+    });
+    for (const id of known) {
+      if (visible.has(id)) continue;
+      known.delete(id);
+      del.push(id);
     }
     if (add.length > 0) snap.pa = add;
     if (del.length > 0) snap.pd = del;
