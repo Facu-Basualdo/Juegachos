@@ -5,11 +5,11 @@ export const meta: GameEntry = {
   title: "Puerco Araña",
   description: "Lanzá la telaraña, columpiate entre los edificios con impulso de péndulo y llegá lo más lejos que puedas.",
   path: "/games/puerco-arana/",
-  controls: "Mantené clic, espacio o toque para lanzar la telaraña y soltá para columpiarte.",
+  controls: "Mantené clic, espacio o toque para lanzar la telaraña al anclaje marcado y soltá para salir disparado.",
   howTo: {
-    intro: "Lanzá la telaraña y columpiate entre los edificios para llegar lo más lejos posible.",
+    intro: "Columpiate entre los edificios: colgado no te caés, lo que mata es soltarte sin nada a tiro.",
     actions: [
-      { title: "Telaraña", icons: ["space", "click", "hold"], note: "mantené y soltá para columpiarte" },
+      { title: "Telaraña", icons: ["space", "click", "hold"], note: "mantené para engancharte al anclaje marcado, soltá para salir disparado" },
     ],
   },
   accent: "#ff5d8f",
