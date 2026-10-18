@@ -88,11 +88,11 @@ export class Hud {
     this.scoreLineEl.textContent = "";
     this.btnEl.textContent = "Iniciar Juego";
     this.hintEl.innerHTML = `
-      Controles:<br>
-      <span class="overlay__hint-keys">Mantener pulsado</span> (o <span class="overlay__hint-keys">Espacio</span>) : Lanzar telaraña<br>
-      <span class="overlay__hint-keys">Soltar</span> : Soltarse conservando el impulso<br>
-      Soltate a toda velocidad para ganar puntos extra. No toques la calle.<br>
-      <span class="overlay__hint-keys">Enter</span> : Iniciar / Reintentar
+      <span class="overlay__hint-keys">Mantené pulsado</span> (o <span class="overlay__hint-keys">Espacio</span>) : la telaraña va al anclaje marcado<br>
+      <span class="overlay__hint-keys">Soltá</span> : salís disparado con todo el impulso<br>
+      Colgado no te caés nunca: lo que mata es soltarte sin nada a tiro.<br>
+      Las avenidas anchas se cruzan soltándote rápido y hacia arriba.<br>
+      <span class="overlay__hint-keys">Enter</span> o tocá la pantalla : Iniciar
     `;
     this.leaderboard.clear();
     this.overlayEl.classList.remove("hidden");
@@ -114,7 +114,7 @@ export class Hud {
     }
 
     this.btnEl.textContent = "Reintentar";
-    this.hintEl.innerHTML = "Presiona ENTER o toca el botón para volver a jugar";
+    this.hintEl.innerHTML = "Presioná ENTER o tocá la pantalla para volver a jugar";
     this.overlayEl.classList.remove("hidden");
   }
 
