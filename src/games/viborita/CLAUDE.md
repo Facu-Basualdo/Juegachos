@@ -1,5 +1,10 @@
 # Viborita
 
+**Oculto del roster** (`hidden: true` en `meta.ts`) a pedido del programador: en la primera
+prueba real "va re mal". No aparece en la landing ni en las salas, pero el codigo, el
+namespace `/viborita` del server y la pagina `/games/viborita/` siguen ahi (la pagina sale con
+`noindex`).
+
 Clon de slither.io. La cabeza apunta al mouse (con un giro maximo que baja al crecer),
 el cuerpo sigue el camino de la cabeza, comer alarga. Chocar la cabeza contra el
 cuerpo de OTRA viborita mata (el propio no) y el muerto se convierte en comida de su

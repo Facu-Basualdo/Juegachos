@@ -21,6 +21,8 @@ export const meta: GameEntry = {
   order: 1090,
   added: "2026-10-17",
   mobile: true,
+  /** Oculto a pedido del programador: en la prueba real "va re mal". El codigo queda. */
+  hidden: true,
   /**
    * Sin `roomTimeLimitSec`, a pedido del programador, y sin que eso pueda colgar la
    * ronda: termina sola cuando una humana llega a la meta de largo, o cuando ya no
