@@ -9,8 +9,12 @@ import {
   INPUT_INTERVAL,
   INPUT_MIN_GAP,
   INPUT_TURN_EPS,
+  INTERP_FALL_RATE,
   INTERP_MARGIN_MS,
-  INTERP_SPACINGS,
+  INTERP_MAX_MS,
+  INTERP_RISE_RATE,
+  INTERP_START_SPACINGS,
+  PREDICT_EAT_TIMEOUT_MS,
   MAX_DT,
   TRAIL_FORGET_MS,
   VIS_FADE_LEN,
@@ -18,7 +22,7 @@ import {
 } from "./constants";
 import { Hud, type TopRow } from "./Hud";
 import { InputController } from "./InputController";
-import { bodyLengthOf, radiusOf, viewHeightOf, wrapAngle } from "./motion";
+import { bodyLengthOf, pelletRadiusOf, radiusOf, viewHeightOf, wrapAngle } from "./motion";
 import { Predictor } from "./Predictor";
 import { Renderer, type Camera, type PelletView, type SnakeView } from "./Renderer";
 import { SoundEffects } from "./SoundEffects";
@@ -45,6 +49,8 @@ interface PlayerMeta {
 interface Pellet extends PelletView {
   /** Snapshot que la trajo: una baja vieja que sale de la cola no puede borrar un alta nueva. */
   seq: number;
+  /** La cabeza propia ya la toco (prediccion cosmetica): oculta desde este instante, 0 si no. */
+  eatenAt: number;
 }
 
 /** Sin `vb:init` despues de esto (en sala) se da el server por perdido y se reporta. */
@@ -60,7 +66,8 @@ const ROOM_GIVE_UP_MS = 20_000;
  * Tres relojes conviven en pantalla, y es a proposito:
  *  - La viborita PROPIA va en el presente predicho (`Predictor`): gira al toque aunque
  *    el server este a 150 ms.
- *  - Las AJENAS van unos 60 ms en el pasado (`Timeline`): la cabeza interpolada entre
+ *  - Las AJENAS van en el pasado (`Timeline`), lo justo para cubrir el jitter medido
+ *    (35 a 60 ms con una conexion normal): la cabeza interpolada entre
  *    dos snapshots reales y el cuerpo armado con su estela (`Trail`) hasta ese mismo
  *    instante.
  *  - La COMIDA que desaparece se borra cuando la interpolacion llega al snapshot que
@@ -116,8 +123,12 @@ export class Game {
   private spectatorAt: { x: number; y: number } | null = null;
 
   private camera: Camera = { x: 0, y: 0, viewH: 1000 };
-  /** Retraso de interpolacion de las demas (ms), segun la cadencia de snapshots del server. */
+  /** Retraso de interpolacion de las demas (ms): se adapta al jitter medido (ver constants). */
   private interpDelay = 110;
+  /** Panel de red (tecla N o `?net`). */
+  private showNet = new URLSearchParams(location.search).has("net");
+  private fps = 60;
+  private netWindow = { at: 0, bytes: 0, snaps: 0, kbps: 0, sps: 0 };
   private readonly bodyBuf: number[] = [];
 
   private inputSeq = 0;
@@ -137,6 +148,11 @@ export class Game {
     this.resize();
     window.addEventListener("resize", this.resize);
     this.hud.onPlay((name) => this.onPlay(name));
+    window.addEventListener("keydown", (e) => {
+      if (e.code !== "KeyN" || e.repeat || e.target instanceof HTMLInputElement) return;
+      this.showNet = !this.showNet;
+      if (!this.showNet) this.hud.setNet(null);
+    });
 
     // Para medir en local (ver README): expone el juego a la consola / Playwright.
     if (new URLSearchParams(location.search).has("debug")) (window as unknown as { __vb: Game }).__vb = this;
@@ -236,7 +252,7 @@ export class Game {
     this.canSpawn = init.canSpawn;
     this.renderer.setConfig(init.cfg);
     this.predictor.setConfig(init.cfg);
-    this.interpDelay = (INTERP_SPACINGS * 1000) / init.cfg.snapshotHz + INTERP_MARGIN_MS;
+    this.interpDelay = (INTERP_START_SPACINGS * 1000) / init.cfg.snapshotHz + INTERP_MARGIN_MS;
     this.players.clear();
     this.onPlayers({ add: init.players });
     // Arena nueva o reconexion: el server vuelve a mandar toda la comida y todos los
@@ -274,7 +290,7 @@ export class Game {
     const add = snap.pa;
     if (add) {
       for (let i = 0; i < add.length; i += 5) {
-        this.pellets.set(add[i], { x: add[i + 1], y: add[i + 2], color: add[i + 3], mass: add[i + 4] / 10, seq });
+        this.pellets.set(add[i], { x: add[i + 1], y: add[i + 2], color: add[i + 3], mass: add[i + 4] / 10, seq, eatenAt: 0 });
       }
     }
     if (snap.pd) this.pendingDrops.push({ t: t ?? now, seq, ids: snap.pd });
@@ -498,13 +514,87 @@ export class Game {
     if (this.room && !this.reported && this.offlineSince > 0 && now - this.offlineSince > ROOM_GIVE_UP_MS) {
       this.giveUp();
     }
+    this.adaptInterpDelay(dt);
+    this.predictEating(now);
     this.flushDrops(now - this.interpDelay);
     this.updateCamera(dt);
-    this.renderer.draw(this.ctx, this.cssW, this.cssH, this.camera, this.pellets.values(), this.snakeViews(now), now / 1000);
+    this.renderer.draw(this.ctx, this.cssW, this.cssH, this.camera, this.visiblePellets(), this.snakeViews(now), now / 1000);
+    this.updateNetPanel(now, rawDt);
     if (this.state === "playing") this.drawJoystick();
 
     requestAnimationFrame(this.tick);
   };
+
+  /**
+   * Retraso de interpolacion adaptativo ("network buffer"): un espaciado de snapshot
+   * mas el jitter medido mas un margen, alcanzado de a poco (sube rapido, baja lento)
+   * para que el cambio no se vea como un acelerón de las demas.
+   */
+  private adaptInterpDelay(dt: number): void {
+    const cfg = this.cfg;
+    if (!cfg) return;
+    const spacing = 1000 / cfg.snapshotHz;
+    const target = Math.min(INTERP_MAX_MS, spacing + this.timeline.jitter() + INTERP_MARGIN_MS);
+    const diff = target - this.interpDelay;
+    const step = (diff > 0 ? INTERP_RISE_RATE : INTERP_FALL_RATE) * dt;
+    this.interpDelay += Math.max(-step, Math.min(step, diff));
+  }
+
+  /**
+   * Prediccion cosmetica de la comida (como los efectos locales de los shooters): lo
+   * que la boca propia ya toco desaparece en el acto, sin esperar la ida y vuelta. El
+   * largo NO se predice (lo decide el server); si el server no confirma en
+   * PREDICT_EAT_TIMEOUT_MS (otra cabeza llego antes, o la prediccion se equivoco), el
+   * bocado vuelve a aparecer.
+   */
+  private predictEating(now: number): void {
+    const cfg = this.cfg;
+    const head = this.predictor.head;
+    for (const p of this.pellets.values()) {
+      if (p.eatenAt > 0 && now - p.eatenAt > PREDICT_EAT_TIMEOUT_MS) p.eatenAt = 0;
+    }
+    if (!cfg || !head || this.state !== "playing") return;
+    const mouth = radiusOf(cfg, this.predictor.mass) * cfg.mouthK;
+    const hx = head.x + this.predictor.visX;
+    const hy = head.y + this.predictor.visY;
+    for (const p of this.pellets.values()) {
+      if (p.eatenAt > 0) continue;
+      const reach = mouth + pelletRadiusOf(p.mass);
+      const dx = p.x - hx;
+      const dy = p.y - hy;
+      if (dx * dx + dy * dy < reach * reach) p.eatenAt = now;
+    }
+  }
+
+  private *visiblePellets(): Iterable<PelletView> {
+    for (const p of this.pellets.values()) if (p.eatenAt === 0) yield p;
+  }
+
+  /** Panel de red: ida y vuelta, jitter, retraso de interpolacion, snapshots y ancho de banda. */
+  private updateNetPanel(now: number, rawDt: number): void {
+    if (rawDt > 0) this.fps += (1 / rawDt - this.fps) * 0.05;
+    const w = this.netWindow;
+    const socket = this.socket;
+    if (socket && now - w.at >= 1000) {
+      const secs = (now - w.at) / 1000;
+      if (w.at > 0) {
+        w.kbps = (socket.bytesIn - w.bytes) / 1024 / secs;
+        w.sps = (socket.snapsIn - w.snaps) / secs;
+      }
+      w.at = now;
+      w.bytes = socket.bytesIn;
+      w.snaps = socket.snapsIn;
+    }
+    if (!this.showNet) return;
+    this.hud.setNet([
+      `ida y vuelta  ${this.predictor.rtt > 0 ? Math.round(this.predictor.rtt) + " ms" : "-"}`,
+      `jitter p95    ${Math.round(this.timeline.jitter())} ms`,
+      `interpolacion ${Math.round(this.interpDelay)} ms`,
+      `snapshots     ${Math.round(w.sps)} /s`,
+      `bajada        ${w.kbps.toFixed(1)} KB/s`,
+      `fps           ${Math.round(this.fps)}`,
+    ]);
+  }
 
   /** Si el `vb:spawned` no vuelve (se perdio en un corte), se pide de nuevo. */
   private spawnWait = 0;

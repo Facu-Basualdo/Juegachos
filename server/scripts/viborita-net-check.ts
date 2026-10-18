@@ -16,6 +16,7 @@ import { io as connect, type Socket } from "socket.io-client";
 import { registerViborita } from "../src/games/viborita.js";
 import { VIBORITA_CONFIG as C } from "../src/games/viborita-config.js";
 import type { VbInit, VbPlayerInfo, VbSnap } from "../src/protocol.js";
+import { decodeSnap } from "../../src/games/viborita/game/ViboritaCodec.ts";
 
 let failures = 0;
 let checks = 0;
@@ -58,7 +59,11 @@ class Client {
       this.init = init;
       for (const [id, name] of init.players) this.players.set(id, name);
     });
-    this.socket.on("vb:snap", (s: VbSnap) => this.snaps.push(s));
+    // Binario: se decodifica con el codec del cliente.
+    this.socket.on("vb:snap", (data: ArrayBuffer) => {
+      const s: VbSnap | null = decodeSnap(data);
+      if (s) this.snaps.push(s);
+    });
     this.socket.on("vb:players", (m: { add?: VbPlayerInfo[] }) => {
       for (const [id, name] of m.add ?? []) this.players.set(id, name);
     });

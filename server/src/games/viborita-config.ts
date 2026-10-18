@@ -203,6 +203,14 @@ export const VIBORITA_CONFIG = {
 
 export type ArenaKind = VbArenaKind;
 
+// El snapshot binario guarda las posiciones de las cabezas a 0.1 u en 16 bits: el mapa
+// (2R) no puede pasar de 6553 u. Mejor romper al arrancar que mandar posiciones truncadas.
+for (const mode of [VIBORITA_CONFIG.public, VIBORITA_CONFIG.room]) {
+  if (mode.mapRadius * 2 * 10 > 0xffff) {
+    throw new Error(`viborita: mapRadius ${mode.mapRadius} no entra en el snapshot binario (max 3276)`);
+  }
+}
+
 export function modeConfig(kind: ArenaKind): ModeConfig {
   return kind === "public" ? VIBORITA_CONFIG.public : VIBORITA_CONFIG.room;
 }
@@ -225,6 +233,7 @@ export function clientConfig(kind: ArenaKind): VbClientConfig {
     turnBase: s.turnBase,
     turnMassK: s.turnMassK,
     boostMinMass: VIBORITA_CONFIG.boost.minMass,
+    mouthK: s.mouthK,
     viewBase: VIBORITA_CONFIG.view.baseHeight,
     viewExp: VIBORITA_CONFIG.view.exp,
     spectatorView: VIBORITA_CONFIG.view.spectatorHeight,

@@ -84,10 +84,10 @@ Ninguna fila de la matriz de `SIMULATION_ARCHITECTURE.md` es slither; se armo co
   que el cuerpo no se doble de golpe. El server aplica cada input con el buffer de
   jitter (`inputBufferMs`), como Manchon.
 - **Ajenas: interpoladas** en el pasado sobre el reloj de la simulacion
-  (`Timeline.ts`), con un retraso de dos espaciados de snapshot mas 10 ms que sale del
-  `snapshotHz` del server: con snapshots a 40 Hz son **60 ms** (eran 110 con 20 Hz). El
-  cuerpo se arma con los puntos de la estela de hora <= ese instante. Medido: 0 a 1
-  tiron cada mil cuadros, con y sin `?lag=150`.
+  (`Timeline.ts`), con un retraso **adaptativo** (ver "Tecnicas de red" abajo): un
+  espaciado de snapshot mas el jitter medido mas 10 ms. El cuerpo se arma con los
+  puntos de la estela de hora <= ese instante. Medido: 0 a 1 tiron cada mil cuadros,
+  con y sin `?lag=150&jitter=40`.
 
 ## Compensacion de lag (por que no moris cuando el otro te tendria que chocar)
 
@@ -120,6 +120,46 @@ La solucion es la de los shooters, **juzgar el choque en la vista del que lo da*
   200 ms, y la rival que mete la cabeza en su cuerpo muere ella.
 - **Comida**: altas (`pa`, con color y masa) y bajas (`pd`) respecto de lo que el
   cliente ya tiene; las bajas se aplican cuando la interpolacion alcanza su snapshot.
+
+## Tecnicas de red (las de los shooters, como Fortnite)
+
+Pedido del programador: replicar lo que se pueda de los juegos grandes. Estado de cada
+tecnica:
+
+| Tecnica | Donde | Estado |
+| --- | --- | --- |
+| Server autoritativo, el cliente solo manda input | `viborita.ts` / `viborita-arena.ts` | Hecho |
+| Prediccion del jugador + reconciliacion por acuse | `Predictor.ts` | Hecho |
+| Interpolacion de los demas sobre el reloj del server | `Timeline.ts` | Hecho |
+| Compensacion de lag (juzgar en la vista del que lo hace) | `crashes()` + `Snake.offsetAt` | Hecho |
+| Relevancia / culling por vista | `snakeDiff`, `pelletDiff` | Hecho |
+| Estado que no cambia viaja una vez (comida, cuerpos al entrar) | `pa`/`pd`, `k` | Hecho |
+| **Replicacion binaria cuantizada** | `viborita-codec.ts` / `ViboritaCodec.ts` | Hecho: cabeza en 17 bytes (eran ~45 en JSON); el ejemplo del check pesa 108 contra 206 |
+| **Buffer de interpolacion adaptativo al jitter** | `Timeline.jitter`, `Game.adaptInterpDelay` | Hecho: percentil 95 del atraso de llegada; sube rapido, baja lento |
+| **Prediccion cosmetica** (lo local se ve al instante) | `Game.predictEating` | Hecho: la comida que toca la boca propia se oculta ya y vuelve si el server no confirma en 600 ms. El largo NO se predice |
+| **Snapshots a la hora justa** | `WAKE_MS` en la arena | Hecho: el timer se despierta cada 5 ms; con el timer al paso, Windows (15.6 ms) los mandaba de a dos (jitter local 26 ms -> 13) |
+| Tick y envio altos | `tickHz` 40, snapshot por paso | Hecho (Fortnite usa ~30 Hz) |
+| Sin compresion por mensaje y sin Nagle | socket.io / ws por defecto | Verificado: `perMessageDeflate` apagado, `setNoDelay` prendido |
+| Panel de estadisticas de red | tecla **N** o `?net` | Hecho: ida y vuelta, jitter, interpolacion, snapshots/s, KB/s, fps |
+
+Lo que **no** se puede replicar, y por que:
+
+- **UDP** (lo que usan todos los shooters: un paquete perdido no frena a los que
+  vienen atras). En el navegador las opciones son WebRTC DataChannel o WebTransport
+  (QUIC), y **Cloudflare Tunnel solo pasa HTTP/WebSocket sobre TCP** hasta la netbook.
+  Con TCP, un paquete perdido retiene a los siguientes hasta la retransmision (un tiron
+  de ~1 RTT); no hay forma de evitarlo sin cambiar de hosting.
+- **Servidores por region**: hay un solo server (la netbook en Argentina); para alguien
+  lejos, la latencia la pone la distancia.
+- **Replication graph / dormancy** de Unreal: optimizaciones para 100 jugadores con
+  miles de objetos; con 40 conexiones por arena el culling simple alcanza.
+- **Extrapolar a las demas al presente** (dead reckoning): choca con la compensacion de
+  lag, que juzga contra lo que se ve. Mostrarlas adelantadas haria que se vea una cosa y
+  se juzgue otra.
+
+Medido en localhost con el server en Windows: interpolacion de 110 ms fija a ~48 ms
+adaptativa, ancho de banda de bajada ~3-4 KB/s, 0 tirones. Con `?lag=150&jitter=40`:
+interpolacion ~81 ms, 1 tiron en 600 cuadros.
 
 ## Reglas (viborita-config.ts)
 

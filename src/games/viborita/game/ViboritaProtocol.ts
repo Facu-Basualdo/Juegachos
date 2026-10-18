@@ -27,6 +27,8 @@ export interface VbClientConfig {
   turnBase: number;
   turnMassK: number;
   boostMinMass: number;
+  /** Alcance de la boca (fraccion del radio): con eso el cliente predice la comida que come. */
+  mouthK: number;
   viewBase: number;
   viewExp: number;
   spectatorView: number;
@@ -122,7 +124,8 @@ export interface VbClientToServer {
 /** Server -> Cliente. */
 export interface VbServerToClient {
   "vb:init": (msg: VbInit) => void;
-  "vb:snap": (msg: VbSnap) => void;
+  /** `VbSnap` codificado en binario (ver `viborita-codec.ts` / `ViboritaCodec.ts`). */
+  "vb:snap": (msg: ArrayBuffer) => void;
   "vb:players": (msg: { add?: VbPlayerInfo[]; del?: number[] }) => void;
   "vb:top": (msg: VbTop) => void;
   "vb:spawned": (msg: { mass: number }) => void;

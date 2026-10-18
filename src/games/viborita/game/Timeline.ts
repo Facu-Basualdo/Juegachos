@@ -19,6 +19,8 @@ interface Frame {
 
 /** Cuanto historial se guarda (ms). Sobra contra el retraso de interpolacion. */
 const KEEP_MS = 800;
+/** Cuantas muestras de demora se guardan para medir el jitter (~2 s a 40 Hz). */
+const JITTER_SAMPLES = 80;
 
 /**
  * Linea de tiempo de los snapshots, para dibujar a las DEMAS cabezas interpoladas.
@@ -32,10 +34,38 @@ const KEEP_MS = 800;
 export class Timeline {
   private frames: Frame[] = [];
   private clockOffset: number | null = null;
+  /** Cuanto tarde llego cada snapshot respecto del mas rapido (ms), en anillo. */
+  private readonly lateness: number[] = [];
+  private lateIdx = 0;
+  private jitterP95 = 0;
+  private pushes = 0;
 
   reset(): void {
     this.frames = [];
     this.clockOffset = null;
+    this.lateness.length = 0;
+    this.lateIdx = 0;
+    this.jitterP95 = 0;
+  }
+
+  /**
+   * Jitter de llegada: el percentil 95 de cuanto mas tarde que el snapshot mas rapido
+   * llegan los demas (ms). Es lo que tiene que cubrir el retraso de interpolacion para
+   * que casi nunca falte el snapshot siguiente.
+   */
+  jitter(): number {
+    return this.jitterP95;
+  }
+
+  private recordLateness(late: number): void {
+    const v = Math.max(0, late);
+    if (this.lateness.length < JITTER_SAMPLES) this.lateness.push(v);
+    else this.lateness[this.lateIdx] = v;
+    this.lateIdx = (this.lateIdx + 1) % JITTER_SAMPLES;
+    // Ordenar 80 numeros cada 10 snapshots no cuesta nada.
+    if (++this.pushes % 10 !== 0) return;
+    const sorted = [...this.lateness].sort((a, b) => a - b);
+    this.jitterP95 = sorted[Math.floor(0.95 * (sorted.length - 1))];
   }
 
   /**
@@ -53,6 +83,7 @@ export class Timeline {
     if (this.clockOffset === null || sample < this.clockOffset) this.clockOffset = sample;
     else this.clockOffset += (sample - this.clockOffset) * CLOCK_DRIFT_RATE;
     const t = snap.t + this.clockOffset;
+    this.recordLateness(now - t);
 
     const tail = this.frames[this.frames.length - 1];
     if (tail && t <= tail.t) return null;

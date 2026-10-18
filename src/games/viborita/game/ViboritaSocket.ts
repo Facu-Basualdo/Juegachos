@@ -1,4 +1,5 @@
 import type { Socket } from "socket.io-client";
+import { decodeSnap } from "./ViboritaCodec";
 import type { VbDead, VbInit, VbInput, VbJoin, VbPlayerInfo, VbSnap, VbTop } from "./ViboritaProtocol";
 
 /**
@@ -52,6 +53,10 @@ export class ViboritaSocket {
   private readonly up = new LagLine();
   private readonly down = new LagLine();
 
+  /** Bytes y snapshots recibidos (para el panel de red). */
+  bytesIn = 0;
+  snapsIn = 0;
+
   /** Token que manda el server para recuperar el jugador tras un corte. */
   private token: string | null = null;
 
@@ -90,7 +95,13 @@ export class ViboritaSocket {
       this.token = init.tk;
       this.initCb(init);
     });
-    recv<VbSnap>("vb:snap", (snap) => this.snapCb(snap));
+    // El snapshot llega en binario (ver ViboritaCodec.ts).
+    recv<ArrayBuffer>("vb:snap", (data) => {
+      this.bytesIn += data.byteLength;
+      this.snapsIn++;
+      const snap = decodeSnap(data);
+      if (snap) this.snapCb(snap);
+    });
     recv<{ add?: VbPlayerInfo[]; del?: number[] }>("vb:players", (msg) => this.playersCb(msg));
     recv<VbTop>("vb:top", (top) => this.topCb(top));
     recv<{ mass: number }>("vb:spawned", () => this.spawnedCb());

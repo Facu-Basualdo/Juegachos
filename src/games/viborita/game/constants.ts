@@ -20,12 +20,29 @@ export const INPUT_MIN_GAP = 1 / 30;
 export const INPUT_TURN_EPS = 0.06;
 
 /**
- * Retraso con el que se dibuja a las demas: dos espaciados de snapshot mas un margen
- * (con uno solo, cualquier hipo de red seca el buffer). Sale de la cadencia que manda
- * el server (`snapshotHz`): a 40 Hz son 2 x 25 + 10 = 60 ms.
+ * Retraso con el que se dibuja a las demas: un espaciado de snapshot mas lo que llegan
+ * tarde los paquetes (el percentil 95 del jitter medido, ver `Timeline.jitter`) mas un
+ * margen. Es el "network buffer" adaptativo de los shooters: con buena conexion baja
+ * solo (a 40 Hz y sin jitter, 25 + 10 = 35 ms) y con una conexion irregular sube hasta
+ * dejar de trabarse, en vez de ser un numero fijo pensado para el peor caso.
  */
-export const INTERP_SPACINGS = 2;
 export const INTERP_MARGIN_MS = 10;
+/** Retraso al conectar, antes de tener mediciones: dos espaciados de snapshot + margen. */
+export const INTERP_START_SPACINGS = 2;
+/** Techo del retraso adaptativo (ms). */
+export const INTERP_MAX_MS = 250;
+/**
+ * Cuanto puede cambiar el retraso por segundo (ms/s). Sube rapido (si el jitter crece,
+ * cada cuadro de demora es un tiron) y baja despacio (bajar de golpe adelanta el reloj
+ * de las demas y se ve como un acelerón).
+ */
+export const INTERP_RISE_RATE = 120;
+export const INTERP_FALL_RATE = 15;
+/**
+ * Comida que la cabeza propia ya toco: se oculta al instante (prediccion cosmetica) y
+ * vuelve a aparecer si el server no confirma que se la comio en este tiempo (ms).
+ */
+export const PREDICT_EAT_TIMEOUT_MS = 600;
 /** Correccion lenta hacia arriba del offset de reloj (deriva entre relojes). */
 export const CLOCK_DRIFT_RATE = 0.01;
 /** Si falta un snapshot, cuanto se sigue el ultimo tramo antes de frenar (ms). */

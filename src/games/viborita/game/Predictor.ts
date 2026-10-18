@@ -35,6 +35,8 @@ export class Predictor {
   readonly trail = new Trail();
   /** Ultimo input enviado: el que el server esta aplicando. */
   dir = { angle: 0, boost: false };
+  /** Ida y vuelta medida con los acuses de input (ms), para el panel de red. */
+  rtt = 0;
   private inputs: SentInput[] = [];
   private cfg: VbClientConfig | null = null;
 
@@ -94,7 +96,13 @@ export class Predictor {
 
     let from = this.inputs.findIndex((i) => i.n === ack);
     if (from > 0) this.inputs.splice(0, from);
-    if (from >= 0) from = 0;
+    if (from >= 0) {
+      from = 0;
+      // Desde que se mando el input acusado hasta ahora, menos lo que el server ya lo
+      // venia aplicando: la ida y vuelta (incluye el buffer de jitter del server).
+      const sample = performance.now() - this.inputs[0].t - applied;
+      if (sample > 0 && sample < HISTORY_MS) this.rtt = this.rtt === 0 ? sample : this.rtt + (sample - this.rtt) * 0.1;
+    }
     // Acuse que ya no esta en la lista (red muy lenta) o todavia ninguno: se
     // reproducen los posteriores al acuse desde la cabeza del server.
     const start = from >= 0 ? 0 : this.inputs.findIndex((i) => i.n > ack);

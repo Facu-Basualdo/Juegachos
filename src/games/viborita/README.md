@@ -38,7 +38,8 @@ Agregar a la URL:
   TCP).
 
 Va en el cliente porque el throttling de red de las devtools no afecta a los
-WebSockets. `?debug=1` ademas expone el juego en `window.__vb` (por ejemplo
+WebSockets. La tecla **N** (o `?net` en la URL) muestra el panel de red: ida y vuelta,
+jitter, retraso de interpolacion, snapshots por segundo, KB/s y fps. `?debug=1` ademas expone el juego en `window.__vb` (por ejemplo
 `__vb.predictor.visX` para ver el resto de correccion de la cabeza propia).
 
 ## Chequeos

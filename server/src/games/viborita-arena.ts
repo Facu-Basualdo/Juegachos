@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { VbDead, VbInit, VbPhase, VbPlayerInfo, VbSnap, VbTop } from "../protocol.js";
 import { SpatialHash } from "./viborita-grid.js";
+import { encodeSnap } from "./viborita-codec.js";
 import { botSteer, newBrain, type BotBrain, type BotWorld } from "./viborita-bot.js";
 import {
   VIBORITA_CONFIG as C,
@@ -36,6 +37,15 @@ import {
  */
 
 const TICK_MS = 1000 / C.sim.tickHz;
+/**
+ * Cada cuanto se despierta el timer (ms). Mas seguido que el paso a proposito: el paso
+ * sigue siendo fijo (lo cuenta el acumulador), pero cada snapshot sale a menos de 5 ms
+ * de su hora. Con el timer al paso, en Windows (resolucion ~15.6 ms) los snapshots
+ * salian de a dos y despues un hueco: 26 ms de jitter medido en localhost, que el
+ * cliente tenia que cubrir con mas retraso de interpolacion. Un despertar sin paso que
+ * dar no cuesta nada.
+ */
+const WAKE_MS = 5;
 /** Lado de un balde de la spatial hash. */
 const HASH_CELL = 120;
 /** Pasos entre dos `vb:top` (1 por segundo). */
@@ -398,7 +408,7 @@ export class Arena {
     this.segHash = new SpatialHash(this.R * 2, HASH_CELL);
     while (this.naturalPellets < this.mode.pelletCount) this.addNaturalPellet();
     while (this.botCount < this.botTarget()) this.addBot();
-    this.loop = setInterval(() => this.tick(), TICK_MS);
+    this.loop = setInterval(() => this.tick(), WAKE_MS);
   }
 
   // ---------------------------------------------------------------- conexiones
@@ -907,7 +917,7 @@ export class Arena {
       }
       this.snakeDiff(player, snap, view);
       this.pelletDiff(player, snap, view);
-      this.host.emit(player.socketId, "vb:snap", snap);
+      this.host.emit(player.socketId, "vb:snap", encodeSnap(snap));
     }
   }
 

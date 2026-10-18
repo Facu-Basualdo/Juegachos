@@ -474,7 +474,9 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   AI. Es el unico juego del server con **compensacion de lag**: cada input dice que instante del
   server estaba dibujando el cliente y el choque de esa cabeza se juzga contra los cuerpos
   ajenos rebobinados a ese instante (tope de 300 ms), asi nadie muere por algo que en su
-  pantalla no toco. Snapshots a 40 Hz e interpolacion de 60 ms. Los snapshots llevan solo las CABEZAS: cada cliente arma los
+  pantalla no toco. Snapshots a 40 Hz y en **binario cuantizado** (`viborita-codec.ts`, duplicado
+  en el cliente: una cabeza son 17 bytes en vez de ~45 en JSON), con interpolacion **adaptativa
+  al jitter** medido en el cliente. Los snapshots llevan solo las CABEZAS: cada cliente arma los
   cuerpos con la estela de cabezas, y el cuerpo entero viaja solo cuando una viborita entra a su
   vista. Chequeos: `npm run check:viborita` y `npm run check:viborita-net`. Ver el `CLAUDE.md` de
   `viborita` (reemplazo a Agar, el clon de agar.io, antes de mergearse).

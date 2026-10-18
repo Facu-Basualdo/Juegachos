@@ -174,6 +174,32 @@ body {
   display: block;
 }
 
+/* Panel de red (tecla N): una tarjeta mas del sitio, con numeros tabulares. */
+.vb-net {
+  position: absolute;
+  left: 14px;
+  top: 62px;
+  display: none;
+  padding: 10px 14px;
+  background: var(--card);
+  border: 2.5px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 0 6px 0 -2px var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+}
+
+.vb-hud--room .vb-net {
+  top: 96px;
+}
+
+.vb-net.is-shown {
+  display: block;
+}
+
 /* Turbo en pantalla (solo en pantallas tactiles). */
 .vb-turbo {
   position: absolute;
