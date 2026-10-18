@@ -9,7 +9,8 @@ import {
   INPUT_INTERVAL,
   INPUT_MIN_GAP,
   INPUT_TURN_EPS,
-  INTERP_DELAY,
+  INTERP_MARGIN_MS,
+  INTERP_SPACINGS,
   MAX_DT,
   TRAIL_FORGET_MS,
   VIS_FADE_LEN,
@@ -59,7 +60,7 @@ const ROOM_GIVE_UP_MS = 20_000;
  * Tres relojes conviven en pantalla, y es a proposito:
  *  - La viborita PROPIA va en el presente predicho (`Predictor`): gira al toque aunque
  *    el server este a 150 ms.
- *  - Las AJENAS van INTERP_DELAY en el pasado (`Timeline`): la cabeza interpolada entre
+ *  - Las AJENAS van unos 60 ms en el pasado (`Timeline`): la cabeza interpolada entre
  *    dos snapshots reales y el cuerpo armado con su estela (`Trail`) hasta ese mismo
  *    instante.
  *  - La COMIDA que desaparece se borra cuando la interpolacion llega al snapshot que
@@ -115,6 +116,8 @@ export class Game {
   private spectatorAt: { x: number; y: number } | null = null;
 
   private camera: Camera = { x: 0, y: 0, viewH: 1000 };
+  /** Retraso de interpolacion de las demas (ms), segun la cadencia de snapshots del server. */
+  private interpDelay = 110;
   private readonly bodyBuf: number[] = [];
 
   private inputSeq = 0;
@@ -233,6 +236,7 @@ export class Game {
     this.canSpawn = init.canSpawn;
     this.renderer.setConfig(init.cfg);
     this.predictor.setConfig(init.cfg);
+    this.interpDelay = (INTERP_SPACINGS * 1000) / init.cfg.snapshotHz + INTERP_MARGIN_MS;
     this.players.clear();
     this.onPlayers({ add: init.players });
     // Arena nueva o reconexion: el server vuelve a mandar toda la comida y todos los
@@ -494,7 +498,7 @@ export class Game {
     if (this.room && !this.reported && this.offlineSince > 0 && now - this.offlineSince > ROOM_GIVE_UP_MS) {
       this.giveUp();
     }
-    this.flushDrops(now - INTERP_DELAY);
+    this.flushDrops(now - this.interpDelay);
     this.updateCamera(dt);
     this.renderer.draw(this.ctx, this.cssW, this.cssH, this.camera, this.pellets.values(), this.snakeViews(now), now / 1000);
     if (this.state === "playing") this.drawJoystick();
@@ -535,7 +539,10 @@ export class Game {
     // Fechado con el cuadro, no con performance.now(): la prediccion avanza por
     // cuadros y el replay tiene que cortar los tramos en los mismos instantes.
     this.predictor.recordInput(n, now, angle, boost);
-    this.socket?.sendInput([n, Math.round(now * 10) / 10, angle, boost ? 1 : 0]);
+    // Que instante del server estoy dibujando de las demas: el server juzga los choques
+    // de mi cabeza contra eso (compensacion de lag), no contra el presente que no veo.
+    const view = this.timeline.serverTimeAt(now - this.interpDelay);
+    this.socket?.sendInput([n, Math.round(now * 10) / 10, angle, boost ? 1 : 0, view === null ? -1 : Math.round(view)]);
   }
 
   // ---------------------------------------------------------------- vista
@@ -566,7 +573,7 @@ export class Game {
     const views: SnakeView[] = [];
     const cfg = this.cfg;
     if (!cfg) return views;
-    const rt = now - INTERP_DELAY;
+    const rt = now - this.interpDelay;
     const playing = this.state === "playing";
     this.timeline.sample(rt, (sid, head) => {
       // La propia sale del predictor, no del pasado interpolado.

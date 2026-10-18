@@ -17,7 +17,7 @@ interface Frame {
   heads: Map<number, SnapHead>;
 }
 
-/** Cuanto historial se guarda (ms). Sobra contra el INTERP_DELAY. */
+/** Cuanto historial se guarda (ms). Sobra contra el retraso de interpolacion. */
 const KEEP_MS = 800;
 
 /**
@@ -36,6 +36,15 @@ export class Timeline {
   reset(): void {
     this.frames = [];
     this.clockOffset = null;
+  }
+
+  /**
+   * El instante de la simulacion del server que corresponde a un instante local, o
+   * null si todavia no llego ningun snapshot. Es lo que viaja en cada input como
+   * "lo que estaba viendo" (compensacion de lag).
+   */
+  serverTimeAt(local: number): number | null {
+    return this.clockOffset === null ? null : local - this.clockOffset;
   }
 
   /** Agrega el snapshot y devuelve su instante en el reloj local (null si llego fuera de orden). */
@@ -66,7 +75,7 @@ export class Timeline {
   }
 
   /**
-   * Las cabezas en el instante local `rt` (normalmente ahora - INTERP_DELAY). Dibuja
+   * Las cabezas en el instante local `rt` (ahora menos el retraso de interpolacion). Dibuja
    * las que estan en el snapshot de despues de `rt`: una que ya no esta ahi murio o
    * salio de la vista. Una que todavia no estaba en el snapshot de antes recien entra
    * y no se dibuja hasta que la interpolacion la alcance.

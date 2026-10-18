@@ -45,7 +45,7 @@ WebSockets. `?debug=1` ademas expone el juego en `window.__vb` (por ejemplo
 
 ```bash
 cd server
-npm run check:viborita       # giro, cuerpo, choques, turbo, sala, culling, bots (~40 s)
+npm run check:viborita       # giro, cuerpo, choques, compensacion de lag, turbo, sala, culling, bots (~40 s)
 npm run check:viborita-net   # con sockets reales: validacion, rate limit, reconexion, arenas (~15 s)
 ```
 
@@ -56,8 +56,9 @@ Todos en `server/src/games/viborita-config.ts`; el cliente los recibe al conecta
 | Grupo | Parametro | Default | Que hace |
 | --- | --- | --- | --- |
 | `sim` | `tickHz` | 40 | Paso fijo de la simulacion. |
-| | `snapshotEvery` | 2 | Snapshot cada N pasos (20 Hz). Tiene que ser entero. |
-| | `inputBufferMs` | 30 | Buffer de jitter de los inputs. |
+| | `snapshotEvery` | 1 | Snapshot cada N pasos (40 Hz). Tiene que ser entero. |
+| | `inputBufferMs` | 20 | Buffer de jitter de los inputs. |
+| `lagComp` | `maxRewindMs` | 300 | Tope de la compensacion de lag (cuanto atras se puede juzgar un choque). |
 | `arena` | `maxSocketsPerArena` | 40 | Conexiones por arena publica; al llenarse se abre otra. |
 | `public` / `room` | `mapRadius` | 3000 / 1800 | Radio del mapa circular. |
 | | `pelletCount` | 1100 / 450 | Comida natural que se mantiene. |

@@ -74,17 +74,50 @@ Ninguna fila de la matriz de `SIMULATION_ARCHITECTURE.md` es slither; se armo co
   server. El cuerpo entero (`k`) viaja **solo la primera vez** que una viborita entra
   a la vista de un cliente (o al reconectar), para sembrar la estela. Medido: el cuerpo
   que dibuja el cliente se desvia 0.48 u como mucho del del server (radio 19), con
-  zigzag y turbo; es la flecha de las cuerdas de 20 Hz.
+  zigzag y turbo; es la flecha de las cuerdas entre cabezas.
 - **Culling por la caja del cuerpo**, no por la cabeza: una larga que cruza la pantalla
   con la cabeza afuera se tiene que ver.
 - **Viborita propia: prediccion + reconciliacion por acuse** (`Predictor.ts`), con la
-  misma `advanceHead`. Medido con `?lag=150&jitter=37`: correccion media 0.35 u. El
+  misma `advanceHead`. Medido con `?lag=150&jitter=37`: correccion media ~1 u (0.35 con
+  el buffer de input en 30 ms; se bajo a 20 a cambio de 10 ms menos de atraso). El
   resto de una correccion se reparte desde la cabeza hacia atras (`VIS_FADE_LEN`) para
   que el cuerpo no se doble de golpe. El server aplica cada input con el buffer de
   jitter (`inputBufferMs`), como Manchon.
-- **Ajenas: interpoladas** `INTERP_DELAY` (110 ms) en el pasado sobre el reloj de la
-  simulacion (`Timeline.ts`); el cuerpo se arma con los puntos de la estela de hora
-  <= ese instante. Medido: 0 a 1 tiron cada mil cuadros.
+- **Ajenas: interpoladas** en el pasado sobre el reloj de la simulacion
+  (`Timeline.ts`), con un retraso de dos espaciados de snapshot mas 10 ms que sale del
+  `snapshotHz` del server: con snapshots a 40 Hz son **60 ms** (eran 110 con 20 Hz). El
+  cuerpo se arma con los puntos de la estela de hora <= ese instante. Medido: 0 a 1
+  tiron cada mil cuadros, con y sin `?lag=150`.
+
+## Compensacion de lag (por que no moris cuando el otro te tendria que chocar)
+
+El problema (reportado por el programador en la primera prueba: "yo hago que otro me
+choque pero muero yo"): la propia se ve en el presente predicho y las demas en el
+pasado (latencia de bajada + interpolacion), y el input propio llega tarde (subida +
+buffer). Con ~70 ms de ping eso suma unos 200 ms: las demas se veian **3 a 5 cuerpos
+atras** de donde estaban, y al cruzarle adelante a una "con margen" el que metia la
+cabeza en el cuerpo ajeno era uno.
+
+La solucion es la de los shooters, **juzgar el choque en la vista del que lo da**:
+
+- Cada input lleva, como quinto elemento, el instante del server que el cliente estaba
+  dibujando de las demas (`Timeline.serverTimeAt(ahora - retraso)`, -1 si todavia no
+  sabe). El server lo convierte en un atraso contra el instante en que ese input rige
+  (`Player.viewLag`), acotado a `lagComp.maxRewindMs` (300 ms) para que nadie se
+  invente una ventaja. Los bots tienen atraso 0.
+- **Rebobinar un cuerpo es correrlo por su propio camino.** Cada viborita lleva un
+  odometro con historial (`Snake.offsetAt(t)` = cuanto recorrio la cabeza desde `t`), y
+  los segmentos de choque saben su distancia a la cabeza (`Segment.s`) y se muestrean
+  `REWIND_DIST` mas alla de la cola. El cuerpo como estaba en `t` son los segmentos con
+  `s` entre `offsetAt(t)` y `offsetAt(t) + largo`: no se guardan copias del cuerpo.
+- Cada cabeza se compara contra los cuerpos ajenos **rebobinados a su propio atraso**.
+  Asi uno muere solo si en su pantalla toco a otro.
+- La contra (la de cualquier compensacion): con dos jugadores con latencia, a veces una
+  pasa por encima del cuerpo de la otra sin morir, porque a cada una se la juzga con lo
+  que veia ella. Es mucho menos frustrante que morir sin haber tocado nada.
+- Chequeado en `viborita-check.ts`: el mismo cruce (cortarle adelante con 70 u de
+  margen en pantalla) mata al que corta sin compensar y lo deja vivo compensando con
+  200 ms, y la rival que mete la cabeza en su cuerpo muere ella.
 - **Comida**: altas (`pa`, con color y masa) y bajas (`pd`) respecto de lo que el
   cliente ya tiene; las bajas se aplican cuando la interpolacion alcanza su snapshot.
 

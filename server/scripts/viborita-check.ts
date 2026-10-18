@@ -105,7 +105,7 @@ function human(arena: Arena, id: string, name: string): Player {
     while (t < 3000) {
       const target = t < 1500 ? 1.4 : -2.2;
       advanceHead(s, target, turnRateOf(s.mass), 230, dtMs / 1000);
-      s.pushHead();
+      s.pushHead(t);
       t += dtMs;
     }
     const pts: [number, number][] = [];
@@ -136,7 +136,7 @@ function human(arena: Arena, id: string, name: string): Player {
   for (let i = 0; i < 40 * 6; i++) {
     const target = Math.sin(t / 700) * 3; // zigzag con curvas cerradas
     advanceHead(s, target, turnRateOf(s.mass), i % 80 < 30 ? 470 : 230, 0.025);
-    s.pushHead();
+    s.pushHead(t);
     t += 25;
     if (i % 2 === 1) trail.push(t, s.x, s.y);
   }
@@ -258,6 +258,58 @@ function human(arena: Arena, id: string, name: string): Player {
   const dead = sent.find((m) => m.event === "vb:dead")?.payload as { reason: string } | undefined;
   check("sala: el que no toca nada se estrella contra el borde", !p.alive && dead?.reason === "wall", `${(steps / 40).toFixed(1)} s`);
   check("sala: una sola vida", !arena.spawn(p, "Quieto"));
+}
+
+// ------------------------------------------------------------------ compensacion de lag
+
+{
+  // A le cruza adelante a B, perpendicular, 70 u delante de la cabeza de B. A tarda
+  // ~0.36 s en atravesar la franja por donde pasa B; en ese tiempo la cabeza REAL de B
+  // llega a esa x, asi que en el presente A mete la cabeza en el cuerpo de B. En lo que
+  // A veia (B 200 ms = 46 u atras), B no llegaba: el cruce era limpio.
+  const run = (viewLag: number) => {
+    const { arena } = makeArena("public");
+    clearPellets(arena);
+    const R = arena.R;
+    const a = human(arena, "s1", "Corta");
+    const b = human(arena, "s2", "Rival");
+    arena.spawn(a, "Corta");
+    arena.spawn(b, "Rival");
+    // Un segundo de historial yendo derecho, sin cruzarse: despues B queda con la
+    // cabeza en (R, R) yendo a +x, y A en (R + 70, R + 60) yendo hacia arriba.
+    place(arena, b, R - 230, R, 0, 60);
+    place(arena, a, R + 70, R + 290, -Math.PI / 2, 60);
+    const go = () => {
+      a.angle = -Math.PI / 2;
+      b.angle = 0;
+      a.boost = b.boost = false;
+      a.viewLag = viewLag;
+    };
+    for (let i = 0; i < 40; i++) {
+      go();
+      step(arena);
+    }
+    let steps = 0;
+    while (a.alive && steps < 30) {
+      go();
+      step(arena);
+      steps++;
+    }
+    return { aAlive: a.alive, bAlive: b.alive };
+  };
+  const now = run(0);
+  const lagged = run(200);
+  check("lag: sin compensar, el que corta tarde se muere", !now.aAlive, JSON.stringify(now));
+  check("lag: compensado, sobrevive el cruce que en su pantalla era limpio", lagged.aAlive, JSON.stringify(lagged));
+  const { arena } = makeArena("public");
+  const p = human(arena, "s9", "Tramposo");
+  arena.spawn(p, "Tramposo");
+  p.lastActiveAt = Infinity;
+  step(arena, 400); // 10 s de simulacion
+  // Dice que estaba viendo el instante 0, o sea 10 s atras: tiene que quedar en el tope.
+  arena.input(p, 1, 0, 0, false, 0);
+  step(arena, 3);
+  check("lag: el atraso declarado tiene tope", p.viewLag === C.lagComp.maxRewindMs, `${p.viewLag} ms`);
 }
 
 // ------------------------------------------------------------------ turbo

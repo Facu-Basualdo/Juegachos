@@ -20,10 +20,12 @@ export const INPUT_MIN_GAP = 1 / 30;
 export const INPUT_TURN_EPS = 0.06;
 
 /**
- * Retraso con el que se dibuja a las demas (ms): dos espaciados de snapshot (2 x 50)
- * mas margen. Con uno solo, cualquier hipo de red seca el buffer.
+ * Retraso con el que se dibuja a las demas: dos espaciados de snapshot mas un margen
+ * (con uno solo, cualquier hipo de red seca el buffer). Sale de la cadencia que manda
+ * el server (`snapshotHz`): a 40 Hz son 2 x 25 + 10 = 60 ms.
  */
-export const INTERP_DELAY = 110;
+export const INTERP_SPACINGS = 2;
+export const INTERP_MARGIN_MS = 10;
 /** Correccion lenta hacia arriba del offset de reloj (deriva entre relojes). */
 export const CLOCK_DRIFT_RATE = 0.01;
 /** Si falta un snapshot, cuanto se sigue el ultimo tramo antes de frenar (ms). */
