@@ -11,6 +11,10 @@ import { SpatialHash } from "../src/games/viborita-grid.js";
 import { Arena, Snake, type ArenaHost, type Player } from "../src/games/viborita-arena.js";
 import { VIBORITA_CONFIG as C, advanceHead, bodyLengthOf, radiusOf, turnRateOf } from "../src/games/viborita-config.js";
 import { sanitizeName } from "../src/games/viborita.js";
+import { encodeSnap } from "../src/games/viborita-codec.js";
+// El decodificador real del cliente: lo que se prueba es que los dos lados se entiendan.
+import { decodeSnap } from "../../src/games/viborita/game/ViboritaCodec.ts";
+import type { VbSnap } from "../src/protocol.js";
 
 let failures = 0;
 let checks = 0;
@@ -28,7 +32,9 @@ type Sent = { socketId: string; event: string; payload: unknown };
 function makeArena(kind: "public" | "room"): { arena: Arena; sent: Sent[] } {
   const sent: Sent[] = [];
   const host: ArenaHost = {
-    emit: (socketId, event, payload) => sent.push({ socketId, event, payload }),
+    // Los snapshots viajan en binario: se guardan ya decodificados con el codec del cliente.
+    emit: (socketId, event, payload) =>
+      sent.push({ socketId, event, payload: event === "vb:snap" ? decodeSnap(payload as Buffer) : payload }),
     onEmpty: () => {},
   };
   const arena = new Arena(`T-${kind}`, kind, host);
@@ -105,7 +111,7 @@ function human(arena: Arena, id: string, name: string): Player {
     while (t < 3000) {
       const target = t < 1500 ? 1.4 : -2.2;
       advanceHead(s, target, turnRateOf(s.mass), 230, dtMs / 1000);
-      s.pushHead();
+      s.pushHead(t);
       t += dtMs;
     }
     const pts: [number, number][] = [];
@@ -136,7 +142,7 @@ function human(arena: Arena, id: string, name: string): Player {
   for (let i = 0; i < 40 * 6; i++) {
     const target = Math.sin(t / 700) * 3; // zigzag con curvas cerradas
     advanceHead(s, target, turnRateOf(s.mass), i % 80 < 30 ? 470 : 230, 0.025);
-    s.pushHead();
+    s.pushHead(t);
     t += 25;
     if (i % 2 === 1) trail.push(t, s.x, s.y);
   }
@@ -154,6 +160,37 @@ function human(arena: Arena, id: string, name: string): Player {
     worst = Math.max(worst, best);
   });
   check("cuerpo: el que dibuja el cliente coincide con el del server", worst < 1.5, `${worst.toFixed(2)} u de desvio maximo (radio ${radiusOf(300).toFixed(0)})`);
+}
+
+// ------------------------------------------------------------------ snapshot binario
+
+{
+  const snap: VbSnap = {
+    t: 123456,
+    n: 789,
+    a: 12.5,
+    s: [7, 3, 2999.9, 15.2, -3141, 1234.5, 1, 8, 4, 0.1, 5999.9, 3141, 100, 0],
+    k: [7, 3, 10, 20, 30, 40, 50, 60],
+    pa: [11, 100, 200, 5, 25, 12, 6000, 1, 11, 100],
+    pd: [99, 100],
+    cx: 3000,
+    cy: 2500,
+  };
+  const buf = encodeSnap(snap);
+  const back = decodeSnap(buf)!;
+  let worst = 0;
+  for (let i = 0; i < snap.s.length; i++) {
+    const tol = i % 7 === 4 ? 0.1 : i % 7 === 5 ? 0.01 : 0.051; // angulo x1000 a 1e-4 rad, masa float32
+    worst = Math.max(worst, Math.abs(back.s[i] - snap.s[i]) / tol);
+  }
+  const exact =
+    back.t === snap.t && back.n === snap.n && back.a === snap.a && back.cx === 3000 && back.cy === 2500 &&
+    JSON.stringify(back.k) === JSON.stringify(snap.k) &&
+    JSON.stringify(back.pa) === JSON.stringify(snap.pa) &&
+    JSON.stringify(back.pd) === JSON.stringify(snap.pd);
+  check("binario: el cliente decodifica lo que codifica el server", exact && worst <= 1, `peor error ${worst.toFixed(2)} de la tolerancia`);
+  const json = Buffer.byteLength(JSON.stringify(["vb:snap", snap]));
+  check("binario: pesa menos que el JSON de antes", buf.length < json * 0.6, `${buf.length} bytes vs ${json} en JSON`);
 }
 
 // ------------------------------------------------------------------ spatial hash
@@ -258,6 +295,58 @@ function human(arena: Arena, id: string, name: string): Player {
   const dead = sent.find((m) => m.event === "vb:dead")?.payload as { reason: string } | undefined;
   check("sala: el que no toca nada se estrella contra el borde", !p.alive && dead?.reason === "wall", `${(steps / 40).toFixed(1)} s`);
   check("sala: una sola vida", !arena.spawn(p, "Quieto"));
+}
+
+// ------------------------------------------------------------------ compensacion de lag
+
+{
+  // A le cruza adelante a B, perpendicular, 70 u delante de la cabeza de B. A tarda
+  // ~0.36 s en atravesar la franja por donde pasa B; en ese tiempo la cabeza REAL de B
+  // llega a esa x, asi que en el presente A mete la cabeza en el cuerpo de B. En lo que
+  // A veia (B 200 ms = 46 u atras), B no llegaba: el cruce era limpio.
+  const run = (viewLag: number) => {
+    const { arena } = makeArena("public");
+    clearPellets(arena);
+    const R = arena.R;
+    const a = human(arena, "s1", "Corta");
+    const b = human(arena, "s2", "Rival");
+    arena.spawn(a, "Corta");
+    arena.spawn(b, "Rival");
+    // Un segundo de historial yendo derecho, sin cruzarse: despues B queda con la
+    // cabeza en (R, R) yendo a +x, y A en (R + 70, R + 60) yendo hacia arriba.
+    place(arena, b, R - 230, R, 0, 60);
+    place(arena, a, R + 70, R + 290, -Math.PI / 2, 60);
+    const go = () => {
+      a.angle = -Math.PI / 2;
+      b.angle = 0;
+      a.boost = b.boost = false;
+      a.viewLag = viewLag;
+    };
+    for (let i = 0; i < 40; i++) {
+      go();
+      step(arena);
+    }
+    let steps = 0;
+    while (a.alive && steps < 30) {
+      go();
+      step(arena);
+      steps++;
+    }
+    return { aAlive: a.alive, bAlive: b.alive };
+  };
+  const now = run(0);
+  const lagged = run(200);
+  check("lag: sin compensar, el que corta tarde se muere", !now.aAlive, JSON.stringify(now));
+  check("lag: compensado, sobrevive el cruce que en su pantalla era limpio", lagged.aAlive, JSON.stringify(lagged));
+  const { arena } = makeArena("public");
+  const p = human(arena, "s9", "Tramposo");
+  arena.spawn(p, "Tramposo");
+  p.lastActiveAt = Infinity;
+  step(arena, 400); // 10 s de simulacion
+  // Dice que estaba viendo el instante 0, o sea 10 s atras: tiene que quedar en el tope.
+  arena.input(p, 1, 0, 0, false, 0);
+  step(arena, 3);
+  check("lag: el atraso declarado tiene tope", p.viewLag === C.lagComp.maxRewindMs, `${p.viewLag} ms`);
 }
 
 // ------------------------------------------------------------------ turbo

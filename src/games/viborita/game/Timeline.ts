@@ -17,8 +17,10 @@ interface Frame {
   heads: Map<number, SnapHead>;
 }
 
-/** Cuanto historial se guarda (ms). Sobra contra el INTERP_DELAY. */
+/** Cuanto historial se guarda (ms). Sobra contra el retraso de interpolacion. */
 const KEEP_MS = 800;
+/** Cuantas muestras de demora se guardan para medir el jitter (~2 s a 40 Hz). */
+const JITTER_SAMPLES = 80;
 
 /**
  * Linea de tiempo de los snapshots, para dibujar a las DEMAS cabezas interpoladas.
@@ -32,10 +34,47 @@ const KEEP_MS = 800;
 export class Timeline {
   private frames: Frame[] = [];
   private clockOffset: number | null = null;
+  /** Cuanto tarde llego cada snapshot respecto del mas rapido (ms), en anillo. */
+  private readonly lateness: number[] = [];
+  private lateIdx = 0;
+  private jitterP95 = 0;
+  private pushes = 0;
 
   reset(): void {
     this.frames = [];
     this.clockOffset = null;
+    this.lateness.length = 0;
+    this.lateIdx = 0;
+    this.jitterP95 = 0;
+  }
+
+  /**
+   * Jitter de llegada: el percentil 95 de cuanto mas tarde que el snapshot mas rapido
+   * llegan los demas (ms). Es lo que tiene que cubrir el retraso de interpolacion para
+   * que casi nunca falte el snapshot siguiente.
+   */
+  jitter(): number {
+    return this.jitterP95;
+  }
+
+  private recordLateness(late: number): void {
+    const v = Math.max(0, late);
+    if (this.lateness.length < JITTER_SAMPLES) this.lateness.push(v);
+    else this.lateness[this.lateIdx] = v;
+    this.lateIdx = (this.lateIdx + 1) % JITTER_SAMPLES;
+    // Ordenar 80 numeros cada 10 snapshots no cuesta nada.
+    if (++this.pushes % 10 !== 0) return;
+    const sorted = [...this.lateness].sort((a, b) => a - b);
+    this.jitterP95 = sorted[Math.floor(0.95 * (sorted.length - 1))];
+  }
+
+  /**
+   * El instante de la simulacion del server que corresponde a un instante local, o
+   * null si todavia no llego ningun snapshot. Es lo que viaja en cada input como
+   * "lo que estaba viendo" (compensacion de lag).
+   */
+  serverTimeAt(local: number): number | null {
+    return this.clockOffset === null ? null : local - this.clockOffset;
   }
 
   /** Agrega el snapshot y devuelve su instante en el reloj local (null si llego fuera de orden). */
@@ -44,6 +83,7 @@ export class Timeline {
     if (this.clockOffset === null || sample < this.clockOffset) this.clockOffset = sample;
     else this.clockOffset += (sample - this.clockOffset) * CLOCK_DRIFT_RATE;
     const t = snap.t + this.clockOffset;
+    this.recordLateness(now - t);
 
     const tail = this.frames[this.frames.length - 1];
     if (tail && t <= tail.t) return null;
@@ -66,7 +106,7 @@ export class Timeline {
   }
 
   /**
-   * Las cabezas en el instante local `rt` (normalmente ahora - INTERP_DELAY). Dibuja
+   * Las cabezas en el instante local `rt` (ahora menos el retraso de interpolacion). Dibuja
    * las que estan en el snapshot de despues de `rt`: una que ya no esta ahi murio o
    * salio de la vista. Una que todavia no estaba en el snapshot de antes recien entra
    * y no se dibuja hasta que la interpolacion la alcance.

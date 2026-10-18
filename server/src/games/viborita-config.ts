@@ -38,8 +38,12 @@ export const VIBORITA_CONFIG = {
   sim: {
     /** Paso fijo de la simulacion. */
     tickHz: 40,
-    /** Un snapshot cada N pasos (40 / 2 = 20 Hz). Tiene que ser un multiplo ENTERO del paso. */
-    snapshotEvery: 2,
+    /**
+     * Un snapshot cada N pasos. Tiene que ser un multiplo ENTERO del paso. En 1 (40 Hz)
+     * el cliente puede interpolar con ~60 ms de retraso en vez de ~110: los snapshots
+     * solo llevan cabezas, asi que el doble de mensajes sigue siendo poco trafico.
+     */
+    snapshotEvery: 1,
     /** Tope de tiempo real absorbido por despertar (si el event loop se atrasa). */
     maxCatchupMs: 150,
     /**
@@ -47,8 +51,19 @@ export const VIBORITA_CONFIG = {
      * `t_cliente + offset + inputBufferMs`, asi dura en el server lo mismo que en el
      * cliente y la reconciliacion no tiembla.
      */
-    inputBufferMs: 30,
+    inputBufferMs: 20,
     inputOffsetDrift: 0.005,
+  },
+
+  /**
+   * Compensacion de lag: el choque de TU cabeza se juzga contra los cuerpos ajenos como
+   * los veias vos (cada input dice que instante del server estaba dibujando el cliente).
+   * Sin esto, las demas se ven ~200 ms atras de donde estan y morias cruzandole adelante
+   * a una que en tu pantalla estaba lejos. El tope impide que alguien declare un atraso
+   * inventado para esquivar choques.
+   */
+  lagComp: {
+    maxRewindMs: 300,
   },
 
   arena: {
@@ -188,6 +203,14 @@ export const VIBORITA_CONFIG = {
 
 export type ArenaKind = VbArenaKind;
 
+// El snapshot binario guarda las posiciones de las cabezas a 0.1 u en 16 bits: el mapa
+// (2R) no puede pasar de 6553 u. Mejor romper al arrancar que mandar posiciones truncadas.
+for (const mode of [VIBORITA_CONFIG.public, VIBORITA_CONFIG.room]) {
+  if (mode.mapRadius * 2 * 10 > 0xffff) {
+    throw new Error(`viborita: mapRadius ${mode.mapRadius} no entra en el snapshot binario (max 3276)`);
+  }
+}
+
 export function modeConfig(kind: ArenaKind): ModeConfig {
   return kind === "public" ? VIBORITA_CONFIG.public : VIBORITA_CONFIG.room;
 }
@@ -210,6 +233,7 @@ export function clientConfig(kind: ArenaKind): VbClientConfig {
     turnBase: s.turnBase,
     turnMassK: s.turnMassK,
     boostMinMass: VIBORITA_CONFIG.boost.minMass,
+    mouthK: s.mouthK,
     viewBase: VIBORITA_CONFIG.view.baseHeight,
     viewExp: VIBORITA_CONFIG.view.exp,
     spectatorView: VIBORITA_CONFIG.view.spectatorHeight,

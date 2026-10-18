@@ -27,6 +27,8 @@ export interface VbClientConfig {
   turnBase: number;
   turnMassK: number;
   boostMinMass: number;
+  /** Alcance de la boca (fraccion del radio): con eso el cliente predice la comida que come. */
+  mouthK: number;
   viewBase: number;
   viewExp: number;
   spectatorView: number;
@@ -39,11 +41,14 @@ export interface VbClientConfig {
 export type VbPlayerInfo = [number, string, number, number];
 
 /**
- * `[n, t, angulo, turbo]`: numero de secuencia, reloj del cliente (ms), angulo hacia
- * donde quiere ir la cabeza (rad, el server limita cuanto gira por segundo) y turbo
- * (0 | 1; el server lo ignora si no alcanza la masa).
+ * `[n, t, angulo, turbo, vista]`: numero de secuencia, reloj del cliente (ms), angulo
+ * hacia donde quiere ir la cabeza (rad, el server limita cuanto gira por segundo),
+ * turbo (0 | 1; el server lo ignora si no alcanza la masa) y el instante del server
+ * (ms de simulacion) que el cliente estaba dibujando de las demas, o -1 si todavia no
+ * sabe. Con eso el server juzga los choques de esta cabeza como los veia el jugador
+ * (compensacion de lag, acotada a `lagComp.maxRewindMs`).
  */
-export type VbInput = [number, number, number, number];
+export type VbInput = [number, number, number, number, number];
 
 export type VbJoin =
   | { mode: "public"; aspect: number; tk?: string }
@@ -119,7 +124,8 @@ export interface VbClientToServer {
 /** Server -> Cliente. */
 export interface VbServerToClient {
   "vb:init": (msg: VbInit) => void;
-  "vb:snap": (msg: VbSnap) => void;
+  /** `VbSnap` codificado en binario (ver `viborita-codec.ts` / `ViboritaCodec.ts`). */
+  "vb:snap": (msg: ArrayBuffer) => void;
   "vb:players": (msg: { add?: VbPlayerInfo[]; del?: number[] }) => void;
   "vb:top": (msg: VbTop) => void;
   "vb:spawned": (msg: { mass: number }) => void;

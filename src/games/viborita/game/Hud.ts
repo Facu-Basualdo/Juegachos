@@ -34,6 +34,7 @@ export class Hud {
   private readonly lengthEl: HTMLDivElement;
   private readonly countdownEl: HTMLDivElement;
   private readonly bannerEl: HTMLDivElement;
+  private readonly netEl: HTMLDivElement;
 
   private playCb: (name: string) => void = () => {};
   /** La tarjeta acepta arrancar (inicio / muerte con reaparicion). */
@@ -116,8 +117,10 @@ export class Hud {
     this.countdownEl.className = "countdown";
     this.bannerEl = document.createElement("div");
     this.bannerEl.className = "vb-banner";
+    this.netEl = document.createElement("div");
+    this.netEl.className = "vb-net";
 
-    this.root.append(top, this.lengthEl, this.bannerEl);
+    this.root.append(top, this.lengthEl, this.bannerEl, this.netEl);
     container.append(this.root, this.overlay, this.countdownEl);
   }
 
@@ -231,6 +234,12 @@ export class Hud {
     this.countdownEl.classList.remove("is-shown");
     void this.countdownEl.offsetWidth;
     this.countdownEl.classList.add("is-shown");
+  }
+
+  /** Panel de red (tecla N). null lo oculta. */
+  setNet(lines: string[] | null): void {
+    this.netEl.classList.toggle("is-shown", lines !== null);
+    if (lines) this.netEl.textContent = lines.join("\n");
   }
 
   /** Aviso arriba (reconectando, ganador de la sala). null lo oculta. */

@@ -123,11 +123,12 @@ export function registerViborita(io: Server): () => ViboritaStats {
 
     socket.on("vb:in", (payload: unknown) => {
       if (!arena || !player) return;
-      if (!Array.isArray(payload) || payload.length !== 4) return;
-      const [n, t, angle, boost] = payload as unknown[];
+      if (!Array.isArray(payload) || payload.length !== 5) return;
+      const [n, t, angle, boost, view] = payload as unknown[];
       if (!isInt(n) || n < 1 || !isFiniteNum(t) || !isFiniteNum(angle) || (boost !== 0 && boost !== 1)) return;
       if (Math.abs(angle) > 4) return; // un angulo en radianes, ya envuelto en [-pi, pi]
-      arena.input(player, n, t, angle, boost === 1);
+      if (!isFiniteNum(view)) return;
+      arena.input(player, n, t, angle, boost === 1, view);
     });
 
     socket.on("vb:view", (payload: unknown) => {

@@ -16,6 +16,7 @@ import { io as connect, type Socket } from "socket.io-client";
 import { registerViborita } from "../src/games/viborita.js";
 import { VIBORITA_CONFIG as C } from "../src/games/viborita-config.js";
 import type { VbInit, VbPlayerInfo, VbSnap } from "../src/protocol.js";
+import { decodeSnap } from "../../src/games/viborita/game/ViboritaCodec.ts";
 
 let failures = 0;
 let checks = 0;
@@ -58,7 +59,11 @@ class Client {
       this.init = init;
       for (const [id, name] of init.players) this.players.set(id, name);
     });
-    this.socket.on("vb:snap", (s: VbSnap) => this.snaps.push(s));
+    // Binario: se decodifica con el codec del cliente.
+    this.socket.on("vb:snap", (data: ArrayBuffer) => {
+      const s: VbSnap | null = decodeSnap(data);
+      if (s) this.snaps.push(s);
+    });
     this.socket.on("vb:players", (m: { add?: VbPlayerInfo[] }) => {
       for (const [id, name] of m.add ?? []) this.players.set(id, name);
     });
@@ -77,7 +82,7 @@ class Client {
   }
 
   input(angle: number, boost: 0 | 1): void {
-    this.socket.emit("vb:in", [++this.seq, performance.now(), angle, boost]);
+    this.socket.emit("vb:in", [++this.seq, performance.now(), angle, boost, -1]);
   }
 
   close(): void {
@@ -125,8 +130,9 @@ const vb = await measure(1);
 check("con la masa inicial el turbo no anda", vb < C.snake.speed * 1.25, `${vb.toFixed(0)} u/s`);
 
 const before = a.snaps.length;
-a.socket.emit("vb:in", [999999, 0, 50, 0]);
-a.socket.emit("vb:in", [999998, 0, 1, 7]);
+a.socket.emit("vb:in", [999999, 0, 50, 0, -1]);
+a.socket.emit("vb:in", [999998, 0, 1, 7, -1]);
+a.socket.emit("vb:in", [999997, 0, 1, 0, "x"]);
 a.socket.emit("vb:in", "basura");
 a.socket.emit("vb:in", [1, 2, 3]);
 a.socket.emit("vb:join", { mode: "public", aspect: 1 });

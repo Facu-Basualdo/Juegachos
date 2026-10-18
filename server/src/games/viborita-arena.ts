@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { VbDead, VbInit, VbPhase, VbPlayerInfo, VbSnap, VbTop } from "../protocol.js";
 import { SpatialHash } from "./viborita-grid.js";
+import { encodeSnap } from "./viborita-codec.js";
 import { botSteer, newBrain, type BotBrain, type BotWorld } from "./viborita-bot.js";
 import {
   VIBORITA_CONFIG as C,
@@ -36,14 +37,29 @@ import {
  */
 
 const TICK_MS = 1000 / C.sim.tickHz;
+/**
+ * Cada cuanto se despierta el timer (ms). Mas seguido que el paso a proposito: el paso
+ * sigue siendo fijo (lo cuenta el acumulador), pero cada snapshot sale a menos de 5 ms
+ * de su hora. Con el timer al paso, en Windows (resolucion ~15.6 ms) los snapshots
+ * salian de a dos y despues un hueco: 26 ms de jitter medido en localhost, que el
+ * cliente tenia que cubrir con mas retraso de interpolacion. Un despertar sin paso que
+ * dar no cuesta nada.
+ */
+const WAKE_MS = 5;
 /** Lado de un balde de la spatial hash. */
 const HASH_CELL = 120;
 /** Pasos entre dos `vb:top` (1 por segundo). */
 const TOP_EVERY = C.sim.tickHz;
 /** Separacion de los puntos del cuerpo entero (`k`) que se manda al entrar a la vista. */
 const KEY_SPACING = 12;
-/** Estela guardada de mas, por si el largo crece entre dos pasos. */
-const TRAIL_MARGIN = 40;
+/**
+ * Cuanto puede correrse un cuerpo hacia atras al rebobinarlo (compensacion de lag):
+ * lo que recorre con turbo en el tope de rebobinado. Los segmentos de choque y la
+ * estela se guardan esa distancia mas alla de la cola.
+ */
+const REWIND_DIST = (C.snake.boostSpeed * C.lagComp.maxRewindMs) / 1000;
+/** Estela guardada de mas: el rebobinado y por si el largo crece entre dos pasos. */
+const TRAIL_MARGIN = REWIND_DIST + 40;
 
 interface QueuedInput {
   /** simTime en que rige. */
@@ -51,6 +67,8 @@ interface QueuedInput {
   angle: number;
   boost: boolean;
   seq: number;
+  /** simTime que el cliente estaba dibujando de las demas (-1: no sabe). */
+  view: number;
 }
 
 export class Pellet {
@@ -74,6 +92,8 @@ export interface Segment {
   x: number;
   y: number;
   snake: Snake;
+  /** Distancia desde la cabeza, sobre la estela. */
+  s: number;
 }
 
 export class Snake {
@@ -84,9 +104,22 @@ export class Snake {
   /** Largo de la estela desde `start` hasta la cabeza. */
   pathLen = 0;
 
-  /** Segmentos muestreados en el ultimo paso (los primeros `nSeg` valen). */
+  /**
+   * Segmentos muestreados en el ultimo paso (los primeros `nSeg` valen). Siguen
+   * `REWIND_DIST` mas alla de la cola: esos solo cuentan cuando se rebobina el cuerpo.
+   * `nBody` son los del cuerpo de ahora.
+   */
   readonly segments: Segment[] = [];
   nSeg = 0;
+  nBody = 0;
+  /**
+   * Odometro de la cabeza (cuanto recorrio desde que aparecio) y su historial reciente.
+   * Rebobinar el cuerpo `dt` ms es correrlo hacia atras por su propio camino lo que
+   * recorrio en ese tiempo: `offsetAt`.
+   */
+  odo = 0;
+  private readonly histT: number[] = [];
+  private readonly histOdo: number[] = [];
   minX = 0;
   minY = 0;
   maxX = 0;
@@ -123,12 +156,19 @@ export class Snake {
   }
 
   /** Agrega la cabeza actual a la estela y recorta lo que ya no es cuerpo. */
-  pushHead(): void {
+  pushHead(simTime: number): void {
     const n = this.px.length;
     const lx = this.px[n - 1];
     const ly = this.py[n - 1];
     const d = Math.hypot(this.x - lx, this.y - ly);
+    this.histT.push(simTime);
+    this.histOdo.push(this.odo + d);
+    while (this.histT.length > 2 && this.histT[0] < simTime - C.lagComp.maxRewindMs - 100) {
+      this.histT.shift();
+      this.histOdo.shift();
+    }
     if (d < 0.01) return;
+    this.odo += d;
     this.px.push(this.x);
     this.py.push(this.y);
     this.pathLen += d;
@@ -177,21 +217,44 @@ export class Snake {
     }
   }
 
-  /** Muestrea los segmentos de choque y la caja que ocupa el cuerpo. */
+  /**
+   * Cuanto hay que correr el cuerpo hacia atras (por su camino) para verlo como estaba
+   * en `t`: lo que recorrio la cabeza desde entonces. 0 para el presente.
+   */
+  offsetAt(t: number): number {
+    const n = this.histT.length;
+    if (n === 0 || t >= this.histT[n - 1]) return 0;
+    if (t <= this.histT[0]) return this.odo - this.histOdo[0];
+    for (let i = n - 1; i > 0; i--) {
+      if (this.histT[i - 1] <= t) {
+        const f = (t - this.histT[i - 1]) / (this.histT[i] - this.histT[i - 1] || 1);
+        return this.odo - (this.histOdo[i - 1] + (this.histOdo[i] - this.histOdo[i - 1]) * f);
+      }
+    }
+    return 0;
+  }
+
+  /** Muestrea los segmentos de choque (con el tramo de rebobinado) y la caja del cuerpo. */
   sampleSegments(): void {
-    const r = this.r;
+    const spacing = Math.max(4, this.r * C.snake.segmentSpacingK);
+    const body = this.bodyLength;
     this.nSeg = 0;
+    this.nBody = 0;
     this.minX = this.maxX = this.x;
     this.minY = this.maxY = this.y;
-    this.walkBody(Math.max(4, r * C.snake.segmentSpacingK), this.bodyLength, (x, y) => {
+    this.walkBody(spacing, body + REWIND_DIST, (x, y) => {
+      const s = this.nSeg * spacing;
       let seg = this.segments[this.nSeg];
       if (!seg) {
-        seg = { x, y, snake: this };
+        seg = { x, y, snake: this, s };
         this.segments.push(seg);
       }
       seg.x = x;
       seg.y = y;
+      seg.s = s;
       this.nSeg++;
+      if (s > body) return;
+      this.nBody++;
       if (x < this.minX) this.minX = x;
       if (x > this.maxX) this.maxX = x;
       if (y < this.minY) this.minY = y;
@@ -219,7 +282,7 @@ export class Snake {
 
   /** Punta de la cola (donde cae la comida del turbo). */
   tail(): { x: number; y: number } {
-    const s = this.segments[Math.max(0, this.nSeg - 1)];
+    const s = this.segments[Math.max(0, this.nBody - 1)];
     return s ? { x: s.x, y: s.y } : { x: this.x, y: this.y };
   }
 }
@@ -243,6 +306,12 @@ export class Player {
   clockOffset: number | null = null;
   /** Ultima vez que el input cambio (para la inactividad). */
   lastActiveAt = 0;
+  /**
+   * Cuanto atras (ms) estaba viendo a las demas este jugador, segun su ultimo input
+   * aplicado. Sus choques se juzgan contra los cuerpos rebobinados eso. 0 = presente
+   * (los bots, o un cliente que todavia no sabe su reloj).
+   */
+  viewLag = 0;
 
   // ---- Vida ----
   /** Ya aparecio alguna vez (en sala hay una sola vida). */
@@ -285,6 +354,7 @@ export class Player {
     this.lastSeq = 0;
     this.lastSeqAt = simTime;
     this.clockOffset = null;
+    this.viewLag = 0;
   }
 
   info(): VbPlayerInfo {
@@ -338,7 +408,7 @@ export class Arena {
     this.segHash = new SpatialHash(this.R * 2, HASH_CELL);
     while (this.naturalPellets < this.mode.pelletCount) this.addNaturalPellet();
     while (this.botCount < this.botTarget()) this.addBot();
-    this.loop = setInterval(() => this.tick(), TICK_MS);
+    this.loop = setInterval(() => this.tick(), WAKE_MS);
   }
 
   // ---------------------------------------------------------------- conexiones
@@ -436,7 +506,7 @@ export class Arena {
 
   // ---------------------------------------------------------------- input
 
-  input(player: Player, seq: number, sentAt: number, angle: number, boost: boolean): void {
+  input(player: Player, seq: number, sentAt: number, angle: number, boost: boolean, view: number): void {
     // Solo hacia adelante: un mensaje fuera de orden no puede hacer reconciliar al
     // cliente contra un input viejo.
     if (seq <= player.lastSeq) return;
@@ -455,7 +525,7 @@ export class Arena {
 
     const prev = last ?? player;
     if (Math.abs(angle - prev.angle) > 0.02 || boost !== prev.boost) player.lastActiveAt = this.simTime;
-    player.queue.push({ at, angle, boost, seq });
+    player.queue.push({ at, angle, boost, seq, view });
   }
 
   /** Instante actual en la linea de tiempo de la simulacion, con el resto sin simular. */
@@ -510,10 +580,13 @@ export class Arena {
       player.boost = input.boost;
       player.lastSeq = input.seq;
       player.lastSeqAt = at;
+      // Lo que veia el cliente cuando mando este input, medido contra el instante en
+      // que el input rige (es cuando su cabeza esta donde el la veia).
+      player.viewLag = input.view < 0 ? 0 : clamp(at - input.view, 0, C.lagComp.maxRewindMs);
     }
     if (!snake) return;
     this.moveSnake(player, snake, this.simTime - from);
-    snake.pushHead();
+    snake.pushHead(this.simTime);
 
     const dropped = snake.chargeBoost();
     if (dropped > 0) {
@@ -568,6 +641,12 @@ export class Arena {
    * Choques: la cabeza contra el borde del circulo, o contra un segmento de OTRA
    * viborita (el propio cuerpo no mata). Primero se juntan todos y despues se aplican:
    * dos cabezas que se tocan mueren las dos, como en slither.
+   *
+   * Compensacion de lag: la cabeza de cada jugador se compara contra los cuerpos ajenos
+   * REBOBINADOS a lo que el veia (`viewLag`). Un cuerpo rebobinado es el mismo camino
+   * corrido hacia atras lo que recorrio la cabeza desde entonces (`offsetAt`), asi que
+   * alcanza con filtrar los segmentos por su distancia a la cabeza: no hace falta
+   * guardar copias del cuerpo. Cada uno muere solo si en SU pantalla toco a otro.
    */
   private crashes(): void {
     const deaths: { player: Player; by: Player | null; reason: VbDead["reason"] }[] = [];
@@ -580,9 +659,18 @@ export class Arena {
         continue;
       }
       const range = r + this.maxR;
+      const lag = player.viewLag;
+      const offsets = new Map<Snake, number>();
       let killer: Player | null = null;
       this.segHash.query(snake.x - range, snake.y - range, snake.x + range, snake.y + range, (seg) => {
         if (killer || seg.snake === snake) return;
+        let shift = offsets.get(seg.snake);
+        if (shift === undefined) {
+          shift = lag > 0 ? seg.snake.offsetAt(this.simTime - lag) : 0;
+          offsets.set(seg.snake, shift);
+        }
+        // Fuera del cuerpo que veia: adelante de la cabeza de entonces o detras de la cola.
+        if (seg.s < shift - seg.snake.r * 0.5 || seg.s > shift + seg.snake.bodyLength) return;
         const reach = seg.snake.r + r * C.snake.crashK;
         if ((seg.x - snake.x) ** 2 + (seg.y - snake.y) ** 2 < reach * reach) killer = seg.snake.owner;
       });
@@ -734,7 +822,7 @@ export class Arena {
         R: this.R,
         querySegments: (x0, y0, x1, y1, cb) =>
           this.segHash.query(x0, y0, x1, y1, (seg) => {
-            if (seg.snake !== snake) cb(seg.x, seg.y, seg.snake.r);
+            if (seg.snake !== snake && seg.s <= seg.snake.bodyLength) cb(seg.x, seg.y, seg.snake.r);
           }),
         queryPellets: (x0, y0, x1, y1, cb) => this.pelletHash.query(x0, y0, x1, y1, (p) => cb(p.x, p.y, p.mass)),
         queryHeads: (x0, y0, x1, y1, cb) => {
@@ -829,7 +917,7 @@ export class Arena {
       }
       this.snakeDiff(player, snap, view);
       this.pelletDiff(player, snap, view);
-      this.host.emit(player.socketId, "vb:snap", snap);
+      this.host.emit(player.socketId, "vb:snap", encodeSnap(snap));
     }
   }
 
